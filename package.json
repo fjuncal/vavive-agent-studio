@@ -1,10 +1,9 @@
 {
-  "name": "vavive-gptmaker-platform",
+  "name": "vavive-agent-studio",
   "version": "0.1.0",
   "private": true,
   "workspaces": [
-    "apps/admin-web",
-    "packages/shared"
+    "apps/admin-web"
   ],
   "scripts": {
     "dev:web": "npm --workspace @vavive/admin-web run dev",
