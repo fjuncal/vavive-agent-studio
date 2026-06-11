@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: vavive-gptmaker-api
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vavive_gptmaker}
+    username: ${DATABASE_USERNAME:vavive}
+    password: ${DATABASE_PASSWORD:vavive}
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  jackson:
+    time-zone: America/Sao_Paulo
+
+server:
+  port: ${SERVER_PORT:8080}
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:vavive-dev-secret-change-me-with-at-least-32-chars}
+    expiration-seconds: ${JWT_EXPIRATION_SECONDS:86400}
+
+gptmaker:
+  base-url: ${GPTMAKER_BASE_URL:https://api.gptmaker.ai}
+  token: ${GPTMAKER_API_TOKEN:}
+  mock-enabled: ${GPTMAKER_MOCK_ENABLED:true}

@@ -1,0 +1,87 @@
+package br.com.vavive.gptmaker.domain.entity;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.PrePersist;
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+@Entity
+public class Franchise {
+    @Id
+    @GeneratedValue(strategy = GenerationType.UUID)
+    private UUID id;
+
+    private String name;
+    private String document;
+    private String city;
+    private String state;
+    private String status;
+    private LocalDateTime createdAt;
+
+    protected Franchise() {
+    }
+
+    public Franchise(String name, String document, String city, String state, String status) {
+        this.name = name;
+        this.document = document;
+        this.city = city;
+        this.state = state;
+        this.status = status;
+    }
+
+    @PrePersist
+    void prePersist() {
+        createdAt = LocalDateTime.now();
+    }
+
+    public UUID getId() {
+        return id;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
+    }
+
+    public String getDocument() {
+        return document;
+    }
+
+    public void setDocument(String document) {
+        this.document = document;
+    }
+
+    public String getCity() {
+        return city;
+    }
+
+    public void setCity(String city) {
+        this.city = city;
+    }
+
+    public String getState() {
+        return state;
+    }
+
+    public void setState(String state) {
+        this.state = state;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+}

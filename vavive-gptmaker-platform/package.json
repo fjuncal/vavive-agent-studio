@@ -1,0 +1,16 @@
+{
+  "name": "vavive-gptmaker-platform",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "apps/admin-web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:web": "npm --workspace @vavive/admin-web run dev",
+    "build:web": "npm --workspace @vavive/admin-web run build",
+    "dev:api": "cd apps/api && .\\mvnw.cmd spring-boot:run",
+    "build:api": "cd apps/api && .\\mvnw.cmd test",
+    "db:up": "docker compose up -d postgres"
+  }
+}

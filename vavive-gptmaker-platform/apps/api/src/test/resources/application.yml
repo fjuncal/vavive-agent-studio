@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:vavive_gptmaker_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: create-drop
+
+app:
+  jwt:
+    secret: test-secret-with-at-least-32-characters
+
+gptmaker:
+  base-url: https://api.gptmaker.ai
+  token:
+  mock-enabled: true
