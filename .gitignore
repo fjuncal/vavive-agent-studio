@@ -1,10 +1,10 @@
 node_modules/
-.next/
-out/
-dist/
-target/
+apps/admin-web/node_modules/
+apps/admin-web/.next/
+apps/api/target/
 .env
 .env.local
+.idea/
 .DS_Store
 npm-debug.log*
 .turbo/

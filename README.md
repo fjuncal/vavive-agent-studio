@@ -1,14 +1,14 @@
 # Vavive Agent Studio
 
-Vavive Agent Studio e o MVP SaaS da Vavive para operacao de franquias com agentes conectados ao GPTMaker. A plataforma organiza login, franquias, leads, configuracao comercial e treinamento do agente em uma camada propria da Vavive.
+Vavive Agent Studio e o MVP SaaS da Vavive para franquias, com painel administrativo em Next.js e backend em Spring Boot. O GPTMaker e tratado como integracao externa protegida pela API da Vavive.
 
 ## Arquitetura do MVP
 
-- `apps/admin-web`: painel administrativo em Next.js, TypeScript e Tailwind.
-- `apps/api`: backend em Java 21 com Spring Boot, JWT, JPA e integracao protegida com GPTMaker.
-- `PostgreSQL`: base oficial da Vavive para usuarios, franquias, agentes, leads, regras, intencoes e treinamentos.
+- `apps/admin-web`: front-end em Next.js, TypeScript e Tailwind.
+- `apps/api`: backend em Java 21, Spring Boot, JWT, JPA e integracao com GPTMaker.
+- `PostgreSQL`: persistencia de usuarios, franquias, leads, agentes, regras, intencoes e treinamentos.
 
-O backend existe porque a Vavive precisa centralizar autenticacao, autorizacao por franquia, persistencia dos dados do negocio e protecao do token do GPTMaker. O front-end nunca chama o GPTMaker diretamente para evitar exposicao de credenciais e para manter validacoes, auditoria e regras de permissao no servidor.
+O backend existe para centralizar autenticacao, autorizacao por franquia, persistencia do negocio e protecao do token do GPTMaker. O front-end nao chama o GPTMaker diretamente para evitar exposicao de credenciais e para garantir que toda integracao passe pelas regras da Vavive.
 
 ## Estrutura de pastas
 
@@ -17,40 +17,41 @@ vavive-agent-studio/
 ├── apps/
 │   ├── admin-web/
 │   └── api/
-├── docs/
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
-├── package.json
 └── README.md
 ```
 
-## Como rodar
-
-1. PostgreSQL:
+## Como rodar o banco
 
 ```powershell
-docker compose up -d postgres
+docker compose up -d
 ```
 
-2. Front-end:
+## Como rodar o front-end
 
 ```powershell
+cd apps/admin-web
 npm install
-npm run dev:web
+npm run dev
 ```
 
-3. Backend:
+## Como rodar o backend
+
+Em sistemas Unix:
+
+```bash
+cd apps/api
+./mvnw spring-boot:run
+```
+
+No Windows:
 
 ```powershell
-cd apps\api
-.\mvnw.cmd spring-boot:run
+cd apps/api
+mvnw.cmd spring-boot:run
 ```
-
-URLs padrao:
-
-- Front-end: `http://localhost:3000`
-- Backend: `http://localhost:8080`
 
 ## Variaveis de ambiente
 
@@ -69,30 +70,17 @@ Arquivo base: [.env.example](/C:/Users/lypy_/IdeaProjects/vavive-agent-studio/.e
 
 ## Seeds e usuarios mockados
 
-- `admin@vavive.com` / `admin123` : `SUPER_ADMIN`
-- `franquia@vavive.com` / `admin123` : `ADMIN_FRANQUIA`
+- `admin@vavive.com` / `admin123`
+- `franquia@vavive.com` / `admin123`
 
-O seed inicial tambem cria:
+O seed inicial tambem cria uma franquia mockada, um agente GPTMaker mockado e alguns leads mockados.
 
-- uma franquia mockada
-- um agente GPTMaker mockado
-- alguns leads mockados
+## Importante para agentes de IA / OpenCode / Codex
 
-## Endpoints iniciais
-
-- `POST /auth/login`
-- `GET /me`
-- `GET /franchises`
-- `POST /franchises`
-- `GET /franchises/{id}`
-- `GET /dashboard/summary`
-- `GET /leads`
-- `GET /agents`
-- `POST /agents/{id}/trainings`
-- `POST /agents/{id}/intents`
-- `POST /agents/{id}/rules`
-
-## Observacoes
-
-- A integracao real com GPTMaker ainda esta encapsulada em `GptMakerClient` no backend e hoje responde com mocks quando `GPTMAKER_MOCK_ENABLED=true`.
-- `ADMIN_FRANQUIA` deve enxergar apenas a propria franquia; `SUPER_ADMIN` pode ver toda a rede.
+- Nunca execute `npm install` na raiz do projeto.
+- Sempre execute `npm install` dentro de `apps/admin-web`.
+- O backend usa Maven e deve ser executado dentro de `apps/api`.
+- Nao criar `packages/shared` neste MVP.
+- Nao criar pasta `docs` neste MVP.
+- Nao expor token do GPTMaker no front-end.
+- Toda integracao com GPTMaker deve passar pelo backend.
