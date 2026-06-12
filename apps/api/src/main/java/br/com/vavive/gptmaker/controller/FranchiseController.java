@@ -2,6 +2,9 @@ package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
+import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
+import br.com.vavive.gptmaker.dto.PublishAgentResponse;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -33,5 +36,20 @@ public class FranchiseController {
     @GetMapping("/franchises/{id}")
     public FranchiseResponse get(@PathVariable UUID id) {
         return franchiseService.get(id);
+    }
+
+    @GetMapping("/franchises/{id}/setup")
+    public FranchiseSetupResponse getSetup(@PathVariable UUID id) {
+        return franchiseService.getSetup(id);
+    }
+
+    @PostMapping("/franchises/{id}/setup")
+    public FranchiseSetupResponse updateSetup(@PathVariable UUID id, @RequestBody UpdateFranchiseSetupRequest request) {
+        return franchiseService.updateSetup(id, request);
+    }
+
+    @PostMapping("/franchises/{id}/publish-agent")
+    public PublishAgentResponse publishAgent(@PathVariable UUID id) {
+        return franchiseService.publishAgent(id);
     }
 }

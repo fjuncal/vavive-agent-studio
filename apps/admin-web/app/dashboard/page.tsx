@@ -11,6 +11,17 @@ import { evolution } from "@/lib/mock-data";
 import { BadgeCheck, MessageCircle, TrendingUp, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
 
+function formatPublication(value?: string | null) {
+  if (!value) {
+    return "Ainda nao publicado";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short"
+  }).format(new Date(value));
+}
+
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [recentLeads, setRecentLeads] = useState<LeadSummary[]>([]);
@@ -47,6 +58,25 @@ export default function DashboardPage() {
         <StatCard label="Conversao" value={isLoading ? "..." : `${summary?.conversionRate?.toFixed(1).replace(".", ",") ?? "0,0"}%`} hint="Calculada a partir do backend" icon={TrendingUp} />
       </section>
 
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status de configuracao</p>
+          <p className="mt-3 text-lg font-semibold text-ink">{isLoading ? "..." : summary?.setupStatus?.replaceAll("_", " ") || "NAO INICIADO"}</p>
+        </div>
+        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">% concluido</p>
+          <p className="mt-3 text-lg font-semibold text-ink">{isLoading ? "..." : `${summary?.completionPercentage ?? 0}%`}</p>
+        </div>
+        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Ultima publicacao</p>
+          <p className="mt-3 text-sm font-semibold text-ink">{isLoading ? "..." : formatPublication(summary?.lastPublicationAt)}</p>
+        </div>
+        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Ultimo treinamento</p>
+          <p className="mt-3 text-sm font-semibold text-ink">{isLoading ? "..." : summary?.lastTrainingTitle || "Nenhum treinamento publicado"}</p>
+        </div>
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
         <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
           <div className="flex items-center justify-between">
@@ -67,14 +97,16 @@ export default function DashboardPage() {
         </div>
         <div className="rounded-2xl border border-line/80 bg-ink p-5 text-white shadow-soft">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-100">Proximo melhor passo</p>
-          <h2 className="mt-4 text-xl font-semibold">Treinamento da franquia</h2>
+          <h2 className="mt-4 text-xl font-semibold">Setup guiado da franquia</h2>
           <p className="mt-3 text-sm leading-7 text-white/70">
-            Complete dados de servicos, regioes e regras antes de enviar novos blocos ao GPTMaker.
+            O fluxo principal agora publica o agente a partir do setup. Complete os campos obrigatorios e gere o treinamento sem sair da jornada.
           </p>
           <div className="mt-6 h-2 rounded-full bg-white/10">
-            <div className="h-2 w-2/3 rounded-full bg-brand-500" />
+            <div className="h-2 rounded-full bg-brand-500" style={{ width: `${summary?.completionPercentage ?? 0}%` }} />
           </div>
-          <p className="mt-3 text-xs text-white/60">6 de 9 etapas completas</p>
+          <p className="mt-3 text-xs text-white/60">
+            {isLoading ? "Carregando progresso..." : `${summary?.completionPercentage ?? 0}% concluido • ${summary?.setupStatus?.replaceAll("_", " ") || "NAO INICIADO"}`}
+          </p>
         </div>
       </section>
 

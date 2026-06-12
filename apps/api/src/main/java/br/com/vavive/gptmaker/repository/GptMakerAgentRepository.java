@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface GptMakerAgentRepository extends JpaRepository<GptMakerAgent, UUID> {
     List<GptMakerAgent> findByFranchiseId(UUID franchiseId);
+
+    java.util.Optional<GptMakerAgent> findFirstByFranchiseIdOrderByCreatedAtAsc(UUID franchiseId);
 }

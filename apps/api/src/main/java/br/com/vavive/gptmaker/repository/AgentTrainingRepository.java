@@ -5,4 +5,5 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AgentTrainingRepository extends JpaRepository<AgentTraining, UUID> {
+    java.util.Optional<AgentTraining> findTopByAgentFranchiseIdOrderByCreatedAtDesc(UUID franchiseId);
 }

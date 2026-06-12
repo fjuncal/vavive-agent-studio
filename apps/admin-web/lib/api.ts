@@ -35,6 +35,10 @@ export type DashboardSummary = {
   activeLeads: number;
   finishedChats: number;
   conversionRate: number;
+  setupStatus: string;
+  completionPercentage: number;
+  lastPublicationAt?: string | null;
+  lastTrainingTitle?: string | null;
 };
 
 export type LeadSummary = {
@@ -64,6 +68,52 @@ export type CreateFranchisePayload = {
   document?: string;
   city: string;
   state: string;
+};
+
+export type FranchiseSetup = {
+  franchiseId: string;
+  franchiseName: string;
+  document?: string | null;
+  city: string;
+  state: string;
+  responsibleName?: string | null;
+  services?: string | null;
+  prices?: string | null;
+  regions?: string | null;
+  schedules?: string | null;
+  faq?: string | null;
+  rules?: string | null;
+  toneOfVoice?: string | null;
+  completionPercentage: number;
+  setupStatus: string;
+  lastPublishedAt?: string | null;
+  lastGeneratedTraining?: string | null;
+};
+
+export type UpdateFranchiseSetupPayload = {
+  franchiseName?: string;
+  document?: string;
+  city?: string;
+  state?: string;
+  responsibleName?: string;
+  services?: string;
+  prices?: string;
+  regions?: string;
+  schedules?: string;
+  faq?: string;
+  rules?: string;
+  toneOfVoice?: string;
+};
+
+export type PublishAgentResult = {
+  franchiseId: string;
+  agentId: string;
+  trainingId: string;
+  success: boolean;
+  status: string;
+  externalReference?: string | null;
+  message: string;
+  publishedAt?: string | null;
 };
 
 function getStoredToken(): string | null {
@@ -167,4 +217,21 @@ export function getLeads() {
 
 export function getAgents() {
   return apiFetch<AgentSummary[]>("/agents");
+}
+
+export function getFranchiseSetup(id: string) {
+  return apiFetch<FranchiseSetup>(`/franchises/${id}/setup`);
+}
+
+export function saveFranchiseSetup(id: string, payload: UpdateFranchiseSetupPayload) {
+  return apiFetch<FranchiseSetup>(`/franchises/${id}/setup`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function publishFranchiseAgent(id: string) {
+  return apiFetch<PublishAgentResult>(`/franchises/${id}/publish-agent`, {
+    method: "POST"
+  });
 }

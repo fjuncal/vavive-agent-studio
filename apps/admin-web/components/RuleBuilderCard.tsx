@@ -1,14 +1,44 @@
 "use client";
 
 import { CheckCircle2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-export function RuleBuilderCard({ title, description, defaultChecked = true }: { title: string; description: string; defaultChecked?: boolean }) {
+export function RuleBuilderCard({
+  title,
+  description,
+  defaultChecked = true,
+  checked: controlledChecked,
+  onCheckedChange
+}: {
+  title: string;
+  description: string;
+  defaultChecked?: boolean;
+  checked?: boolean;
+  onCheckedChange?: (checked: boolean) => void;
+}) {
   const [checked, setChecked] = useState(defaultChecked);
+  const isControlled = typeof controlledChecked === "boolean";
+
+  useEffect(() => {
+    if (isControlled) {
+      setChecked(controlledChecked);
+    }
+  }, [controlledChecked, isControlled]);
 
   return (
     <label className="flex cursor-pointer gap-4 rounded-2xl border border-line/80 bg-white/86 p-4 shadow-sm transition hover:border-brand-100 hover:bg-brand-50/30">
-      <input type="checkbox" checked={checked} onChange={(event) => setChecked(event.target.checked)} className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(event) => {
+          const nextChecked = event.target.checked;
+          if (!isControlled) {
+            setChecked(nextChecked);
+          }
+          onCheckedChange?.(nextChecked);
+        }}
+        className="mt-1 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500"
+      />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-ink">{title}</h3>

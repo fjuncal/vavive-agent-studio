@@ -24,6 +24,10 @@ public class AgentTraining {
     private String content;
 
     private String status;
+    private String externalReference;
+
+    @Column(length = 2000)
+    private String resultMessage;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id")
@@ -34,10 +38,12 @@ public class AgentTraining {
     protected AgentTraining() {
     }
 
-    public AgentTraining(String title, String content, String status, GptMakerAgent agent) {
+    public AgentTraining(String title, String content, String status, String externalReference, String resultMessage, GptMakerAgent agent) {
         this.title = title;
         this.content = content;
         this.status = status;
+        this.externalReference = externalReference;
+        this.resultMessage = resultMessage;
         this.agent = agent;
     }
 
@@ -60,6 +66,14 @@ public class AgentTraining {
 
     public String getStatus() {
         return status;
+    }
+
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public String getResultMessage() {
+        return resultMessage;
     }
 
     public GptMakerAgent getAgent() {

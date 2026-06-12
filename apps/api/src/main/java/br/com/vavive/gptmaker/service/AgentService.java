@@ -64,7 +64,14 @@ public class AgentService {
         GptMakerAgent agent = requireAccessibleAgent(agentId);
         var result = gptMakerClient.sendTraining(agent.getExternalId(), request.title(), request.content());
         String status = result.success() ? "ENVIADO_GPTMAKER_MOCK" : "SALVO_LOCALMENTE";
-        AgentTraining training = trainingRepository.save(new AgentTraining(request.title(), request.content(), status, agent));
+        AgentTraining training = trainingRepository.save(new AgentTraining(
+            request.title(),
+            request.content(),
+            status,
+            result.externalReference(),
+            result.message(),
+            agent
+        ));
         return new TrainingResponse(training.getId(), training.getTitle(), training.getContent(), training.getStatus(), training.getCreatedAt());
     }
 
