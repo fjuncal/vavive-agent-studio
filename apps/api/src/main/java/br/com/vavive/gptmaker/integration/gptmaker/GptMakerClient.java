@@ -6,7 +6,6 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import feign.RetryableException;
-import java.util.UUID;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -57,7 +56,7 @@ public class GptMakerClient {
             return new GptMakerSyncResult(
                 response.success(),
                 response.success() ? "PUBLICADO_GPTMAKER" : "PUBLICACAO_FALHOU",
-                response.referenceOrDefault("training-" + UUID.randomUUID()),
+                normalizeReference(response.reference()),
                 response.success() ? "Agente publicado no GPTMaker com sucesso." : "Nao foi possivel publicar o agente no GPTMaker.",
                 false,
                 null,
@@ -93,32 +92,14 @@ public class GptMakerClient {
         }
 
         try {
-            /*
-             * Inferencia a partir da documentacao oficial: para tipo INSTRUCTIONS,
-             * enviamos description/details/instructions e mantemos os demais campos vazios.
-             */
             var response = feignClient.createIntent(
                 externalAgentId,
-                new GptMakerCreateIntentRequest(
-                    description,
-                    "INSTRUCTIONS",
-                    "POST",
-                    "https://example.invalid/gptmaker-instructions",
-                    false,
-                    false,
-                    description,
-                    instructions == null || instructions.isBlank() ? description : instructions,
-                    null,
-                    null,
-                    null,
-                    null,
-                    null
-                )
+                buildInstructionsIntentRequest(description, instructions)
             );
             return new GptMakerSyncResult(
                 response.success(),
                 response.success() ? "ENVIADO_GPTMAKER" : "ENVIO_FALHOU",
-                response.referenceOrDefault("intent-" + UUID.randomUUID()),
+                normalizeReference(response.reference()),
                 response.success() ? "Intencao enviada ao GPTMaker com sucesso." : "Nao foi possivel enviar a intencao ao GPTMaker.",
                 false,
                 null,
@@ -166,11 +147,21 @@ public class GptMakerClient {
     }
 
     private String resolveErrorCode(FeignException exception) {
+        GptMakerErrorResponse error = parseError(exception);
+        if (error != null && error.code() != null && !error.code().isBlank()) {
+            return error.code();
+        }
         if (exception.status() == 401 || exception.status() == 403) {
             return "GPTMAKER_AUTH_ERROR";
         }
         if (exception.status() == 400) {
             return "GPTMAKER_BAD_REQUEST";
+        }
+        if (exception.status() == 404) {
+            return "GPTMAKER_AGENT_NOT_FOUND";
+        }
+        if (exception.status() == 429) {
+            return "GPTMAKER_RATE_LIMIT";
         }
         if (exception.status() >= 500) {
             return "GPTMAKER_UNAVAILABLE";
@@ -185,6 +176,12 @@ public class GptMakerClient {
         if (exception.status() == 400) {
             return "O GPTMaker rejeitou os dados enviados. Revise o conteudo e tente novamente.";
         }
+        if (exception.status() == 404) {
+            return "O agente informado nao foi encontrado no GPTMaker.";
+        }
+        if (exception.status() == 429) {
+            return "O GPTMaker atingiu o limite temporario de requisicoes. Tente novamente em alguns instantes.";
+        }
         if (exception.status() >= 500) {
             return "Nao foi possivel publicar no GPTMaker agora. Tente novamente mais tarde.";
         }
@@ -192,19 +189,64 @@ public class GptMakerClient {
     }
 
     private String extractDetails(FeignException exception) {
+        GptMakerErrorResponse error = parseError(exception);
+        if (error != null) {
+            if (error.message() != null && !error.message().isBlank()) {
+                return sanitize(error.message());
+            }
+            if (error.error() != null && !error.error().isBlank()) {
+                return sanitize(error.error());
+            }
+        }
+        String content = exception.contentUTF8();
+        return sanitize(content);
+    }
+
+    private GptMakerCreateIntentRequest buildInstructionsIntentRequest(String description, String instructions) {
+        /*
+         * TODO: a documentacao oficial do GPTMaker marca `httpMethod` e `url` como obrigatorios
+         * inclusive para intents do tipo INSTRUCTIONS. Quando o contrato oficial diferenciar
+         * esse caso de forma explicita, ajustar este payload para remover o campo `url`.
+         */
+        return new GptMakerCreateIntentRequest(
+            description,
+            "INSTRUCTIONS",
+            "POST",
+            properties.baseUrl(),
+            false,
+            false,
+            description,
+            instructions == null || instructions.isBlank() ? description : instructions,
+            null,
+            null,
+            null,
+            null,
+            null
+        );
+    }
+
+    private GptMakerErrorResponse parseError(FeignException exception) {
         String content = exception.contentUTF8();
         if (content == null || content.isBlank()) {
             return null;
         }
         try {
-            GptMakerErrorResponse error = objectMapper.readValue(content, GptMakerErrorResponse.class);
-            if (error.message() != null && !error.message().isBlank()) {
-                return error.message();
-            }
-            return error.error();
+            return objectMapper.readValue(content, GptMakerErrorResponse.class);
         } catch (Exception ignored) {
-            return content.length() > 300 ? content.substring(0, 300) : content;
+            return null;
         }
+    }
+
+    private String sanitize(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String sanitized = value.replaceAll("\\s+", " ").trim();
+        return sanitized.length() > 300 ? sanitized.substring(0, 300) : sanitized;
+    }
+
+    private String normalizeReference(String reference) {
+        return reference == null || reference.isBlank() ? null : reference;
     }
 
     public record GptMakerHealthStatus(

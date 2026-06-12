@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: vavive-gptmaker-postgres
     environment:
-      POSTGRES_DB: XXXXX
-      POSTGRES_USER: XXXX
-      POSTGRES_PASSWORD: XXXXXXX
+      POSTGRES_DB: vavive_gptmaker
+      POSTGRES_USER: vavive
+      POSTGRES_PASSWORD: vavive
     ports:
       - "5432:5432"
     volumes:

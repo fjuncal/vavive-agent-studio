@@ -150,6 +150,16 @@ export default function AgentTrainingsPage() {
     if (!params?.id) {
       return;
     }
+    if (!agent?.externalId) {
+      setError("Nao foi possivel publicar no GPTMaker. O agente ainda nao possui identificador externo configurado.");
+      setSuccess(null);
+      return;
+    }
+    if (!form.title.trim() || !preview.trim()) {
+      setError("Preencha o titulo e gere ou revise o treinamento antes de enviar.");
+      setSuccess(null);
+      return;
+    }
 
     setIsSubmitting(true);
     setError(null);
@@ -165,10 +175,10 @@ export default function AgentTrainingsPage() {
       } else if (created.status === "PUBLICADO_GPTMAKER") {
         setSuccess("Agente publicado no GPTMaker com sucesso.");
       } else {
-        setError(created.message || "Nao foi possivel publicar no GPTMaker agora. O treinamento ficou salvo localmente.");
+        setError(created.message || "Nao foi possivel publicar no GPTMaker. Verifique a configuracao da integracao ou tente novamente.");
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel enviar o treinamento.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel publicar no GPTMaker. Verifique a configuracao da integracao ou tente novamente.");
     } finally {
       setIsSubmitting(false);
     }

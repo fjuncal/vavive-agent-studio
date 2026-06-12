@@ -4,9 +4,7 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentReque
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
-import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -28,7 +26,4 @@ public interface GptMakerFeignClient {
         @PathVariable String agentId,
         @RequestBody GptMakerCreateIntentRequest request
     );
-
-    @GetMapping("/v2/workspaces")
-    GptMakerWorkspaceResponse[] listWorkspaces();
 }

@@ -90,6 +90,7 @@ Arquivo base: [.env.example](/C:/Users/lypy_/IdeaProjects/vavive-agent-studio/.e
 Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 
 - O backend usa OpenFeign para falar com a API do GPTMaker.
+- O backend usa Spring Boot `4.0.x` com Spring Cloud `2025.1.x` para manter a combinacao oficialmente suportada pelo Spring Cloud.
 - `GPTMAKER_MOCK_ENABLED=true` existe apenas para desenvolvimento local.
 - `GPTMAKER_MOCK_ENABLED=false` usa a API real do GPTMaker.
 - Em modo real, se a API GPTMaker falhar, o sistema mostra erro controlado e nao simula sucesso.
@@ -97,6 +98,16 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 - `GPTMAKER_API_TOKEN` fica apenas no backend.
 - O front-end nunca chama o GPTMaker diretamente.
 - Toda integracao com GPTMaker passa pela API Java da Vavive.
+
+## Validacao da integracao GPTMaker
+
+- Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
+- O backend usa OpenFeign.
+- Health local: `GET /gptmaker/health`
+- `GPTMAKER_MOCK_ENABLED=true`: simula publicacao
+- `GPTMAKER_MOCK_ENABLED=false` sem token: erro controlado
+- `GPTMAKER_MOCK_ENABLED=false` com token: tenta chamar GPTMaker real
+- Nao existe fallback funcional em modo real
 
 ## Seeds e usuarios mockados
 
