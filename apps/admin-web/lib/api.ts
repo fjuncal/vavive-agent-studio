@@ -132,6 +132,16 @@ export type GptMakerHealth = {
   message: string;
 };
 
+export type GptMakerDiagnostics = {
+  baseUrl: string;
+  mockEnabled: boolean;
+  tokenConfigured: boolean;
+  status: "CONNECTED" | "MISSING_TOKEN" | "ERROR" | "MOCK";
+  workspaceCount: number;
+  message: string;
+  details?: string | null;
+};
+
 export type TrainingSummary = {
   id: string;
   title: string;
@@ -153,6 +163,8 @@ export type GptMakerAgentOption = {
   name: string;
   behavior?: string | null;
   avatar?: string | null;
+  communicationType?: string | null;
+  type?: string | null;
   jobName?: string | null;
   jobSite?: string | null;
   jobDescription?: string | null;
@@ -291,6 +303,10 @@ export function publishFranchiseAgent(id: string) {
 
 export function getGptMakerHealth() {
   return apiFetch<GptMakerHealth>("/gptmaker/health");
+}
+
+export function getGptMakerDiagnostics() {
+  return apiFetch<GptMakerDiagnostics>("/gptmaker/diagnostics");
 }
 
 export function getAgentTrainings(id: string) {

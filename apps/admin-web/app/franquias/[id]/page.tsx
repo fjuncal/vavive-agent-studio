@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import {
   getFranchiseById,
   getFranchiseGptMakerConnection,
+  getGptMakerDiagnostics,
   getGptMakerHealth,
   getGptMakerWorkspaceAgents,
   getGptMakerWorkspaces,
@@ -15,10 +16,11 @@ import {
   type FranchiseGptMakerConnection,
   type FranchiseSummary,
   type GptMakerAgentOption,
+  type GptMakerDiagnostics,
   type GptMakerHealth,
   type GptMakerWorkspaceOption
 } from "@/lib/api";
-import { Bot, CheckCircle2, Loader2, PlugZap, RefreshCcw, ShieldCheck } from "lucide-react";
+import { Bot, Loader2, PlugZap, RefreshCcw, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -40,6 +42,7 @@ export default function FranchiseDetailPage() {
   const [franchise, setFranchise] = useState<FranchiseSummary | null>(null);
   const [connection, setConnection] = useState<FranchiseGptMakerConnection | null>(null);
   const [health, setHealth] = useState<GptMakerHealth | null>(null);
+  const [diagnostics, setDiagnostics] = useState<GptMakerDiagnostics | null>(null);
   const [workspaces, setWorkspaces] = useState<GptMakerWorkspaceOption[]>([]);
   const [agents, setAgents] = useState<GptMakerAgentOption[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
@@ -48,6 +51,7 @@ export default function FranchiseDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
@@ -83,6 +87,7 @@ export default function FranchiseDetailPage() {
 
   useEffect(() => {
     if (!isSuperAdmin) {
+      setWorkspaceLoadError("Apenas SUPER_ADMIN pode carregar e vincular workspaces GPTMaker.");
       return;
     }
 
@@ -135,7 +140,7 @@ export default function FranchiseDetailPage() {
     : workspaceLoadError
       ? "Erro ao carregar workspaces"
       : workspaces.length === 0
-        ? "Nenhum workspace encontrado"
+        ? "Nenhum workspace retornado pela API GPTMaker."
         : `Workspace(s) encontrado(s): ${workspaces.length}`;
 
   async function handleSaveConnection() {
@@ -159,6 +164,26 @@ export default function FranchiseDetailPage() {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar o vinculo GPTMaker.");
     } finally {
       setIsSaving(false);
+    }
+  }
+
+  async function handleDiagnostics() {
+    setIsRunningDiagnostics(true);
+    setError(null);
+    try {
+      const response = await getGptMakerDiagnostics();
+      setDiagnostics(response);
+      if (response.status === "CONNECTED") {
+        setSuccess(`Conexao validada. ${response.workspaceCount} workspace(s) encontrado(s).`);
+      } else {
+        setSuccess(null);
+        setError(response.message);
+      }
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel executar o diagnostico GPTMaker.");
+      setSuccess(null);
+    } finally {
+      setIsRunningDiagnostics(false);
     }
   }
 
@@ -226,7 +251,7 @@ export default function FranchiseDetailPage() {
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-slate-700">Workspace GPTMaker</span>
                 <span className={`text-xs ${workspaceLoadError ? "text-rose-600" : "text-slate-500"}`}>
-                  {workspaceStatusMessage}
+                  {workspaceLoadError ?? workspaceStatusMessage}
                 </span>
                 <select
                   className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
@@ -277,6 +302,8 @@ export default function FranchiseDetailPage() {
               {selectedAgent ? (
                 <div className="rounded-xl bg-mist p-4 text-sm text-slate-600">
                   <p><strong className="text-ink">Comportamento:</strong> {selectedAgent.behavior ?? "Nao informado"}</p>
+                  <p className="mt-1"><strong className="text-ink">Tipo de comunicacao:</strong> {selectedAgent.communicationType ?? "Nao informado"}</p>
+                  <p className="mt-1"><strong className="text-ink">Objetivo:</strong> {selectedAgent.type ?? "Nao informado"}</p>
                   <p className="mt-1"><strong className="text-ink">Funcao:</strong> {selectedAgent.jobName ?? "Nao informada"}</p>
                   <p className="mt-1"><strong className="text-ink">Descricao:</strong> {selectedAgent.jobDescription ?? "Nao informada"}</p>
                 </div>
@@ -295,11 +322,19 @@ export default function FranchiseDetailPage() {
                 <Link href="/setup-guiado" className="rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700">
                   Abrir setup guiado
                 </Link>
+                <button
+                  type="button"
+                  onClick={() => void handleDiagnostics()}
+                  disabled={isRunningDiagnostics}
+                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isRunningDiagnostics ? "Testando..." : "Testar conexao GPTMaker"}
+                </button>
               </div>
             </div>
           ) : (
             <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-              Apenas o perfil SUPER_ADMIN pode alterar o workspace e o agente GPTMaker desta franquia.
+              Apenas SUPER_ADMIN pode carregar e vincular workspaces GPTMaker.
             </div>
           )}
         </div>
@@ -325,6 +360,11 @@ export default function FranchiseDetailPage() {
             <div className="rounded-xl bg-white/10 p-4">
               <p className="font-semibold">Health da integracao</p>
               <p className="mt-1 text-white/70">{health?.status ?? "Carregando..."}</p>
+            </div>
+            <div className="rounded-xl bg-white/10 p-4">
+              <p className="font-semibold">Diagnostico GPTMaker</p>
+              <p className="mt-1 text-white/70">{diagnostics?.status ?? "Ainda nao executado"}</p>
+              <p className="mt-2 text-xs text-white/60">{diagnostics?.message ?? "Use o botao de teste para validar a conexao real."}</p>
             </div>
           </div>
         </div>

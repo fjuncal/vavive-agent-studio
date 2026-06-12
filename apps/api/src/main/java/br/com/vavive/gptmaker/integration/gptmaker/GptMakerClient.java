@@ -3,13 +3,14 @@ package br.com.vavive.gptmaker.integration.gptmaker;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import feign.RetryableException;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -123,12 +124,59 @@ public class GptMakerClient {
 
     public GptMakerHealthStatus health() {
         if (properties.mockEnabled()) {
-            return new GptMakerHealthStatus(properties.baseUrl(), true, properties.tokenConfigured(), "MOCK", "Publicacao simulada em ambiente de desenvolvimento.");
+            return new GptMakerHealthStatus(properties.baseUrl(), true, properties.tokenConfigured(), "MOCK", "Publicacao simulada em ambiente de desenvolvimento. Use /gptmaker/diagnostics para testar conexao real.");
         }
         if (!properties.tokenConfigured()) {
-            return new GptMakerHealthStatus(properties.baseUrl(), false, false, "MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+            return new GptMakerHealthStatus(properties.baseUrl(), false, false, "MISSING_TOKEN", MISSING_TOKEN_MESSAGE + " Use /gptmaker/diagnostics para testar conexao real.");
         }
-        return new GptMakerHealthStatus(properties.baseUrl(), false, true, "READY", "Integracao pronta para usar a API real do GPTMaker.");
+        return new GptMakerHealthStatus(properties.baseUrl(), false, true, "READY", "Configuracao pronta. Use /gptmaker/diagnostics para testar conexao real.");
+    }
+
+    public GptMakerDiagnosticsResponse diagnostics() {
+        if (properties.mockEnabled()) {
+            return new GptMakerDiagnosticsResponse(
+                true,
+                properties.tokenConfigured(),
+                properties.baseUrl(),
+                "MOCK",
+                0,
+                "Integracao em modo mock. Nenhuma chamada real ao GPTMaker foi executada.",
+                null
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            return new GptMakerDiagnosticsResponse(
+                false,
+                false,
+                properties.baseUrl(),
+                "MISSING_TOKEN",
+                0,
+                MISSING_TOKEN_MESSAGE,
+                null
+            );
+        }
+        try {
+            List<GptMakerWorkspaceResponse> workspaces = listWorkspaces();
+            return new GptMakerDiagnosticsResponse(
+                false,
+                true,
+                properties.baseUrl(),
+                "CONNECTED",
+                workspaces.size(),
+                "Conexao real com o GPTMaker validada com sucesso.",
+                null
+            );
+        } catch (GptMakerIntegrationException exception) {
+            return new GptMakerDiagnosticsResponse(
+                false,
+                true,
+                properties.baseUrl(),
+                "ERROR",
+                0,
+                exception.getMessage(),
+                exception.getDetails()
+            );
+        }
     }
 
     public List<GptMakerWorkspaceResponse> listWorkspaces() {
@@ -144,17 +192,16 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<GptMakerWorkspaceResponse[]> response = feignClient.listWorkspaces();
-            List<GptMakerWorkspaceResponse> items = response.getBody() == null
-                ? List.of()
-                : Arrays.stream(response.getBody()).toList();
+            ResponseEntity<JsonNode> response = feignClient.listWorkspaces();
+            JsonNode payload = response.getBody();
+            List<GptMakerWorkspaceResponse> items = mapWorkspacePayload(payload);
             log.info("GPTMaker listWorkspaces endpoint=/v2/workspaces status={} quantity={} mockEnabled=false", response.getStatusCode().value(), items.size());
             return items;
         } catch (RetryableException exception) {
             log.warn("GPTMaker listWorkspaces endpoint=/v2/workspaces status=TIMEOUT quantity=0 mockEnabled=false");
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os workspaces do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
-            log.warn("GPTMaker listWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false", exception.status());
+            log.warn("GPTMaker listWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false details={}", exception.status(), extractDetails(exception));
             throw toIntegrationException(exception, "Nao foi possivel listar os workspaces do GPTMaker.");
         }
     }
@@ -165,8 +212,8 @@ public class GptMakerClient {
         }
         if (properties.mockEnabled()) {
             List<GptMakerAgentResponse> mockItems = List.of(
-                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-01", "Assistente Comercial", "Acolhedor", null, "Atendimento", "https://gptmaker.ai", "Agente comercial da franquia"),
-                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-02", "Assistente Operacional", "Objetivo", null, "Operacao", "https://gptmaker.ai", "Agente de suporte operacional")
+                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-01", "Assistente Comercial", "Acolhedor", null, "NORMAL", "SALE", "Atendimento", "https://gptmaker.ai", "Agente comercial da franquia"),
+                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-02", "Assistente Operacional", "Objetivo", null, "FORMAL", "SUPPORT", "Operacao", "https://gptmaker.ai", "Agente de suporte operacional")
             );
             log.info("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status=200 quantity={} mockEnabled=true", workspaceId, mockItems.size());
             return mockItems;
@@ -175,17 +222,16 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<GptMakerAgentResponse[]> response = feignClient.listAgents(workspaceId);
-            List<GptMakerAgentResponse> items = response.getBody() == null
-                ? List.of()
-                : Arrays.stream(response.getBody()).toList();
+            ResponseEntity<JsonNode> response = feignClient.listAgents(workspaceId);
+            JsonNode payload = response.getBody();
+            List<GptMakerAgentResponse> items = mapAgentPayload(payload);
             log.info("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status={} quantity={} mockEnabled=false", workspaceId, response.getStatusCode().value(), items.size());
             return items;
         } catch (RetryableException exception) {
             log.warn("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status=TIMEOUT quantity=0 mockEnabled=false", workspaceId);
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os agentes do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
-            log.warn("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false", workspaceId, exception.status());
+            log.warn("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false details={}", workspaceId, exception.status(), extractDetails(exception));
             throw toIntegrationException(exception, "Nao foi possivel listar os agentes do GPTMaker.");
         }
     }
@@ -198,16 +244,16 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<JsonNode> response = feignClient.debugListWorkspaces();
+            ResponseEntity<JsonNode> response = feignClient.listWorkspaces();
             JsonNode payload = response.getBody();
-            int quantity = payload != null && payload.isArray() ? payload.size() : payload == null ? 0 : 1;
+            int quantity = mapWorkspacePayload(payload).size();
             log.info("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status={} quantity={} mockEnabled=false", response.getStatusCode().value(), quantity);
             return payload;
         } catch (RetryableException exception) {
             log.warn("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status=TIMEOUT quantity=0 mockEnabled=false");
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os workspaces do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
-            log.warn("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false", exception.status());
+            log.warn("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false details={}", exception.status(), extractDetails(exception));
             throw toIntegrationException(exception, "Nao foi possivel listar os workspaces do GPTMaker.");
         }
     }
@@ -223,18 +269,94 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<JsonNode> response = feignClient.debugListAgents(workspaceId);
+            ResponseEntity<JsonNode> response = feignClient.listAgents(workspaceId);
             JsonNode payload = response.getBody();
-            int quantity = payload != null && payload.isArray() ? payload.size() : payload == null ? 0 : 1;
+            int quantity = mapAgentPayload(payload).size();
             log.info("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status={} quantity={} mockEnabled=false", workspaceId, response.getStatusCode().value(), quantity);
             return payload;
         } catch (RetryableException exception) {
             log.warn("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status=TIMEOUT quantity=0 mockEnabled=false", workspaceId);
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os agentes do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
-            log.warn("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false", workspaceId, exception.status());
+            log.warn("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false details={}", workspaceId, exception.status(), extractDetails(exception));
             throw toIntegrationException(exception, "Nao foi possivel listar os agentes do GPTMaker.");
         }
+    }
+
+    private List<GptMakerWorkspaceResponse> mapWorkspacePayload(JsonNode payload) {
+        JsonNode itemsNode = extractItemsNode(payload);
+        if (itemsNode == null || itemsNode.isNull()) {
+            return List.of();
+        }
+        if (!itemsNode.isArray()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para workspaces.", sanitize(itemsNode.toString()));
+        }
+
+        List<GptMakerWorkspaceResponse> items = new ArrayList<>();
+        for (JsonNode itemNode : itemsNode) {
+            if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+                continue;
+            }
+            String id = textValue(itemNode, "id");
+            String name = textValue(itemNode, "name");
+            items.add(new GptMakerWorkspaceResponse(id, name));
+        }
+        return items;
+    }
+
+    private List<GptMakerAgentResponse> mapAgentPayload(JsonNode payload) {
+        JsonNode itemsNode = extractItemsNode(payload);
+        if (itemsNode == null || itemsNode.isNull()) {
+            return List.of();
+        }
+        if (!itemsNode.isArray()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para agentes.", sanitize(itemsNode.toString()));
+        }
+
+        List<GptMakerAgentResponse> items = new ArrayList<>();
+        for (JsonNode itemNode : itemsNode) {
+            if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+                continue;
+            }
+            items.add(new GptMakerAgentResponse(
+                textValue(itemNode, "id"),
+                textValue(itemNode, "name"),
+                textValue(itemNode, "behavior"),
+                textValue(itemNode, "avatar"),
+                textValue(itemNode, "communicationType"),
+                textValue(itemNode, "type"),
+                textValue(itemNode, "jobName"),
+                textValue(itemNode, "jobSite"),
+                textValue(itemNode, "jobDescription")
+            ));
+        }
+        return items;
+    }
+
+    private JsonNode extractItemsNode(JsonNode payload) {
+        if (payload == null || payload.isNull()) {
+            return null;
+        }
+        if (payload.isArray()) {
+            return payload;
+        }
+        if (payload.isObject()) {
+            for (String fieldName : List.of("data", "items", "results", "content")) {
+                JsonNode candidate = payload.get(fieldName);
+                if (candidate != null && !candidate.isNull()) {
+                    return candidate;
+                }
+            }
+        }
+        return payload;
+    }
+
+    private String textValue(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        return value.asText();
     }
 
     public GptMakerSyncResult sendRule(String externalAgentId, String title, String description) {

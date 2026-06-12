@@ -6,7 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getDashboardSummary, getGptMakerHealth, getLeads, type DashboardSummary, type GptMakerHealth, type LeadSummary } from "@/lib/api";
+import { getDashboardSummary, getGptMakerDiagnostics, getGptMakerHealth, getLeads, type DashboardSummary, type GptMakerDiagnostics, type GptMakerHealth, type LeadSummary } from "@/lib/api";
 import { evolution } from "@/lib/mock-data";
 import { BadgeCheck, MessageCircle, TrendingUp, UsersRound } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -25,16 +25,18 @@ function formatPublication(value?: string | null) {
 export default function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [gptMakerHealth, setGptMakerHealth] = useState<GptMakerHealth | null>(null);
+  const [gptMakerDiagnostics, setGptMakerDiagnostics] = useState<GptMakerDiagnostics | null>(null);
   const [recentLeads, setRecentLeads] = useState<LeadSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([getDashboardSummary(), getLeads(), getGptMakerHealth()])
-      .then(([dashboardData, leadsData, gptMakerData]) => {
+    Promise.all([getDashboardSummary(), getLeads(), getGptMakerHealth(), getGptMakerDiagnostics()])
+      .then(([dashboardData, leadsData, gptMakerData, gptMakerDiagnosticsData]) => {
         setSummary(dashboardData);
         setRecentLeads(leadsData.slice(0, 4));
         setGptMakerHealth(gptMakerData);
+        setGptMakerDiagnostics(gptMakerDiagnosticsData);
       })
       .catch((requestError) => {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o dashboard.");
@@ -139,6 +141,40 @@ export default function DashboardPage() {
         </div>
         <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {gptMakerHealth?.message ?? "Carregando status da integracao GPTMaker..."}
+        </p>
+      </section>
+
+      <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Diagnostico</p>
+            <h2 className="mt-2 text-lg font-semibold text-ink">Diagnostico GPTMaker</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Este card chama a API real quando o modo mock esta desativado e ajuda a separar erro de configuracao, token ou payload.
+            </p>
+          </div>
+          <StatusBadge status={gptMakerDiagnostics?.status ?? "MOCK"} />
+        </div>
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.mockEnabled ? "Mock" : "Real"}</p>
+          </div>
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Token configurado</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.tokenConfigured ? "Sim" : "Nao"}</p>
+          </div>
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Workspaces encontrados</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.workspaceCount ?? 0}</p>
+          </div>
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.status ?? "Carregando..."}</p>
+          </div>
+        </div>
+        <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          {gptMakerDiagnostics?.message ?? "Carregando diagnostico GPTMaker..."}
         </p>
       </section>
 

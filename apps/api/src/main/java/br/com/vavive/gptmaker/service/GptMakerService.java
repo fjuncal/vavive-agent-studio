@@ -4,6 +4,7 @@ import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
@@ -30,6 +31,10 @@ public class GptMakerService {
         );
     }
 
+    public GptMakerDiagnosticsResponse diagnostics() {
+        return gptMakerClient.diagnostics();
+    }
+
     public List<GptMakerWorkspaceOptionResponse> listWorkspaces() {
         try {
             return gptMakerClient.listWorkspaces().stream()
@@ -48,6 +53,8 @@ public class GptMakerService {
                     item.name(),
                     item.behavior(),
                     item.avatar(),
+                    item.communicationType(),
+                    item.type(),
                     item.jobName(),
                     item.jobSite(),
                     item.jobDescription()

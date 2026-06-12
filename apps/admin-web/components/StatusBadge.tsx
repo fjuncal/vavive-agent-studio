@@ -16,6 +16,8 @@ const variants: Record<string, string> = {
   ENVIO_FALHOU: "bg-rose-50 text-rose-700 ring-rose-100",
   CONECTADO: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   NAO_CONECTADO: "bg-amber-50 text-amber-700 ring-amber-100",
+  CONNECTED: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  ERROR: "bg-rose-50 text-rose-700 ring-rose-100",
   READY: "bg-emerald-50 text-emerald-700 ring-emerald-100",
   MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
   MISSING_TOKEN: "bg-amber-50 text-amber-700 ring-amber-100"

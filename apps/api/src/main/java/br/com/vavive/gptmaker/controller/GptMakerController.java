@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import br.com.vavive.gptmaker.service.GptMakerService;
@@ -21,6 +22,11 @@ public class GptMakerController {
     @GetMapping("/gptmaker/health")
     public GptMakerHealthResponse health() {
         return gptMakerService.health();
+    }
+
+    @GetMapping("/gptmaker/diagnostics")
+    public GptMakerDiagnosticsResponse diagnostics() {
+        return gptMakerService.diagnostics();
     }
 
     @GetMapping("/gptmaker/workspaces")

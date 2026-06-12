@@ -5,6 +5,8 @@ public record GptMakerAgentOptionResponse(
     String name,
     String behavior,
     String avatar,
+    String communicationType,
+    String type,
     String jobName,
     String jobSite,
     String jobDescription

@@ -104,10 +104,29 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 - Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 - O backend usa OpenFeign.
 - Health local: `GET /gptmaker/health`
+- Diagnostico real: `GET /gptmaker/diagnostics`
 - `GPTMAKER_MOCK_ENABLED=true`: simula publicacao
 - `GPTMAKER_MOCK_ENABLED=false` sem token: erro controlado
 - `GPTMAKER_MOCK_ENABLED=false` com token: tenta chamar GPTMaker real
 - Nao existe fallback funcional em modo real
+
+## Como testar GPTMaker real
+
+1. Suba o backend com:
+   - `GPTMAKER_MOCK_ENABLED=false`
+   - `GPTMAKER_API_TOKEN=seu_token`
+   - `GPTMAKER_BASE_URL=https://api.gptmaker.ai`
+2. Faça login como `SUPER_ADMIN`.
+3. Abra o dashboard.
+4. Confira `GET /gptmaker/health`. Ele deve mostrar `READY` quando a configuracao local estiver pronta.
+5. Rode `GET /gptmaker/diagnostics`. Ele chama a API real do GPTMaker e deve mostrar `CONNECTED` e `workspaceCount`.
+6. Abra uma franquia e selecione workspace e agente.
+
+Observacoes:
+- `GET /gptmaker/health` nao chama a API real.
+- `GET /gptmaker/diagnostics` chama a API real.
+- Workspaces usam `GET /v2/workspaces`.
+- Agentes usam `GET /v2/workspace/{workspaceId}/agents`.
 
 ## Seeds e usuarios mockados
 

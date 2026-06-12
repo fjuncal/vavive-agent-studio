@@ -8,6 +8,8 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -112,28 +114,90 @@ class GptMakerClientTest {
         assertTrue(health.tokenConfigured());
     }
 
+    @Test
+    void diagnosticsReturnsConnectedWhenRealModeListsWorkspaces() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        ArrayNode workspaces = objectMapper.createArrayNode();
+        workspaces.add(objectMapper.createObjectNode().put("id", "ws-1").put("name", "Workspace 1"));
+        feignClient.workspacePayload = workspaces;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var diagnostics = client.diagnostics();
+
+        assertEquals("CONNECTED", diagnostics.status());
+        assertEquals(1, diagnostics.workspaceCount());
+    }
+
+    @Test
+    void listWorkspacesAcceptsWrappedDataPayload() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode data = objectMapper.createArrayNode();
+        data.add(objectMapper.createObjectNode().put("id", "ws-1").put("name", "Workspace 1"));
+        payload.set("data", data);
+        feignClient.workspacePayload = payload;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var workspaces = client.listWorkspaces();
+
+        assertEquals(1, workspaces.size());
+        assertEquals("ws-1", workspaces.getFirst().id());
+    }
+
+    @Test
+    void listAgentsAcceptsWrappedItemsPayload() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        ObjectNode payload = objectMapper.createObjectNode();
+        ArrayNode items = objectMapper.createArrayNode();
+        items.add(objectMapper.createObjectNode()
+            .put("id", "agent-1")
+            .put("name", "Agente 1")
+            .put("behavior", "NORMAL")
+            .put("communicationType", "FORMAL")
+            .put("type", "SALE"));
+        payload.set("items", items);
+        feignClient.agentPayload = payload;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var agents = client.listAgents("ws-1");
+
+        assertEquals(1, agents.size());
+        assertEquals("FORMAL", agents.getFirst().communicationType());
+        assertEquals("SALE", agents.getFirst().type());
+    }
+
     private static final class TrackingFeignClient implements GptMakerFeignClient {
         boolean trainingCalled;
         boolean intentCalled;
+        JsonNode workspacePayload = new ObjectMapper().createArrayNode();
+        JsonNode agentPayload = new ObjectMapper().createArrayNode();
 
         @Override
-        public ResponseEntity<GptMakerWorkspaceResponse[]> listWorkspaces() {
-            return ResponseEntity.ok(new GptMakerWorkspaceResponse[0]);
+        public ResponseEntity<JsonNode> listWorkspaces() {
+            return ResponseEntity.ok(workspacePayload);
         }
 
         @Override
-        public ResponseEntity<JsonNode> debugListWorkspaces() {
-            return ResponseEntity.ok(new ObjectMapper().createArrayNode());
-        }
-
-        @Override
-        public ResponseEntity<GptMakerAgentResponse[]> listAgents(String workspaceId) {
-            return ResponseEntity.ok(new GptMakerAgentResponse[0]);
-        }
-
-        @Override
-        public ResponseEntity<JsonNode> debugListAgents(String workspaceId) {
-            return ResponseEntity.ok(new ObjectMapper().createArrayNode());
+        public ResponseEntity<JsonNode> listAgents(String workspaceId) {
+            return ResponseEntity.ok(agentPayload);
         }
 
         @Override

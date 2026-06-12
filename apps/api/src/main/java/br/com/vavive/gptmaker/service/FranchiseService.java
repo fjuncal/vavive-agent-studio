@@ -118,6 +118,8 @@ public class FranchiseService {
                     item.name(),
                     item.behavior(),
                     item.avatar(),
+                    item.communicationType(),
+                    item.type(),
                     item.jobName(),
                     item.jobSite(),
                     item.jobDescription()
@@ -149,6 +151,8 @@ public class FranchiseService {
                     item.name(),
                     item.behavior(),
                     item.avatar(),
+                    item.communicationType(),
+                    item.type(),
                     item.jobName(),
                     item.jobSite(),
                     item.jobDescription()
