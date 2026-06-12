@@ -4,8 +4,8 @@ services:
     container_name: vavive-gptmaker-postgres
     environment:
       POSTGRES_DB: vavive_gptmaker
-      POSTGRES_USER: vavive
-      POSTGRES_PASSWORD: vavive
+      POSTGRES_USER: XXXXX
+      POSTGRES_PASSWORD: XXXXXXXXXXX
     ports:
       - "5432:5432"
     volumes:
