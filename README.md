@@ -85,6 +85,19 @@ Arquivo base: [.env.example](/C:/Users/lypy_/IdeaProjects/vavive-agent-studio/.e
 - `GPTMAKER_MOCK_ENABLED`
 - `NEXT_PUBLIC_API_BASE_URL`
 
+## Integracao GPTMaker
+
+Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
+
+- O backend usa OpenFeign para falar com a API do GPTMaker.
+- `GPTMAKER_MOCK_ENABLED=true` existe apenas para desenvolvimento local.
+- `GPTMAKER_MOCK_ENABLED=false` usa a API real do GPTMaker.
+- Em modo real, se a API GPTMaker falhar, o sistema mostra erro controlado e nao simula sucesso.
+- Nao existe fallback funcional em modo real.
+- `GPTMAKER_API_TOKEN` fica apenas no backend.
+- O front-end nunca chama o GPTMaker diretamente.
+- Toda integracao com GPTMaker passa pela API Java da Vavive.
+
 ## Seeds e usuarios mockados
 
 - `admin@vavive.com` / `admin123`

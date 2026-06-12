@@ -6,7 +6,17 @@ const variants: Record<string, string> = {
   NOVO: "bg-blue-50 text-blue-700 ring-blue-100",
   EM_ATENDIMENTO: "bg-amber-50 text-amber-700 ring-amber-100",
   CONVERTIDO: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  FINALIZADO: "bg-slate-100 text-slate-700 ring-slate-200"
+  FINALIZADO: "bg-slate-100 text-slate-700 ring-slate-200",
+  SALVO_LOCALMENTE: "bg-slate-100 text-slate-700 ring-slate-200",
+  PUBLICADO_GPTMAKER: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  PUBLICADO_GPTMAKER_MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
+  PUBLICACAO_FALHOU: "bg-rose-50 text-rose-700 ring-rose-100",
+  ENVIADO_GPTMAKER: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  ENVIADO_GPTMAKER_MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
+  ENVIO_FALHOU: "bg-rose-50 text-rose-700 ring-rose-100",
+  READY: "bg-emerald-50 text-emerald-700 ring-emerald-100",
+  MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
+  MISSING_TOKEN: "bg-amber-50 text-amber-700 ring-amber-100"
 };
 
 export function StatusBadge({ status }: { status: string }) {

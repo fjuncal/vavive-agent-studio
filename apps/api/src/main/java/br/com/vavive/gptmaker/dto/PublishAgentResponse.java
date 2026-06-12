@@ -11,6 +11,9 @@ public record PublishAgentResponse(
     String status,
     String externalReference,
     String message,
-    LocalDateTime publishedAt
+    LocalDateTime publishedAt,
+    boolean mockEnabled,
+    String errorCode,
+    String details
 ) {
 }

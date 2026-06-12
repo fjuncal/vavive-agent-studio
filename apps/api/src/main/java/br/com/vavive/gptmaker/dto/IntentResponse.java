@@ -9,6 +9,10 @@ public record IntentResponse(
     String description,
     String examplePhrase,
     boolean active,
+    String status,
+    String externalReference,
+    String message,
+    boolean mockEnabled,
     LocalDateTime createdAt
 ) {
 }

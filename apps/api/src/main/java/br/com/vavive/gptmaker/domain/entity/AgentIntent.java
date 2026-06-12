@@ -1,5 +1,6 @@
 package br.com.vavive.gptmaker.domain.entity;
 
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
@@ -21,6 +22,11 @@ public class AgentIntent {
     private String description;
     private String examplePhrase;
     private boolean active = true;
+    private String status;
+    private String externalReference;
+
+    @Column(length = 2000)
+    private String resultMessage;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id")
@@ -31,10 +37,13 @@ public class AgentIntent {
     protected AgentIntent() {
     }
 
-    public AgentIntent(String name, String description, String examplePhrase, GptMakerAgent agent) {
+    public AgentIntent(String name, String description, String examplePhrase, String status, String externalReference, String resultMessage, GptMakerAgent agent) {
         this.name = name;
         this.description = description;
         this.examplePhrase = examplePhrase;
+        this.status = status;
+        this.externalReference = externalReference;
+        this.resultMessage = resultMessage;
         this.agent = agent;
     }
 
@@ -61,6 +70,18 @@ public class AgentIntent {
 
     public boolean isActive() {
         return active;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public String getExternalReference() {
+        return externalReference;
+    }
+
+    public String getResultMessage() {
+        return resultMessage;
     }
 
     public GptMakerAgent getAgent() {

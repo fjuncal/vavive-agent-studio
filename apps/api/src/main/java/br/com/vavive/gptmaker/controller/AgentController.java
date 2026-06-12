@@ -30,6 +30,11 @@ public class AgentController {
         return agentService.list();
     }
 
+    @GetMapping("/agents/{id}/trainings")
+    public List<TrainingResponse> listTrainings(@PathVariable UUID id) {
+        return agentService.listTrainings(id);
+    }
+
     @PostMapping("/agents/{id}/trainings")
     public TrainingResponse addTraining(@PathVariable UUID id, @Valid @RequestBody CreateTrainingRequest request) {
         return agentService.addTraining(id, request);

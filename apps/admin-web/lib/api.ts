@@ -114,6 +114,28 @@ export type PublishAgentResult = {
   externalReference?: string | null;
   message: string;
   publishedAt?: string | null;
+  mockEnabled: boolean;
+  errorCode?: string | null;
+  details?: string | null;
+};
+
+export type GptMakerHealth = {
+  baseUrl: string;
+  mockEnabled: boolean;
+  tokenConfigured: boolean;
+  status: "MOCK" | "READY" | "MISSING_TOKEN";
+  message: string;
+};
+
+export type TrainingSummary = {
+  id: string;
+  title: string;
+  content: string;
+  status: string;
+  externalReference?: string | null;
+  message?: string | null;
+  mockEnabled: boolean;
+  createdAt: string;
 };
 
 function getStoredToken(): string | null {
@@ -233,5 +255,20 @@ export function saveFranchiseSetup(id: string, payload: UpdateFranchiseSetupPayl
 export function publishFranchiseAgent(id: string) {
   return apiFetch<PublishAgentResult>(`/franchises/${id}/publish-agent`, {
     method: "POST"
+  });
+}
+
+export function getGptMakerHealth() {
+  return apiFetch<GptMakerHealth>("/gptmaker/health");
+}
+
+export function getAgentTrainings(id: string) {
+  return apiFetch<TrainingSummary[]>(`/agents/${id}/trainings`);
+}
+
+export function createAgentTraining(id: string, payload: { title: string; content: string }) {
+  return apiFetch<TrainingSummary>(`/agents/${id}/trainings`, {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }

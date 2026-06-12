@@ -1,6 +1,16 @@
 spring:
   application:
     name: vavive-gptmaker-api
+  cloud:
+    compatibility-verifier:
+      enabled: false
+    discovery:
+      enabled: false
+    service-registry:
+      auto-registration:
+        enabled: false
+    loadbalancer:
+      enabled: false
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vavive_gptmaker}
     username: ${DATABASE_USERNAME:vavive}
@@ -25,5 +35,5 @@ app:
 
 gptmaker:
   base-url: ${GPTMAKER_BASE_URL:https://api.gptmaker.ai}
-  token: ${GPTMAKER_API_TOKEN:}
+  api-token: ${GPTMAKER_API_TOKEN:}
   mock-enabled: ${GPTMAKER_MOCK_ENABLED:true}

@@ -309,7 +309,13 @@ export default function GuidedSetupPage() {
     try {
       const result = await publishFranchiseAgent(selectedFranchiseId);
       setPublishResult(result);
-      setSuccessMessage("Agente publicado com sucesso no fluxo protegido da Vavive.");
+      if (result.mockEnabled) {
+        setSuccessMessage("Publicacao simulada em ambiente de desenvolvimento.");
+      } else if (result.success) {
+        setSuccessMessage("Agente publicado no GPTMaker com sucesso.");
+      } else {
+        setSuccessMessage(null);
+      }
       const refreshedSetup = await getFranchiseSetup(selectedFranchiseId);
       setSetup(refreshedSetup);
     } catch (requestError) {
@@ -519,10 +525,16 @@ export default function GuidedSetupPage() {
                   </button>
 
                   {publishResult ? (
-                    <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-800">
-                      <p className="font-semibold">Publicacao concluida</p>
+                    <div
+                      className={clsx(
+                        "mt-4 rounded-2xl border p-4 text-sm",
+                        publishResult.success ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"
+                      )}
+                    >
+                      <p className="font-semibold">{publishResult.success ? "Publicacao concluida" : "Publicacao nao concluida"}</p>
                       <p className="mt-2">{publishResult.message}</p>
                       <p className="mt-2">Referencia externa: {publishResult.externalReference || "Nao retornada"}</p>
+                      {!publishResult.success ? <p className="mt-2">O treinamento foi salvo localmente para nova tentativa.</p> : null}
                     </div>
                   ) : null}
                 </section>

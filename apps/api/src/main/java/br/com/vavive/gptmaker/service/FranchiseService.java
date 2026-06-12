@@ -137,7 +137,7 @@ public class FranchiseService {
             )));
 
         var syncResult = gptMakerClient.sendTraining(agent.getExternalId(), generatedTraining.title(), generatedTraining.content());
-        String trainingStatus = syncResult.success() ? "PUBLICADO_GPTMAKER_MOCK" : "PUBLICACAO_FALHOU";
+        String trainingStatus = syncResult.status();
         var training = trainingRepository.save(new br.com.vavive.gptmaker.domain.entity.AgentTraining(
             generatedTraining.title(),
             generatedTraining.content(),
@@ -160,7 +160,10 @@ public class FranchiseService {
             trainingStatus,
             syncResult.externalReference(),
             syncResult.message(),
-            setup.getLastPublishedAt()
+            setup.getLastPublishedAt(),
+            syncResult.mockEnabled(),
+            syncResult.errorCode(),
+            syncResult.details()
         );
     }
 

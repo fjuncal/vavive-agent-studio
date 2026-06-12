@@ -8,6 +8,9 @@ public record TrainingResponse(
     String title,
     String content,
     String status,
+    String externalReference,
+    String message,
+    boolean mockEnabled,
     LocalDateTime createdAt
 ) {
 }

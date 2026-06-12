@@ -59,28 +59,63 @@ public class AgentService {
         return agents.stream().map(this::toResponse).toList();
     }
 
+    @Transactional(readOnly = true)
+    public List<TrainingResponse> listTrainings(UUID agentId) {
+        GptMakerAgent agent = requireAccessibleAgent(agentId);
+        return trainingRepository.findByAgentIdOrderByCreatedAtDesc(agent.getId()).stream()
+            .map(this::toTrainingResponse)
+            .toList();
+    }
+
     @Transactional
     public TrainingResponse addTraining(UUID agentId, CreateTrainingRequest request) {
         GptMakerAgent agent = requireAccessibleAgent(agentId);
         var result = gptMakerClient.sendTraining(agent.getExternalId(), request.title(), request.content());
-        String status = result.success() ? "ENVIADO_GPTMAKER_MOCK" : "SALVO_LOCALMENTE";
         AgentTraining training = trainingRepository.save(new AgentTraining(
             request.title(),
             request.content(),
-            status,
+            result.status(),
             result.externalReference(),
-            result.message(),
+            result.success() ? result.message() : result.message() + " O treinamento foi salvo localmente para nova tentativa.",
             agent
         ));
-        return new TrainingResponse(training.getId(), training.getTitle(), training.getContent(), training.getStatus(), training.getCreatedAt());
+        return new TrainingResponse(
+            training.getId(),
+            training.getTitle(),
+            training.getContent(),
+            training.getStatus(),
+            training.getExternalReference(),
+            training.getResultMessage(),
+            result.mockEnabled(),
+            training.getCreatedAt()
+        );
     }
 
     @Transactional
     public IntentResponse addIntent(UUID agentId, CreateIntentRequest request) {
         GptMakerAgent agent = requireAccessibleAgent(agentId);
-        gptMakerClient.sendIntent(agent.getExternalId(), request.name(), request.description());
-        AgentIntent intent = intentRepository.save(new AgentIntent(request.name(), request.description(), request.examplePhrase(), agent));
-        return new IntentResponse(intent.getId(), intent.getName(), intent.getDescription(), intent.getExamplePhrase(), intent.isActive(), intent.getCreatedAt());
+        var result = gptMakerClient.sendIntent(agent.getExternalId(), request.name(), request.description(), request.examplePhrase());
+        AgentIntent intent = intentRepository.save(new AgentIntent(
+            request.name(),
+            request.description(),
+            request.examplePhrase(),
+            result.status(),
+            result.externalReference(),
+            result.message(),
+            agent
+        ));
+        return new IntentResponse(
+            intent.getId(),
+            intent.getName(),
+            intent.getDescription(),
+            intent.getExamplePhrase(),
+            intent.isActive(),
+            intent.getStatus(),
+            intent.getExternalReference(),
+            intent.getResultMessage(),
+            result.mockEnabled(),
+            intent.getCreatedAt()
+        );
     }
 
     @Transactional
@@ -110,6 +145,19 @@ public class AgentService {
             agent.getToneOfVoice(),
             agent.getFranchise().getName(),
             agent.getCreatedAt()
+        );
+    }
+
+    private TrainingResponse toTrainingResponse(AgentTraining training) {
+        return new TrainingResponse(
+            training.getId(),
+            training.getTitle(),
+            training.getContent(),
+            training.getStatus(),
+            training.getExternalReference(),
+            training.getResultMessage(),
+            "PUBLICADO_GPTMAKER_MOCK".equals(training.getStatus()),
+            training.getCreatedAt()
         );
     }
 }
