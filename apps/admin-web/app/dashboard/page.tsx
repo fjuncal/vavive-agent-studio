@@ -1,12 +1,34 @@
+"use client";
+
 import { AppShell } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
+import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { dashboardSummary, evolution, leads } from "@/lib/mock-data";
+import { getDashboardSummary, getLeads, type DashboardSummary, type LeadSummary } from "@/lib/api";
+import { evolution } from "@/lib/mock-data";
 import { BadgeCheck, MessageCircle, TrendingUp, UsersRound } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function DashboardPage() {
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [recentLeads, setRecentLeads] = useState<LeadSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    Promise.all([getDashboardSummary(), getLeads()])
+      .then(([dashboardData, leadsData]) => {
+        setSummary(dashboardData);
+        setRecentLeads(leadsData.slice(0, 4));
+      })
+      .catch((requestError) => {
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o dashboard.");
+      })
+      .finally(() => setIsLoading(false));
+  }, []);
+
   return (
     <AppShell>
       <PageHeader
@@ -15,12 +37,14 @@ export default function DashboardPage() {
         description="Acompanhe a saude comercial das franquias e a atividade inicial dos agentes conectados ao GPTMaker."
       />
 
+      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total de leads" value={String(dashboardSummary.totalLeads)} hint="+12% nos ultimos 7 dias" icon={UsersRound} />
-        <StatCard label="Novos leads" value={String(dashboardSummary.newLeads)} hint="Aguardando primeiro contato" icon={MessageCircle} />
-        <StatCard label="Em atendimento" value={String(dashboardSummary.activeLeads)} hint="Conversas em andamento" icon={TrendingUp} />
-        <StatCard label="Finalizadas" value={String(dashboardSummary.finishedChats)} hint="Chats encerrados" icon={BadgeCheck} />
-        <StatCard label="Conversao" value={dashboardSummary.conversionRate} hint="Mock comercial do MVP" icon={TrendingUp} />
+        <StatCard label="Total de leads" value={isLoading ? "..." : String(summary?.totalLeads ?? 0)} hint="+12% nos ultimos 7 dias" icon={UsersRound} />
+        <StatCard label="Novos leads" value={isLoading ? "..." : String(summary?.newLeads ?? 0)} hint="Aguardando primeiro contato" icon={MessageCircle} />
+        <StatCard label="Em atendimento" value={isLoading ? "..." : String(summary?.activeLeads ?? 0)} hint="Conversas em andamento" icon={TrendingUp} />
+        <StatCard label="Finalizadas" value={isLoading ? "..." : String(summary?.finishedChats ?? 0)} hint="Chats encerrados" icon={BadgeCheck} />
+        <StatCard label="Conversao" value={isLoading ? "..." : `${summary?.conversionRate?.toFixed(1).replace(".", ",") ?? "0,0"}%`} hint="Calculada a partir do backend" icon={TrendingUp} />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-[1.3fr_0.7fr]">
@@ -28,7 +52,7 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-ink">Evolucao de leads</h2>
-              <p className="mt-1 text-sm text-slate-500">Volume mockado por dia da semana.</p>
+              <p className="mt-1 text-sm text-slate-500">Grafico ainda mockado neste MVP, enquanto o backend expõe apenas o resumo.</p>
             </div>
             <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">Semana atual</span>
           </div>
@@ -56,16 +80,20 @@ export default function DashboardPage() {
 
       <section className="grid gap-3">
         <h2 className="text-lg font-semibold text-ink">Leads recentes</h2>
-        <DataTable
-          rows={leads.slice(0, 4)}
-          columns={[
-            { header: "Nome", cell: (lead) => <span className="font-semibold text-ink">{lead.name}</span> },
-            { header: "Servico", cell: (lead) => lead.service },
-            { header: "Origem", cell: (lead) => lead.source },
-            { header: "Franquia", cell: (lead) => lead.franchise },
-            { header: "Status", cell: (lead) => <StatusBadge status={lead.status} /> }
-          ]}
-        />
+        {recentLeads.length ? (
+          <DataTable
+            rows={recentLeads}
+            columns={[
+              { header: "Nome", cell: (lead) => <span className="font-semibold text-ink">{lead.name}</span> },
+              { header: "Servico", cell: (lead) => lead.service },
+              { header: "Origem", cell: (lead) => lead.source },
+              { header: "Franquia", cell: (lead) => lead.franchiseName },
+              { header: "Status", cell: (lead) => <StatusBadge status={lead.status} /> }
+            ]}
+          />
+        ) : (
+          <EmptyState icon={MessageCircle} title="Nenhum lead recente" description="Quando houver leads na base da Vavive, eles aparecerao aqui." />
+        )}
       </section>
     </AppShell>
   );

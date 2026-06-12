@@ -1,7 +1,35 @@
+"use client";
+
+import { login } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { Bot, LockKeyhole, Mail, Sparkles } from "lucide-react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 export default function LoginPage() {
+  const router = useRouter();
+  const { setSession } = useAuth();
+  const [email, setEmail] = useState("admin@vavive.com");
+  const [password, setPassword] = useState("admin123");
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setIsSubmitting(true);
+
+    try {
+      const response = await login(email, password);
+      setSession(response.token, response.user);
+      router.replace("/dashboard");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel entrar.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
       <section className="grid w-full max-w-5xl overflow-hidden rounded-[28px] border border-line bg-white shadow-soft lg:grid-cols-[1.05fr_0.95fr]">
@@ -29,24 +57,40 @@ export default function LoginPage() {
             <p className="mt-2 text-sm text-slate-500">Use o acesso inicial do seed para explorar o MVP.</p>
           </div>
 
-          <form className="grid gap-4">
+          <form className="grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Email</span>
               <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5">
                 <Mail size={17} className="text-slate-400" />
-                <input className="w-full outline-none" defaultValue="admin@vavive.com" />
+                <input
+                  className="w-full outline-none"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  disabled={isSubmitting}
+                />
               </div>
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Senha</span>
               <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5">
                 <LockKeyhole size={17} className="text-slate-400" />
-                <input type="password" className="w-full outline-none" defaultValue="admin123" />
+                <input
+                  type="password"
+                  className="w-full outline-none"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  disabled={isSubmitting}
+                />
               </div>
             </label>
-            <Link href="/dashboard" className="mt-2 inline-flex items-center justify-center rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-slate-800">
-              Entrar
-            </Link>
+            {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="mt-2 inline-flex items-center justify-center rounded-xl bg-ink px-4 py-3 text-sm font-semibold text-white shadow-soft transition hover:bg-slate-800 disabled:cursor-wait disabled:opacity-70"
+            >
+              {isSubmitting ? "Entrando..." : "Entrar"}
+            </button>
           </form>
         </div>
       </section>

@@ -1,12 +1,26 @@
+"use client";
+
 import { AppShell } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
-import { leads } from "@/lib/mock-data";
+import { getLeads, type LeadSummary } from "@/lib/api";
 import { MessageSquareText } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export default function LeadsPage() {
+  const [leads, setLeads] = useState<LeadSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getLeads()
+      .then(setLeads)
+      .catch((requestError) => {
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os leads.");
+      });
+  }, []);
+
   return (
     <AppShell>
       <PageHeader
@@ -14,6 +28,7 @@ export default function LeadsPage() {
         title="Leads"
         description="Leads pertencem ao banco da Vavive. No futuro, chats e contatos podem ser sincronizados do GPTMaker pelo backend."
       />
+      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {leads.length ? (
         <DataTable
           rows={leads}
@@ -22,7 +37,7 @@ export default function LeadsPage() {
             { header: "Telefone", cell: (lead) => lead.phone },
             { header: "Servico", cell: (lead) => lead.service },
             { header: "Origem", cell: (lead) => lead.source },
-            { header: "Franquia", cell: (lead) => lead.franchise },
+            { header: "Franquia", cell: (lead) => lead.franchiseName },
             { header: "Status", cell: (lead) => <StatusBadge status={lead.status} /> }
           ]}
         />

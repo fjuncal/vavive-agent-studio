@@ -53,6 +53,23 @@ cd apps/api
 mvnw.cmd spring-boot:run
 ```
 
+## Ordem correta para rodar localmente
+
+Backend:
+
+```powershell
+cd apps/api
+mvnw.cmd spring-boot:run
+```
+
+Frontend:
+
+```powershell
+cd apps/admin-web
+npm install
+npm run dev
+```
+
 ## Variaveis de ambiente
 
 Arquivo base: [.env.example](/C:/Users/lypy_/IdeaProjects/vavive-agent-studio/.env.example)
@@ -84,3 +101,4 @@ O seed inicial tambem cria uma franquia mockada, um agente GPTMaker mockado e al
 - Nao criar pasta `docs` neste MVP.
 - Nao expor token do GPTMaker no front-end.
 - Toda integracao com GPTMaker deve passar pelo backend.
+- Nao alterar `docker-compose.yml` nem credenciais locais sem autorizacao.

@@ -1,37 +1,54 @@
+"use client";
+
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { franchises } from "@/lib/mock-data";
+import { getFranchiseById, type FranchiseSummary } from "@/lib/api";
 import { Bot, CheckCircle2, MessageCircle, UsersRound } from "lucide-react";
 import Link from "next/link";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-export default async function FranchiseDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const franchise = franchises.find((item) => item.id === id) ?? franchises[0];
+export default function FranchiseDetailPage() {
+  const params = useParams<{ id: string }>();
+  const [franchise, setFranchise] = useState<FranchiseSummary | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!params?.id) {
+      return;
+    }
+    getFranchiseById(params.id)
+      .then(setFranchise)
+      .catch((requestError) => {
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar a franquia.");
+      });
+  }, [params?.id]);
 
   return (
     <AppShell>
       <PageHeader
         eyebrow="Franquia"
-        title={franchise.name}
-        description={`${franchise.city} / ${franchise.state}. Dados comerciais e configuracoes desta unidade.`}
+        title={franchise?.name ?? "Carregando franquia"}
+        description={franchise ? `${franchise.city} / ${franchise.state}. Dados comerciais e configuracoes desta unidade.` : "Buscando dados da franquia no backend."}
       />
+      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Leads" value={String(franchise.leads)} hint="Mock desta franquia" icon={UsersRound} />
-        <StatCard label="Novos" value="12" hint="Aguardando atendimento" icon={MessageCircle} />
-        <StatCard label="Agentes" value="1" hint="Conectado ao GPTMaker" icon={Bot} />
+        <StatCard label="Leads" value="--" hint="Resumo detalhado ainda sera ampliado" icon={UsersRound} />
+        <StatCard label="Novos" value="--" hint="Aguardando endpoint detalhado" icon={MessageCircle} />
+        <StatCard label="Agentes" value="--" hint="Ligacao com agentes ainda simplificada" icon={Bot} />
         <StatCard label="Setup" value="67%" hint="6 de 9 etapas" icon={CheckCircle2} />
       </section>
       <section className="grid gap-5 lg:grid-cols-[1fr_360px]">
         <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold text-ink">Resumo operacional</h2>
-            <StatusBadge status={franchise.status} />
+            <StatusBadge status={franchise?.status ?? "ATIVA"} />
           </div>
           <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-2">
-            <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Responsavel:</strong> {franchise.owner}</p>
-            <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Regiao:</strong> bairros proximos e cobertura validada</p>
+            <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Documento:</strong> {franchise?.document ?? "-"}</p>
+            <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Regiao:</strong> cobertura operacional configurada no setup guiado</p>
             <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Horario:</strong> atendimento comercial 8h-18h</p>
             <p className="rounded-xl bg-slate-50 p-4"><strong className="text-ink">Permissao:</strong> ADMIN_FRANQUIA limitado a esta unidade</p>
           </div>
