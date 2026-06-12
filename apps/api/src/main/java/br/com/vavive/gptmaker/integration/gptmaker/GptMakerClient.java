@@ -5,15 +5,21 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingReq
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import feign.RetryableException;
+import java.util.Arrays;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 
 @Component
 public class GptMakerClient {
     private static final String MISSING_TOKEN_MESSAGE = "Token da API GPTMaker nao configurado no backend.";
+    private static final Logger log = LoggerFactory.getLogger(GptMakerClient.class);
 
     private final GptMakerProperties properties;
     private final GptMakerFeignClient feignClient;
@@ -127,19 +133,28 @@ public class GptMakerClient {
 
     public List<GptMakerWorkspaceResponse> listWorkspaces() {
         if (properties.mockEnabled()) {
-            return List.of(
+            List<GptMakerWorkspaceResponse> mockItems = List.of(
                 new GptMakerWorkspaceResponse("mock-workspace-vavive", "Workspace Vavive Demo"),
                 new GptMakerWorkspaceResponse("mock-workspace-sp", "Workspace Sao Paulo")
             );
+            log.info("GPTMaker listWorkspaces endpoint=/v2/workspaces status=200 quantity={} mockEnabled=true", mockItems.size());
+            return mockItems;
         }
         if (!properties.tokenConfigured()) {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            return List.of(feignClient.listWorkspaces());
+            ResponseEntity<GptMakerWorkspaceResponse[]> response = feignClient.listWorkspaces();
+            List<GptMakerWorkspaceResponse> items = response.getBody() == null
+                ? List.of()
+                : Arrays.stream(response.getBody()).toList();
+            log.info("GPTMaker listWorkspaces endpoint=/v2/workspaces status={} quantity={} mockEnabled=false", response.getStatusCode().value(), items.size());
+            return items;
         } catch (RetryableException exception) {
+            log.warn("GPTMaker listWorkspaces endpoint=/v2/workspaces status=TIMEOUT quantity=0 mockEnabled=false");
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os workspaces do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
+            log.warn("GPTMaker listWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false", exception.status());
             throw toIntegrationException(exception, "Nao foi possivel listar os workspaces do GPTMaker.");
         }
     }
@@ -149,19 +164,75 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.");
         }
         if (properties.mockEnabled()) {
-            return List.of(
+            List<GptMakerAgentResponse> mockItems = List.of(
                 new GptMakerAgentResponse("mock-agent-" + workspaceId + "-01", "Assistente Comercial", "Acolhedor", null, "Atendimento", "https://gptmaker.ai", "Agente comercial da franquia"),
                 new GptMakerAgentResponse("mock-agent-" + workspaceId + "-02", "Assistente Operacional", "Objetivo", null, "Operacao", "https://gptmaker.ai", "Agente de suporte operacional")
             );
+            log.info("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status=200 quantity={} mockEnabled=true", workspaceId, mockItems.size());
+            return mockItems;
         }
         if (!properties.tokenConfigured()) {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            return List.of(feignClient.listAgents(workspaceId));
+            ResponseEntity<GptMakerAgentResponse[]> response = feignClient.listAgents(workspaceId);
+            List<GptMakerAgentResponse> items = response.getBody() == null
+                ? List.of()
+                : Arrays.stream(response.getBody()).toList();
+            log.info("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status={} quantity={} mockEnabled=false", workspaceId, response.getStatusCode().value(), items.size());
+            return items;
         } catch (RetryableException exception) {
+            log.warn("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status=TIMEOUT quantity=0 mockEnabled=false", workspaceId);
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os agentes do GPTMaker agora.", sanitize(exception.getMessage()));
         } catch (FeignException exception) {
+            log.warn("GPTMaker listAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false", workspaceId, exception.status());
+            throw toIntegrationException(exception, "Nao foi possivel listar os agentes do GPTMaker.");
+        }
+    }
+
+    public JsonNode debugListWorkspaces() {
+        if (properties.mockEnabled()) {
+            return objectMapper.valueToTree(listWorkspaces());
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+        }
+        try {
+            ResponseEntity<JsonNode> response = feignClient.debugListWorkspaces();
+            JsonNode payload = response.getBody();
+            int quantity = payload != null && payload.isArray() ? payload.size() : payload == null ? 0 : 1;
+            log.info("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status={} quantity={} mockEnabled=false", response.getStatusCode().value(), quantity);
+            return payload;
+        } catch (RetryableException exception) {
+            log.warn("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status=TIMEOUT quantity=0 mockEnabled=false");
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os workspaces do GPTMaker agora.", sanitize(exception.getMessage()));
+        } catch (FeignException exception) {
+            log.warn("GPTMaker debugListWorkspaces endpoint=/v2/workspaces status={} quantity=0 mockEnabled=false", exception.status());
+            throw toIntegrationException(exception, "Nao foi possivel listar os workspaces do GPTMaker.");
+        }
+    }
+
+    public JsonNode debugListAgents(String workspaceId) {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.");
+        }
+        if (properties.mockEnabled()) {
+            return objectMapper.valueToTree(listAgents(workspaceId));
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+        }
+        try {
+            ResponseEntity<JsonNode> response = feignClient.debugListAgents(workspaceId);
+            JsonNode payload = response.getBody();
+            int quantity = payload != null && payload.isArray() ? payload.size() : payload == null ? 0 : 1;
+            log.info("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status={} quantity={} mockEnabled=false", workspaceId, response.getStatusCode().value(), quantity);
+            return payload;
+        } catch (RetryableException exception) {
+            log.warn("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status=TIMEOUT quantity=0 mockEnabled=false", workspaceId);
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os agentes do GPTMaker agora.", sanitize(exception.getMessage()));
+        } catch (FeignException exception) {
+            log.warn("GPTMaker debugListAgents endpoint=/v2/workspace/{}/agents status={} quantity=0 mockEnabled=false", workspaceId, exception.status());
             throw toIntegrationException(exception, "Nao foi possivel listar os agentes do GPTMaker.");
         }
     }

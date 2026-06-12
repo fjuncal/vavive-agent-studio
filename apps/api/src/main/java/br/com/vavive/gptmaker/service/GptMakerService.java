@@ -3,9 +3,13 @@ package br.com.vavive.gptmaker.service;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
+import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class GptMakerService {
@@ -27,22 +31,46 @@ public class GptMakerService {
     }
 
     public List<GptMakerWorkspaceOptionResponse> listWorkspaces() {
-        return gptMakerClient.listWorkspaces().stream()
-            .map(item -> new GptMakerWorkspaceOptionResponse(item.id(), item.name()))
-            .toList();
+        try {
+            return gptMakerClient.listWorkspaces().stream()
+                .map(item -> new GptMakerWorkspaceOptionResponse(item.id(), item.name()))
+                .toList();
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
     }
 
     public List<GptMakerAgentOptionResponse> listAgents(String workspaceId) {
-        return gptMakerClient.listAgents(workspaceId).stream()
-            .map(item -> new GptMakerAgentOptionResponse(
-                item.id(),
-                item.name(),
-                item.behavior(),
-                item.avatar(),
-                item.jobName(),
-                item.jobSite(),
-                item.jobDescription()
-            ))
-            .toList();
+        try {
+            return gptMakerClient.listAgents(workspaceId).stream()
+                .map(item -> new GptMakerAgentOptionResponse(
+                    item.id(),
+                    item.name(),
+                    item.behavior(),
+                    item.avatar(),
+                    item.jobName(),
+                    item.jobSite(),
+                    item.jobDescription()
+                ))
+                .toList();
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+    }
+
+    public JsonNode debugWorkspaces() {
+        try {
+            return gptMakerClient.debugListWorkspaces();
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+    }
+
+    public JsonNode debugAgents(String workspaceId) {
+        try {
+            return gptMakerClient.debugListAgents(workspaceId);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
     }
 }

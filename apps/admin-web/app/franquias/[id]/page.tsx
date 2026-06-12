@@ -48,7 +48,10 @@ export default function FranchiseDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
+  const [agentLoadError, setAgentLoadError] = useState<string | null>(null);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const isConnected = connection?.status === "CONECTADO";
@@ -83,32 +86,57 @@ export default function FranchiseDetailPage() {
       return;
     }
 
+    setIsLoadingWorkspaces(true);
+    setWorkspaceLoadError(null);
     getGptMakerWorkspaces()
-      .then(setWorkspaces)
+      .then((items) => {
+        setWorkspaces(items);
+        if (items.length > 0) {
+          console.log("GPTMaker workspaces mapped", items);
+        }
+      })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os workspaces GPTMaker.");
-      });
+        const message = requestError instanceof Error ? requestError.message : "Erro ao carregar workspaces";
+        setWorkspaceLoadError(message);
+        setError(message);
+      })
+      .finally(() => setIsLoadingWorkspaces(false));
   }, [isSuperAdmin]);
 
   useEffect(() => {
     if (!selectedWorkspaceId || !isSuperAdmin) {
       setAgents([]);
+      setAgentLoadError(null);
       return;
     }
 
     setIsLoadingAgents(true);
+    setAgentLoadError(null);
     getGptMakerWorkspaceAgents(selectedWorkspaceId)
       .then((items) => {
         setAgents(items);
+        if (items.length > 0) {
+          console.log("GPTMaker agents mapped", items);
+        }
         if (!items.some((item) => item.id === selectedAgentId)) {
           setSelectedAgentId("");
         }
       })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes do workspace.");
+        const message = requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes do workspace.";
+        setAgentLoadError(message);
+        setError(message);
       })
       .finally(() => setIsLoadingAgents(false));
   }, [isSuperAdmin, selectedWorkspaceId]);
+
+  const workspaceStatusMessage = isLoadingWorkspaces
+    ? "Carregando..."
+    : workspaceLoadError
+      ? "Erro ao carregar workspaces"
+      : workspaces.length === 0
+        ? "Nenhum workspace encontrado"
+        : `Workspace(s) encontrado(s): ${workspaces.length}`;
 
   async function handleSaveConnection() {
     if (!params?.id || !selectedWorkspaceId || !selectedAgentId) {
@@ -197,9 +225,13 @@ export default function FranchiseDetailPage() {
 
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-slate-700">Workspace GPTMaker</span>
+                <span className={`text-xs ${workspaceLoadError ? "text-rose-600" : "text-slate-500"}`}>
+                  {workspaceStatusMessage}
+                </span>
                 <select
                   className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
                   value={selectedWorkspaceId}
+                  disabled={isLoadingWorkspaces || !!workspaceLoadError}
                   onChange={(event) => {
                     setSelectedWorkspaceId(event.target.value);
                     setSelectedAgentId("");
@@ -216,11 +248,22 @@ export default function FranchiseDetailPage() {
 
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium text-slate-700">Agente GPTMaker</span>
+                <span className={`text-xs ${agentLoadError ? "text-rose-600" : "text-slate-500"}`}>
+                  {!selectedWorkspaceId
+                    ? "Selecione um workspace para carregar os agentes"
+                    : isLoadingAgents
+                      ? "Carregando..."
+                      : agentLoadError
+                        ? "Erro ao carregar agentes"
+                        : agents.length === 0
+                          ? "Nenhum agente encontrado"
+                          : `Agente(s) encontrado(s): ${agents.length}`}
+                </span>
                 <select
                   className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
                   value={selectedAgentId}
                   onChange={(event) => setSelectedAgentId(event.target.value)}
-                  disabled={!selectedWorkspaceId || isLoadingAgents}
+                  disabled={!selectedWorkspaceId || isLoadingAgents || !!agentLoadError}
                 >
                   <option value="">{isLoadingAgents ? "Carregando agentes..." : "Selecione um agente"}</option>
                   {agents.map((agent) => (

@@ -6,8 +6,10 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingReq
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.ResponseEntity;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -115,13 +117,23 @@ class GptMakerClientTest {
         boolean intentCalled;
 
         @Override
-        public GptMakerWorkspaceResponse[] listWorkspaces() {
-            return new GptMakerWorkspaceResponse[0];
+        public ResponseEntity<GptMakerWorkspaceResponse[]> listWorkspaces() {
+            return ResponseEntity.ok(new GptMakerWorkspaceResponse[0]);
         }
 
         @Override
-        public GptMakerAgentResponse[] listAgents(String workspaceId) {
-            return new GptMakerAgentResponse[0];
+        public ResponseEntity<JsonNode> debugListWorkspaces() {
+            return ResponseEntity.ok(new ObjectMapper().createArrayNode());
+        }
+
+        @Override
+        public ResponseEntity<GptMakerAgentResponse[]> listAgents(String workspaceId) {
+            return ResponseEntity.ok(new GptMakerAgentResponse[0]);
+        }
+
+        @Override
+        public ResponseEntity<JsonNode> debugListAgents(String workspaceId) {
+            return ResponseEntity.ok(new ObjectMapper().createArrayNode());
         }
 
         @Override
