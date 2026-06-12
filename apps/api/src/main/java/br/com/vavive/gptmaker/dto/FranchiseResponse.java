@@ -10,6 +10,11 @@ public record FranchiseResponse(
     String city,
     String state,
     String status,
+    String workspaceId,
+    String workspaceName,
+    String agentId,
+    String agentName,
+    LocalDateTime gptMakerLastSyncAt,
     LocalDateTime createdAt
 ) {
 }

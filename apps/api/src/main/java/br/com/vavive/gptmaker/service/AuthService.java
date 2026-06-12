@@ -67,6 +67,11 @@ public class AuthService {
             franchise.getCity(),
             franchise.getState(),
             franchise.getStatus(),
+            franchise.getWorkspaceId(),
+            franchise.getWorkspaceName(),
+            franchise.getAgentId(),
+            franchise.getAgentName(),
+            franchise.getGptMakerLastSyncAt(),
             franchise.getCreatedAt()
         );
     }

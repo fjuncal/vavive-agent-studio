@@ -52,16 +52,32 @@ public class GptMakerAgent {
         return externalId;
     }
 
+    public void setExternalId(String externalId) {
+        this.externalId = externalId;
+    }
+
     public String getName() {
         return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public String getStatus() {
         return status;
     }
 
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
     public String getToneOfVoice() {
         return toneOfVoice;
+    }
+
+    public void setToneOfVoice(String toneOfVoice) {
+        this.toneOfVoice = toneOfVoice;
     }
 
     public Franchise getFranchise() {

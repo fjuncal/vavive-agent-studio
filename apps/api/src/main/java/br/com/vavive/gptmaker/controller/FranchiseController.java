@@ -1,10 +1,14 @@
 package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
+import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
+import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
+import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -36,6 +40,26 @@ public class FranchiseController {
     @GetMapping("/franchises/{id}")
     public FranchiseResponse get(@PathVariable UUID id) {
         return franchiseService.get(id);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker-connection")
+    public FranchiseGptMakerConnectionResponse getGptMakerConnection(@PathVariable UUID id) {
+        return franchiseService.getGptMakerConnection(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker-connection")
+    public FranchiseGptMakerConnectionResponse updateGptMakerConnection(@PathVariable UUID id, @Valid @RequestBody UpdateFranchiseGptMakerConnectionRequest request) {
+        return franchiseService.updateGptMakerConnection(id, request);
+    }
+
+    @GetMapping("/franchises/gptmaker/workspaces")
+    public List<GptMakerWorkspaceOptionResponse> listWorkspaces() {
+        return franchiseService.listWorkspaces();
+    }
+
+    @GetMapping("/franchises/gptmaker/workspaces/{workspaceId}/agents")
+    public List<GptMakerAgentOptionResponse> listWorkspaceAgents(@PathVariable String workspaceId) {
+        return franchiseService.listWorkspaceAgents(workspaceId);
     }
 
     @GetMapping("/franchises/{id}/setup")

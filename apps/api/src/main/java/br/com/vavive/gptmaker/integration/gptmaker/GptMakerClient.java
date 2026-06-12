@@ -2,10 +2,13 @@ package br.com.vavive.gptmaker.integration.gptmaker;
 
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.FeignException;
 import feign.RetryableException;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -120,6 +123,47 @@ public class GptMakerClient {
             return new GptMakerHealthStatus(properties.baseUrl(), false, false, "MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         return new GptMakerHealthStatus(properties.baseUrl(), false, true, "READY", "Integracao pronta para usar a API real do GPTMaker.");
+    }
+
+    public List<GptMakerWorkspaceResponse> listWorkspaces() {
+        if (properties.mockEnabled()) {
+            return List.of(
+                new GptMakerWorkspaceResponse("mock-workspace-vavive", "Workspace Vavive Demo"),
+                new GptMakerWorkspaceResponse("mock-workspace-sp", "Workspace Sao Paulo")
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+        }
+        try {
+            return List.of(feignClient.listWorkspaces());
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os workspaces do GPTMaker agora.", sanitize(exception.getMessage()));
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel listar os workspaces do GPTMaker.");
+        }
+    }
+
+    public List<GptMakerAgentResponse> listAgents(String workspaceId) {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.");
+        }
+        if (properties.mockEnabled()) {
+            return List.of(
+                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-01", "Assistente Comercial", "Acolhedor", null, "Atendimento", "https://gptmaker.ai", "Agente comercial da franquia"),
+                new GptMakerAgentResponse("mock-agent-" + workspaceId + "-02", "Assistente Operacional", "Objetivo", null, "Operacao", "https://gptmaker.ai", "Agente de suporte operacional")
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+        }
+        try {
+            return List.of(feignClient.listAgents(workspaceId));
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar os agentes do GPTMaker agora.", sanitize(exception.getMessage()));
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel listar os agentes do GPTMaker.");
+        }
     }
 
     public GptMakerSyncResult sendRule(String externalAgentId, String title, String description) {
@@ -249,6 +293,14 @@ public class GptMakerClient {
         return reference == null || reference.isBlank() ? null : reference;
     }
 
+    private GptMakerIntegrationException toIntegrationException(FeignException exception, String fallbackMessage) {
+        return new GptMakerIntegrationException(
+            resolveErrorCode(exception),
+            resolveFriendlyMessage(exception) == null ? fallbackMessage : resolveFriendlyMessage(exception),
+            extractDetails(exception)
+        );
+    }
+
     public record GptMakerHealthStatus(
         String baseUrl,
         boolean mockEnabled,
@@ -256,5 +308,28 @@ public class GptMakerClient {
         String status,
         String message
     ) {
+    }
+
+    public static class GptMakerIntegrationException extends RuntimeException {
+        private final String errorCode;
+        private final String details;
+
+        public GptMakerIntegrationException(String errorCode, String message) {
+            this(errorCode, message, null);
+        }
+
+        public GptMakerIntegrationException(String errorCode, String message, String details) {
+            super(message);
+            this.errorCode = errorCode;
+            this.details = details;
+        }
+
+        public String getErrorCode() {
+            return errorCode;
+        }
+
+        public String getDetails() {
+            return details;
+        }
     }
 }

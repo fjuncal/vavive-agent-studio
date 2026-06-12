@@ -4,6 +4,8 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentReque
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 
@@ -111,6 +113,16 @@ class GptMakerClientTest {
     private static final class TrackingFeignClient implements GptMakerFeignClient {
         boolean trainingCalled;
         boolean intentCalled;
+
+        @Override
+        public GptMakerWorkspaceResponse[] listWorkspaces() {
+            return new GptMakerWorkspaceResponse[0];
+        }
+
+        @Override
+        public GptMakerAgentResponse[] listAgents(String workspaceId) {
+            return new GptMakerAgentResponse[0];
+        }
 
         @Override
         public GptMakerCreateTrainingResponse createTraining(String agentId, GptMakerCreateTrainingRequest request) {

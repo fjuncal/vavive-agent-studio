@@ -13,6 +13,11 @@ export type FranchiseSummary = {
   city: string;
   state: string;
   status: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+  gptMakerLastSyncAt?: string | null;
   createdAt?: string;
 };
 
@@ -136,6 +141,32 @@ export type TrainingSummary = {
   message?: string | null;
   mockEnabled: boolean;
   createdAt: string;
+};
+
+export type GptMakerWorkspaceOption = {
+  id: string;
+  name: string;
+};
+
+export type GptMakerAgentOption = {
+  id: string;
+  name: string;
+  behavior?: string | null;
+  avatar?: string | null;
+  jobName?: string | null;
+  jobSite?: string | null;
+  jobDescription?: string | null;
+};
+
+export type FranchiseGptMakerConnection = {
+  franchiseId: string;
+  franchiseName: string;
+  workspaceId?: string | null;
+  workspaceName?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
+  status: string;
+  lastSyncAt?: string | null;
 };
 
 function getStoredToken(): string | null {
@@ -271,4 +302,23 @@ export function createAgentTraining(id: string, payload: { title: string; conten
     method: "POST",
     body: JSON.stringify(payload)
   });
+}
+
+export function getFranchiseGptMakerConnection(id: string) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`);
+}
+
+export function updateFranchiseGptMakerConnection(id: string, payload: { workspaceId: string; agentId: string }) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getGptMakerWorkspaces() {
+  return apiFetch<GptMakerWorkspaceOption[]>("/franchises/gptmaker/workspaces");
+}
+
+export function getGptMakerWorkspaceAgents(workspaceId: string) {
+  return apiFetch<GptMakerAgentOption[]>(`/franchises/gptmaker/workspaces/${workspaceId}/agents`);
 }

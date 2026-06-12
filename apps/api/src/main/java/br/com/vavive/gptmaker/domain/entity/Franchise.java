@@ -19,6 +19,11 @@ public class Franchise {
     private String city;
     private String state;
     private String status;
+    private String workspaceId;
+    private String workspaceName;
+    private String agentId;
+    private String agentName;
+    private LocalDateTime gptMakerLastSyncAt;
     private LocalDateTime createdAt;
 
     protected Franchise() {
@@ -79,6 +84,46 @@ public class Franchise {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getWorkspaceId() {
+        return workspaceId;
+    }
+
+    public void setWorkspaceId(String workspaceId) {
+        this.workspaceId = workspaceId;
+    }
+
+    public String getWorkspaceName() {
+        return workspaceName;
+    }
+
+    public void setWorkspaceName(String workspaceName) {
+        this.workspaceName = workspaceName;
+    }
+
+    public String getAgentId() {
+        return agentId;
+    }
+
+    public void setAgentId(String agentId) {
+        this.agentId = agentId;
+    }
+
+    public String getAgentName() {
+        return agentName;
+    }
+
+    public void setAgentName(String agentName) {
+        this.agentName = agentName;
+    }
+
+    public LocalDateTime getGptMakerLastSyncAt() {
+        return gptMakerLastSyncAt;
+    }
+
+    public void setGptMakerLastSyncAt(LocalDateTime gptMakerLastSyncAt) {
+        this.gptMakerLastSyncAt = gptMakerLastSyncAt;
     }
 
     public LocalDateTime getCreatedAt() {
