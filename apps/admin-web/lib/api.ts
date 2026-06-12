@@ -140,6 +140,10 @@ export type GptMakerDiagnostics = {
   workspaceCount: number;
   message: string;
   details?: string | null;
+  httpStatus?: number | null;
+  errorCode?: string | null;
+  endpoint?: string | null;
+  responsePreview?: string | null;
 };
 
 export type TrainingSummary = {

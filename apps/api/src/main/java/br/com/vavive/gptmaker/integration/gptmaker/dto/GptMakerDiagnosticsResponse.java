@@ -7,6 +7,10 @@ public record GptMakerDiagnosticsResponse(
     String status,
     int workspaceCount,
     String message,
-    String details
+    String details,
+    Integer httpStatus,
+    String errorCode,
+    String endpoint,
+    String responsePreview
 ) {
 }

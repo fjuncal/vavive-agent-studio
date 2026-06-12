@@ -6,7 +6,7 @@ import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
-import com.fasterxml.jackson.databind.JsonNode;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
 import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -15,9 +15,11 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class GptMakerService {
     private final GptMakerClient gptMakerClient;
+    private final CurrentUserService currentUserService;
 
-    public GptMakerService(GptMakerClient gptMakerClient) {
+    public GptMakerService(GptMakerClient gptMakerClient, CurrentUserService currentUserService) {
         this.gptMakerClient = gptMakerClient;
+        this.currentUserService = currentUserService;
     }
 
     public GptMakerHealthResponse health() {
@@ -65,19 +67,22 @@ public class GptMakerService {
         }
     }
 
-    public JsonNode debugWorkspaces() {
+    public GptMakerRawDiagnosticsResponse rawWorkspaceDiagnostics() {
+        requireSuperAdmin();
+        return gptMakerClient.rawWorkspaceDiagnostics();
+    }
+
+    public com.fasterxml.jackson.databind.JsonNode debugAgents(String workspaceId) {
         try {
-            return gptMakerClient.debugListWorkspaces();
+            return gptMakerClient.debugListAgents(workspaceId);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
     }
 
-    public JsonNode debugAgents(String workspaceId) {
-        try {
-            return gptMakerClient.debugListAgents(workspaceId);
-        } catch (GptMakerIntegrationException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+    private void requireSuperAdmin() {
+        if (currentUserService.requireCurrentUser().getRole() != br.com.vavive.gptmaker.domain.enums.UserRole.SUPER_ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas SUPER_ADMIN pode acessar o diagnostico bruto do GPTMaker");
         }
     }
 }

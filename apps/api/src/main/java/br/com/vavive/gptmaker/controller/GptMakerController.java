@@ -4,6 +4,7 @@ import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import br.com.vavive.gptmaker.service.GptMakerService;
 import java.util.List;
@@ -39,9 +40,9 @@ public class GptMakerController {
         return gptMakerService.listAgents(workspaceId);
     }
 
-    @GetMapping("/gptmaker/debug/workspaces")
-    public JsonNode debugWorkspaces() {
-        return gptMakerService.debugWorkspaces();
+    @GetMapping("/gptmaker/diagnostics/workspaces/raw")
+    public GptMakerRawDiagnosticsResponse rawWorkspaceDiagnostics() {
+        return gptMakerService.rawWorkspaceDiagnostics();
     }
 
     @GetMapping("/gptmaker/debug/agents/{workspaceId}")

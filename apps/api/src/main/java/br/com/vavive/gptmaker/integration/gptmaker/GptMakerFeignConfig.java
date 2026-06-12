@@ -13,7 +13,7 @@ public class GptMakerFeignConfig {
                 template.header("Accept", "application/json");
                 template.header("Content-Type", "application/json");
                 if (properties.tokenConfigured()) {
-                    template.header("Authorization", "Bearer " + properties.apiToken());
+                    template.header("Authorization", "Bearer " + properties.sanitizedApiToken());
                 }
             }
         };

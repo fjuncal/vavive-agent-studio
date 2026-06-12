@@ -176,6 +176,19 @@ export default function DashboardPage() {
         <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
           {gptMakerDiagnostics?.message ?? "Carregando diagnostico GPTMaker..."}
         </p>
+        {gptMakerDiagnostics?.details ? (
+          <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            {gptMakerDiagnostics.details}
+          </p>
+        ) : null}
+        {gptMakerDiagnostics?.status === "ERROR" ? (
+          <div className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {gptMakerDiagnostics.httpStatus ? <p>HTTP: {gptMakerDiagnostics.httpStatus}</p> : null}
+            {gptMakerDiagnostics.errorCode ? <p>Codigo: {gptMakerDiagnostics.errorCode}</p> : null}
+            {gptMakerDiagnostics.endpoint ? <p>Endpoint: {gptMakerDiagnostics.endpoint}</p> : null}
+            {gptMakerDiagnostics.responsePreview ? <p>Resposta: {gptMakerDiagnostics.responsePreview}</p> : null}
+          </div>
+        ) : null}
       </section>
 
       <section className="grid gap-3">

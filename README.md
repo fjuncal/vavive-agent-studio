@@ -105,6 +105,7 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 - O backend usa OpenFeign.
 - Health local: `GET /gptmaker/health`
 - Diagnostico real: `GET /gptmaker/diagnostics`
+- Payload bruto seguro: `GET /gptmaker/diagnostics/workspaces/raw`
 - `GPTMAKER_MOCK_ENABLED=true`: simula publicacao
 - `GPTMAKER_MOCK_ENABLED=false` sem token: erro controlado
 - `GPTMAKER_MOCK_ENABLED=false` com token: tenta chamar GPTMaker real
@@ -119,14 +120,29 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 2. Faça login como `SUPER_ADMIN`.
 3. Abra o dashboard.
 4. Confira `GET /gptmaker/health`. Ele deve mostrar `READY` quando a configuracao local estiver pronta.
-5. Rode `GET /gptmaker/diagnostics`. Ele chama a API real do GPTMaker e deve mostrar `CONNECTED` e `workspaceCount`.
-6. Abra uma franquia e selecione workspace e agente.
+5. Teste direto da API real com curl:
+   - `GET https://api.gptmaker.ai/v2/workspaces`
+   - `Authorization: Bearer <token>`
+6. Se o curl funcionar e o backend falhar, o problema esta no backend, normalmente em Feign, parser ou tratamento de erro.
+7. Rode `GET /gptmaker/diagnostics`. Ele chama a API real do GPTMaker e deve mostrar:
+   - `status=CONNECTED`
+   - `workspaceCount=2`
+   - `details=Workspaces retornados: teste, Meu Workspace`
+8. Rode `GET /gptmaker/diagnostics/workspaces/raw` como `SUPER_ADMIN`. O endpoint retorna:
+   - `endpoint`
+   - `httpStatus`
+   - `payload` em sucesso
+   - `errorCode`, `message` e `responsePreview` em erro
+9. Abra uma franquia. A tela deve listar `teste` e `Meu Workspace` ao carregar os workspaces pelo backend.
+10. Ao selecionar um workspace, a tela deve buscar os agentes pelo backend em `GET /v2/workspace/{workspaceId}/agents`.
 
 Observacoes:
 - `GET /gptmaker/health` nao chama a API real.
 - `GET /gptmaker/diagnostics` chama a API real.
 - Workspaces usam `GET /v2/workspaces`.
 - Agentes usam `GET /v2/workspace/{workspaceId}/agents`.
+- Se o curl funciona e o backend nao, nao ajuste o front primeiro. Corrija Feign, parser ou tratamento de erro no backend.
+- Nenhum endpoint, log ou tela deve expor o token do GPTMaker.
 
 ## Seeds e usuarios mockados
 

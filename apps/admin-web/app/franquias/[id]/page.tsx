@@ -96,9 +96,6 @@ export default function FranchiseDetailPage() {
     getGptMakerWorkspaces()
       .then((items) => {
         setWorkspaces(items);
-        if (items.length > 0) {
-          console.log("GPTMaker workspaces mapped", items);
-        }
       })
       .catch((requestError) => {
         const message = requestError instanceof Error ? requestError.message : "Erro ao carregar workspaces";
@@ -120,9 +117,6 @@ export default function FranchiseDetailPage() {
     getGptMakerWorkspaceAgents(selectedWorkspaceId)
       .then((items) => {
         setAgents(items);
-        if (items.length > 0) {
-          console.log("GPTMaker agents mapped", items);
-        }
         if (!items.some((item) => item.id === selectedAgentId)) {
           setSelectedAgentId("");
         }
@@ -363,8 +357,20 @@ export default function FranchiseDetailPage() {
             </div>
             <div className="rounded-xl bg-white/10 p-4">
               <p className="font-semibold">Diagnostico GPTMaker</p>
-              <p className="mt-1 text-white/70">{diagnostics?.status ?? "Ainda nao executado"}</p>
-              <p className="mt-2 text-xs text-white/60">{diagnostics?.message ?? "Use o botao de teste para validar a conexao real."}</p>
+              <div className="mt-2">
+                <StatusBadge status={diagnostics?.status ?? "MOCK"} />
+              </div>
+              <p className="mt-2 text-white/70">{diagnostics?.message ?? "Use o botao de teste para validar a conexao real."}</p>
+              <p className="mt-2 text-xs text-white/60">Workspaces encontrados: {diagnostics?.workspaceCount ?? 0}</p>
+              {diagnostics?.details ? <p className="mt-2 text-xs text-white/60">{diagnostics.details}</p> : null}
+              {diagnostics?.status === "ERROR" ? (
+                <div className="mt-3 space-y-1 text-xs text-white/60">
+                  {diagnostics.httpStatus ? <p>HTTP: {diagnostics.httpStatus}</p> : null}
+                  {diagnostics.errorCode ? <p>Codigo: {diagnostics.errorCode}</p> : null}
+                  {diagnostics.endpoint ? <p>Endpoint: {diagnostics.endpoint}</p> : null}
+                  {diagnostics.responsePreview ? <p>Resposta: {diagnostics.responsePreview}</p> : null}
+                </div>
+              ) : null}
             </div>
           </div>
         </div>

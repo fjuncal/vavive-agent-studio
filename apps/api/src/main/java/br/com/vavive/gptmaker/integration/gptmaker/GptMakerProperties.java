@@ -9,6 +9,17 @@ public record GptMakerProperties(
     boolean mockEnabled
 ) {
     public boolean tokenConfigured() {
-        return apiToken != null && !apiToken.isBlank();
+        return !sanitizedApiToken().isBlank();
+    }
+
+    public String sanitizedApiToken() {
+        if (apiToken == null) {
+            return "";
+        }
+        String token = apiToken.trim();
+        if (token.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            token = token.substring(7).trim();
+        }
+        return token;
     }
 }

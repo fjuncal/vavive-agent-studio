@@ -132,6 +132,7 @@ class GptMakerClientTest {
 
         assertEquals("CONNECTED", diagnostics.status());
         assertEquals(1, diagnostics.workspaceCount());
+        assertEquals("Workspaces retornados: Workspace 1", diagnostics.details());
     }
 
     @Test
@@ -154,6 +155,47 @@ class GptMakerClientTest {
 
         assertEquals(1, workspaces.size());
         assertEquals("ws-1", workspaces.getFirst().id());
+    }
+
+    @Test
+    void listWorkspacesAcceptsRealApiPayloadWithExtraFields() throws Exception {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        String payload = """
+            [
+              {
+                "id": "3F48D32050D9013A41CA5ADF0F36FA2F",
+                "tenant": "3F48D2FF0E98914C027FF682BC242D5D",
+                "tenantOwner": "GPT_MAKER",
+                "createdAt": 1781299515024,
+                "updatedAt": null,
+                "name": "teste",
+                "trialZapiUsage": false
+              },
+              {
+                "id": "3F48D2FF12B74038F57EF682BC242D5D",
+                "tenant": "3F48D2FF0E98914C027FF682BC242D5D",
+                "tenantOwner": "GPT_MAKER",
+                "createdAt": 1781299459252,
+                "updatedAt": null,
+                "name": "Meu Workspace",
+                "trialZapiUsage": false
+              }
+            ]
+            """;
+        feignClient.workspacePayload = objectMapper.readTree(payload);
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var workspaces = client.listWorkspaces();
+
+        assertEquals(2, workspaces.size());
+        assertEquals("teste", workspaces.get(0).name());
+        assertEquals("Meu Workspace", workspaces.get(1).name());
     }
 
     @Test
@@ -182,6 +224,14 @@ class GptMakerClientTest {
         assertEquals(1, agents.size());
         assertEquals("FORMAL", agents.getFirst().communicationType());
         assertEquals("SALE", agents.getFirst().type());
+    }
+
+    @Test
+    void sanitizedApiTokenRemovesBearerPrefixAndSpaces() {
+        GptMakerProperties properties = new GptMakerProperties("https://api.gptmaker.ai", "  Bearer token-123  ", false);
+
+        assertEquals("token-123", properties.sanitizedApiToken());
+        assertTrue(properties.tokenConfigured());
     }
 
     private static final class TrackingFeignClient implements GptMakerFeignClient {
