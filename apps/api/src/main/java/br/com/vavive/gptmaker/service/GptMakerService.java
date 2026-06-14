@@ -35,10 +35,12 @@ public class GptMakerService {
     }
 
     public GptMakerDiagnosticsResponse diagnostics() {
+        requireSuperAdmin();
         return gptMakerClient.diagnostics();
     }
 
     public List<GptMakerWorkspaceOptionResponse> listWorkspaces() {
+        requireSuperAdmin();
         try {
             return gptMakerClient.listWorkspaces().stream()
                 .map(item -> new GptMakerWorkspaceOptionResponse(item.id(), item.name()))
@@ -49,6 +51,7 @@ public class GptMakerService {
     }
 
     public List<GptMakerAgentOptionResponse> listAgents(String workspaceId) {
+        requireSuperAdmin();
         try {
             return gptMakerClient.listAgents(workspaceId).stream()
                 .map(item -> new GptMakerAgentOptionResponse(
@@ -79,6 +82,7 @@ public class GptMakerService {
     }
 
     public com.fasterxml.jackson.databind.JsonNode debugAgents(String workspaceId) {
+        requireSuperAdmin();
         try {
             return gptMakerClient.debugListAgents(workspaceId);
         } catch (GptMakerIntegrationException exception) {

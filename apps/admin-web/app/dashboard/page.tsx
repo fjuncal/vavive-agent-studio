@@ -6,6 +6,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/lib/auth";
 import { getDashboardSummary, getGptMakerDiagnostics, getGptMakerHealth, getLeads, type DashboardSummary, type GptMakerDiagnostics, type GptMakerHealth, type LeadSummary } from "@/lib/api";
 import { evolution } from "@/lib/mock-data";
 import { BadgeCheck, MessageCircle, TrendingUp, UsersRound } from "lucide-react";
@@ -23,6 +24,7 @@ function formatPublication(value?: string | null) {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [gptMakerHealth, setGptMakerHealth] = useState<GptMakerHealth | null>(null);
   const [gptMakerDiagnostics, setGptMakerDiagnostics] = useState<GptMakerDiagnostics | null>(null);
@@ -30,19 +32,27 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+
   useEffect(() => {
-    Promise.all([getDashboardSummary(), getLeads(), getGptMakerHealth(), getGptMakerDiagnostics()])
-      .then(([dashboardData, leadsData, gptMakerData, gptMakerDiagnosticsData]) => {
+    const requests: Promise<unknown>[] = [getDashboardSummary(), getLeads(), getGptMakerHealth()];
+    if (isSuperAdmin) {
+      requests.push(getGptMakerDiagnostics());
+    }
+
+    Promise.all(requests)
+      .then((results) => {
+        const [dashboardData, leadsData, gptMakerData, gptMakerDiagnosticsData] = results as [DashboardSummary, LeadSummary[], GptMakerHealth, GptMakerDiagnostics?];
         setSummary(dashboardData);
         setRecentLeads(leadsData.slice(0, 4));
         setGptMakerHealth(gptMakerData);
-        setGptMakerDiagnostics(gptMakerDiagnosticsData);
+        setGptMakerDiagnostics(gptMakerDiagnosticsData ?? null);
       })
       .catch((requestError) => {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o dashboard.");
       })
       .finally(() => setIsLoading(false));
-  }, []);
+  }, [isSuperAdmin]);
 
   return (
     <AppShell>
@@ -86,9 +96,12 @@ export default function DashboardPage() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold text-ink">Evolucao de leads</h2>
-              <p className="mt-1 text-sm text-slate-500">Grafico ainda mockado neste MVP, enquanto o backend expõe apenas o resumo.</p>
+              <p className="mt-1 text-sm text-slate-500">Grafico ainda mockado neste MVP, enquanto o backend expoe apenas o resumo.</p>
             </div>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">Semana atual</span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">Dados demonstrativos</span>
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">Semana atual</span>
+            </div>
           </div>
           <div className="mt-8 flex h-64 items-end gap-3">
             {evolution.map((item) => (
@@ -109,7 +122,7 @@ export default function DashboardPage() {
             <div className="h-2 rounded-full bg-brand-500" style={{ width: `${summary?.completionPercentage ?? 0}%` }} />
           </div>
           <p className="mt-3 text-xs text-white/60">
-            {isLoading ? "Carregando progresso..." : `${summary?.completionPercentage ?? 0}% concluido • ${summary?.setupStatus?.replaceAll("_", " ") || "NAO INICIADO"}`}
+            {isLoading ? "Carregando progresso..." : `${summary?.completionPercentage ?? 0}% concluido - ${summary?.setupStatus?.replaceAll("_", " ") || "NAO INICIADO"}`}
           </p>
         </div>
       </section>
@@ -144,52 +157,54 @@ export default function DashboardPage() {
         </p>
       </section>
 
-      <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Diagnostico</p>
-            <h2 className="mt-2 text-lg font-semibold text-ink">Diagnostico GPTMaker</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Este card chama a API real quando o modo mock esta desativado e ajuda a separar erro de configuracao, token ou payload.
-            </p>
+      {isSuperAdmin ? (
+        <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Diagnostico</p>
+              <h2 className="mt-2 text-lg font-semibold text-ink">Diagnostico GPTMaker</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-500">
+                Este card chama a API real quando o modo mock esta desativado e ajuda a separar erro de configuracao, token ou payload.
+              </p>
+            </div>
+            <StatusBadge status={gptMakerDiagnostics?.status ?? "MOCK"} />
           </div>
-          <StatusBadge status={gptMakerDiagnostics?.status ?? "MOCK"} />
-        </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-4">
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.mockEnabled ? "Mock" : "Real"}</p>
+          <div className="mt-5 grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl bg-mist px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.mockEnabled ? "Mock" : "Real"}</p>
+            </div>
+            <div className="rounded-xl bg-mist px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Token configurado</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.tokenConfigured ? "Sim" : "Nao"}</p>
+            </div>
+            <div className="rounded-xl bg-mist px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Workspaces encontrados</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.workspaceCount ?? 0}</p>
+            </div>
+            <div className="rounded-xl bg-mist px-4 py-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
+              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.status ?? "Carregando..."}</p>
+            </div>
           </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Token configurado</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.tokenConfigured ? "Sim" : "Nao"}</p>
-          </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Workspaces encontrados</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.workspaceCount ?? 0}</p>
-          </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.status ?? "Carregando..."}</p>
-          </div>
-        </div>
-        <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          {gptMakerDiagnostics?.message ?? "Carregando diagnostico GPTMaker..."}
-        </p>
-        {gptMakerDiagnostics?.details ? (
-          <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            {gptMakerDiagnostics.details}
+          <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+            {gptMakerDiagnostics?.message ?? "Carregando diagnostico GPTMaker..."}
           </p>
-        ) : null}
-        {gptMakerDiagnostics?.status === "ERROR" ? (
-          <div className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-            {gptMakerDiagnostics.httpStatus ? <p>HTTP: {gptMakerDiagnostics.httpStatus}</p> : null}
-            {gptMakerDiagnostics.errorCode ? <p>Codigo: {gptMakerDiagnostics.errorCode}</p> : null}
-            {gptMakerDiagnostics.endpoint ? <p>Endpoint: {gptMakerDiagnostics.endpoint}</p> : null}
-            {gptMakerDiagnostics.responsePreview ? <p>Resposta: {gptMakerDiagnostics.responsePreview}</p> : null}
-          </div>
-        ) : null}
-      </section>
+          {gptMakerDiagnostics?.details ? (
+            <p className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
+              {gptMakerDiagnostics.details}
+            </p>
+          ) : null}
+          {gptMakerDiagnostics?.status === "ERROR" ? (
+            <div className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {gptMakerDiagnostics.httpStatus ? <p>HTTP: {gptMakerDiagnostics.httpStatus}</p> : null}
+              {gptMakerDiagnostics.errorCode ? <p>Codigo: {gptMakerDiagnostics.errorCode}</p> : null}
+              {gptMakerDiagnostics.endpoint ? <p>Endpoint: {gptMakerDiagnostics.endpoint}</p> : null}
+              {gptMakerDiagnostics.responsePreview ? <p>Resposta: {gptMakerDiagnostics.responsePreview}</p> : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="grid gap-3">
         <h2 className="text-lg font-semibold text-ink">Leads recentes</h2>

@@ -1,6 +1,8 @@
 package br.com.vavive.gptmaker.integration.gptmaker;
 
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentDiagnosticsResponse;
@@ -124,6 +126,62 @@ public class GptMakerClient {
             return failure("ENVIO_FALHOU", "GPTMAKER_UNAVAILABLE", "Nao foi possivel enviar a intencao ao GPTMaker agora. Tente novamente mais tarde.", exception.getMessage());
         } catch (FeignException exception) {
             return failure("ENVIO_FALHOU", resolveErrorCode(exception), resolveFriendlyMessage(exception), extractDetails(exception));
+        }
+    }
+
+    public GptMakerCreateAgentResponse createAgent(String workspaceId, GptMakerCreateAgentRequest request) {
+        String endpoint = agentsEndpoint(workspaceId);
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (request == null || request.name() == null || request.name().isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT_NAME", "Nome do agente GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerCreateAgentResponse(
+                "mock-agent-created-" + workspaceId,
+                request.name(),
+                request.behavior(),
+                request.avatar(),
+                request.communicationType(),
+                request.type(),
+                request.jobName(),
+                request.jobSite(),
+                request.jobDescription()
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+
+        try {
+            log.info("Calling GPTMaker POST {} name={} communicationType={} type={}", endpoint, sanitize(request.name()), sanitize(request.communicationType()), sanitize(request.type()));
+            ResponseEntity<String> response = feignClient.createAgent(workspaceId, request);
+            String body = response.getBody();
+            JsonNode payload = parseBody(body, endpoint, response.getStatusCode().value());
+            GptMakerCreateAgentResponse createdAgent = parseCreatedAgent(payload, endpoint);
+            log.info("GPTMaker POST {} status={} bodyPreview={} createdAgentId={} createdAgentName={}", endpoint, response.getStatusCode().value(), preview(body), sanitize(createdAgent.id()), sanitize(createdAgent.name()));
+            return createdAgent;
+        } catch (RetryableException exception) {
+            log.warn("GPTMaker POST {} status=TIMEOUT", endpoint);
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel criar o agente no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            log.warn("GPTMaker POST {} status={} bodyPreview={}", endpoint, exception.status(), preview(exception.contentUTF8()));
+            String message = exception.status() == 404
+                ? "Workspace GPTMaker nao encontrado."
+                : exception.status() == 400
+                    ? "O GPTMaker rejeitou os dados do novo agente. Revise o formulario e tente novamente."
+                    : exception.status() == 401 || exception.status() == 403
+                        ? "Nao foi possivel autenticar na API GPTMaker. Verifique o token configurado no backend."
+                        : "Nao foi possivel criar o agente no GPTMaker.";
+            throw new GptMakerIntegrationException(
+                resolveErrorCode(exception),
+                message,
+                extractDetails(exception),
+                exception.status() > 0 ? exception.status() : null,
+                endpoint,
+                preview(exception.contentUTF8())
+            );
         }
     }
 
@@ -488,6 +546,30 @@ public class GptMakerClient {
         return items;
     }
 
+    private GptMakerCreateAgentResponse parseCreatedAgent(JsonNode payload, String endpoint) {
+        JsonNode itemNode = extractSingleItemNode(payload);
+        if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para criacao de agente.", sanitize(payload == null ? null : payload.toString()), null, endpoint, sanitize(payload == null ? null : payload.toString()));
+        }
+
+        String id = textValue(itemNode, "id");
+        if (id == null || id.isBlank()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker nao retornou o identificador do agente criado.", sanitize(itemNode.toString()), null, endpoint, sanitize(itemNode.toString()));
+        }
+
+        return new GptMakerCreateAgentResponse(
+            id,
+            textValue(itemNode, "name"),
+            textValue(itemNode, "behavior"),
+            textValue(itemNode, "avatar"),
+            textValue(itemNode, "communicationType"),
+            textValue(itemNode, "type"),
+            textValue(itemNode, "jobName"),
+            textValue(itemNode, "jobSite"),
+            textValue(itemNode, "jobDescription")
+        );
+    }
+
     private JsonNode extractItemsNode(JsonNode payload) {
         if (payload == null || payload.isNull()) {
             return null;
@@ -504,6 +586,17 @@ public class GptMakerClient {
             }
         }
         return payload;
+    }
+
+    private JsonNode extractSingleItemNode(JsonNode payload) {
+        JsonNode extracted = extractItemsNode(payload);
+        if (extracted == null || extracted.isNull()) {
+            return null;
+        }
+        if (extracted.isArray()) {
+            return extracted.isEmpty() ? null : extracted.get(0);
+        }
+        return extracted;
     }
 
     private String textValue(JsonNode node, String fieldName) {

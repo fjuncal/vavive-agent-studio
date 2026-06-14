@@ -14,13 +14,12 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function submitCredentials(nextEmail: string, nextPassword: string) {
     setError(null);
     setIsSubmitting(true);
 
     try {
-      const response = await login(email, password);
+      const response = await login(nextEmail, nextPassword);
       setSession(response.token, response.user);
       router.replace("/dashboard");
     } catch (requestError) {
@@ -28,6 +27,11 @@ export default function LoginPage() {
     } finally {
       setIsSubmitting(false);
     }
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await submitCredentials(email, password);
   }
 
   return (
@@ -91,6 +95,35 @@ export default function LoginPage() {
             >
               {isSubmitting ? "Entrando..." : "Entrar"}
             </button>
+            <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
+              <p className="text-sm font-medium text-slate-700">Acesso rapido para testes do MVP.</p>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setEmail("admin@vavive.com");
+                    setPassword("admin123");
+                    void submitCredentials("admin@vavive.com", "admin123");
+                  }}
+                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                >
+                  Entrar como SUPER_ADMIN
+                </button>
+                <button
+                  type="button"
+                  disabled={isSubmitting}
+                  onClick={() => {
+                    setEmail("franquia@vavive.com");
+                    setPassword("admin123");
+                    void submitCredentials("franquia@vavive.com", "admin123");
+                  }}
+                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
+                >
+                  Entrar como ADMIN_FRANQUIA
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       </section>

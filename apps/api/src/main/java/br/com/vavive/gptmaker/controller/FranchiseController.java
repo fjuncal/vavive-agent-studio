@@ -1,14 +1,18 @@
 package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
+import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
+import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
+import br.com.vavive.gptmaker.dto.UserResponse;
+import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -42,6 +46,16 @@ public class FranchiseController {
         return franchiseService.get(id);
     }
 
+    @GetMapping("/franchises/{id}/admin-user")
+    public UserResponse getAdminUser(@PathVariable UUID id) {
+        return franchiseService.getAdminUser(id);
+    }
+
+    @PostMapping("/franchises/{id}/admin-user")
+    public UserResponse createAdminUser(@PathVariable UUID id, @Valid @RequestBody CreateFranchiseAdminUserRequest request) {
+        return franchiseService.createAdminUser(id, request);
+    }
+
     @GetMapping("/franchises/{id}/gptmaker-connection")
     public FranchiseGptMakerConnectionResponse getGptMakerConnection(@PathVariable UUID id) {
         return franchiseService.getGptMakerConnection(id);
@@ -60,6 +74,16 @@ public class FranchiseController {
     @GetMapping("/franchises/gptmaker/workspaces/{workspaceId}/agents")
     public List<GptMakerAgentOptionResponse> listWorkspaceAgents(@PathVariable String workspaceId) {
         return franchiseService.listWorkspaceAgents(workspaceId);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/default-context")
+    public VaviveDefaultContextResponse getDefaultContext(@PathVariable UUID id) {
+        return franchiseService.getDefaultContext(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/agent")
+    public FranchiseGptMakerConnectionResponse provisionGptMakerAgent(@PathVariable UUID id, @Valid @RequestBody ProvisionFranchiseGptMakerAgentRequest request) {
+        return franchiseService.provisionGptMakerAgent(id, request);
     }
 
     @GetMapping("/franchises/{id}/setup")

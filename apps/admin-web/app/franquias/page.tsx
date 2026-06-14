@@ -5,14 +5,17 @@ import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/lib/auth";
 import { getFranchises, type FranchiseSummary } from "@/lib/api";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function FranchisesPage() {
+  const { user } = useAuth();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
     getFranchises()
@@ -28,9 +31,10 @@ export default function FranchisesPage() {
         eyebrow="Rede"
         title="Franquias"
         description="Veja unidades, responsaveis e volume comercial. Usuarios ADMIN_FRANQUIA devem visualizar apenas sua propria unidade."
-        actionLabel="Nova franquia"
-        actionHref="/franquias/nova"
+        actionLabel={isSuperAdmin ? "Nova franquia" : undefined}
+        actionHref={isSuperAdmin ? "/franquias/nova" : undefined}
       />
+      <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Dados demonstrativos podem aparecer enquanto a franquia ainda nao estiver conectada ao GPTMaker real.</div>
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {franchises.length ? (
         <DataTable

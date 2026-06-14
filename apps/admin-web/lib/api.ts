@@ -200,6 +200,37 @@ export type FranchiseGptMakerConnection = {
   lastSyncAt?: string | null;
 };
 
+export type FranchiseAdminUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: "SUPER_ADMIN" | "ADMIN_FRANQUIA";
+  franchise?: FranchiseSummary | null;
+};
+
+export type CreateFranchiseAdminUserPayload = {
+  name: string;
+  email: string;
+  password: string;
+};
+
+export type VaviveDefaultContext = {
+  franchiseId: string;
+  franchiseName: string;
+  context: string;
+};
+
+export type ProvisionFranchiseGptMakerAgentPayload = {
+  workspaceId: string;
+  workspaceName?: string;
+  agentName: string;
+  communicationType: "FORMAL" | "NORMAL" | "RELAXED";
+  type: "SUPPORT" | "SALE" | "PERSONAL";
+  jobName?: string;
+  jobSite?: string;
+  jobDescription?: string;
+};
+
 function getStoredToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -343,6 +374,28 @@ export function getFranchiseGptMakerConnection(id: string) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`);
 }
 
+export function getFranchiseAdminUser(id: string) {
+  return apiFetch<FranchiseAdminUser>(`/franchises/${id}/admin-user`);
+}
+
+export function createFranchiseAdminUser(id: string, payload: CreateFranchiseAdminUserPayload) {
+  return apiFetch<FranchiseAdminUser>(`/franchises/${id}/admin-user`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getFranchiseDefaultContext(id: string) {
+  return apiFetch<VaviveDefaultContext>(`/franchises/${id}/gptmaker/default-context`);
+}
+
+export function provisionFranchiseGptMakerAgent(id: string, payload: ProvisionFranchiseGptMakerAgentPayload) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/agent`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateFranchiseGptMakerConnection(id: string, payload: { workspaceId: string; agentId: string }) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`, {
     method: "POST",
@@ -351,11 +404,11 @@ export function updateFranchiseGptMakerConnection(id: string, payload: { workspa
 }
 
 export function getGptMakerWorkspaces() {
-  return apiFetch<GptMakerWorkspaceOption[]>("/gptmaker/workspaces");
+  return apiFetch<GptMakerWorkspaceOption[]>("/franchises/gptmaker/workspaces");
 }
 
 export function getGptMakerWorkspaceAgents(workspaceId: string) {
-  return apiFetch<GptMakerAgentOption[]>(`/gptmaker/workspaces/${workspaceId}/agents`);
+  return apiFetch<GptMakerAgentOption[]>(`/franchises/gptmaker/workspaces/${workspaceId}/agents`);
 }
 
 export function getGptMakerWorkspaceAgentDiagnostics(workspaceId: string) {

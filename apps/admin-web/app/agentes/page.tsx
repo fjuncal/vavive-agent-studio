@@ -28,6 +28,7 @@ export default function AgentsPage() {
         title="Agentes"
         description="A plataforma Vavive organiza agentes e configuracoes. Toda comunicacao real com GPTMaker deve passar pela API Java."
       />
+      <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Agentes sem conexao real ao GPTMaker devem ser tratados como dados demonstrativos neste MVP.</div>
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {agents.length ? (
         <section className="grid gap-4 lg:grid-cols-2">
@@ -46,6 +47,7 @@ export default function AgentsPage() {
                 <StatusBadge status={agent.status} />
               </div>
               <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                {!agent.connectedToRealGptMaker ? <p className="mb-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Dados demonstrativos</p> : null}
                 <p><strong className="text-ink">Conexao GPTMaker:</strong> {agent.connectionStatus}</p>
                 <p className="mt-1"><strong className="text-ink">External ID:</strong> {agent.externalId || "Nao configurado"}</p>
                 <p><strong className="text-ink">Tom:</strong> {agent.toneOfVoice}</p>

@@ -196,6 +196,7 @@ export default function AgentTrainingsPage() {
         title="Treinamento do Agente"
         description="Ensine o agente com informacoes da sua franquia sem precisar escrever prompts tecnicos."
       />
+      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Dados demonstrativos: sem agente GPTMaker real conectado, este fluxo fica apenas em modo local.</div> : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -322,6 +323,7 @@ export default function AgentTrainingsPage() {
                       <StatusBadge status={training.status} />
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{training.message || "Treinamento salvo."}</p>
+                    {training.mockEnabled || training.status === "SALVO_LOCALMENTE" ? <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Dados demonstrativos</p> : null}
                     {training.externalReference ? <p className="mt-2 text-xs text-slate-400">Referencia: {training.externalReference}</p> : null}
                   </article>
                 ))}

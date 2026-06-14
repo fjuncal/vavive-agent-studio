@@ -22,8 +22,8 @@ export default function NewFranchisePage() {
     setIsSubmitting(true);
 
     try {
-      await createFranchise({ name, document, city, state });
-      router.replace("/franquias");
+      const created = await createFranchise({ name, document, city, state });
+      router.replace(`/franquias/${created.id}`);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar a franquia.");
     } finally {
@@ -38,7 +38,7 @@ export default function NewFranchisePage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Nova franquia"
-        description="Crie a unidade na base Vavive. A conexao com GPTMaker pode ser associada depois pelo backend."
+        description="Crie a unidade local na base Vavive. Neste MVP, a workspace GPTMaker deve existir previamente e sera conectada no proximo passo."
       />
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <form onSubmit={handleSubmit}>
@@ -71,8 +71,15 @@ export default function NewFranchisePage() {
           <h2 className="font-semibold text-ink">Checklist inicial</h2>
           <div className="mt-4 grid gap-3 text-sm text-slate-600">
             <p className="rounded-xl bg-slate-50 p-3">Criar usuario ADMIN_FRANQUIA.</p>
-            <p className="rounded-xl bg-slate-50 p-3">Associar agente GPTMaker existente.</p>
+            <p className="rounded-xl bg-slate-50 p-3">Selecionar uma workspace GPTMaker ja existente.</p>
+            <p className="rounded-xl bg-slate-50 p-3">Criar o agente GPTMaker da franquia dentro dessa workspace.</p>
             <p className="rounded-xl bg-slate-50 p-3">Completar setup guiado da unidade.</p>
+          </div>
+          <div className="mt-4 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+            <p className="font-semibold">Proximo passo: conectar GPTMaker</p>
+            <p className="mt-2">
+              Neste MVP, a workspace precisa existir previamente no GPTMaker. O SUPER_ADMIN seleciona uma workspace e cria o agente da franquia dentro dela.
+            </p>
           </div>
         </aside>
       </div>

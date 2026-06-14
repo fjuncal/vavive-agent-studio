@@ -6,24 +6,32 @@ import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
+import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
+import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
+import br.com.vavive.gptmaker.dto.UserResponse;
+import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
+import br.com.vavive.gptmaker.repository.UserRepository;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
@@ -38,6 +46,9 @@ public class FranchiseService {
     private final SetupProgressService setupProgressService;
     private final GptMakerClient gptMakerClient;
     private final CurrentUserService currentUserService;
+    private final UserRepository userRepository;
+    private final PasswordEncoder passwordEncoder;
+    private final VaviveDefaultContextService vaviveDefaultContextService;
 
     public FranchiseService(
         FranchiseRepository franchiseRepository,
@@ -47,7 +58,10 @@ public class FranchiseService {
         TrainingGeneratorService trainingGeneratorService,
         SetupProgressService setupProgressService,
         GptMakerClient gptMakerClient,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        UserRepository userRepository,
+        PasswordEncoder passwordEncoder,
+        VaviveDefaultContextService vaviveDefaultContextService
     ) {
         this.franchiseRepository = franchiseRepository;
         this.franchiseSetupRepository = franchiseSetupRepository;
@@ -57,6 +71,9 @@ public class FranchiseService {
         this.setupProgressService = setupProgressService;
         this.gptMakerClient = gptMakerClient;
         this.currentUserService = currentUserService;
+        this.userRepository = userRepository;
+        this.passwordEncoder = passwordEncoder;
+        this.vaviveDefaultContextService = vaviveDefaultContextService;
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +101,35 @@ public class FranchiseService {
     }
 
     @Transactional(readOnly = true)
+    public UserResponse getAdminUser(UUID id) {
+        Franchise franchise = requireAccessibleFranchise(id);
+        return userRepository.findFirstByFranchiseIdAndRole(franchise.getId(), UserRole.ADMIN_FRANQUIA)
+            .map(AuthService::toResponse)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Administrador da franquia ainda nao cadastrado"));
+    }
+
+    @Transactional
+    public UserResponse createAdminUser(UUID id, CreateFranchiseAdminUserRequest request) {
+        requireSuperAdmin();
+        Franchise franchise = requireAccessibleFranchise(id);
+        if (userRepository.existsByEmailIgnoreCase(request.email())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ja existe um usuario com este email");
+        }
+        if (userRepository.findFirstByFranchiseIdAndRole(franchise.getId(), UserRole.ADMIN_FRANQUIA).isPresent()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta franquia ja possui um administrador cadastrado");
+        }
+
+        User user = new User(
+            request.name(),
+            request.email(),
+            passwordEncoder.encode(request.password()),
+            UserRole.ADMIN_FRANQUIA,
+            franchise
+        );
+        return AuthService.toResponse(userRepository.save(user));
+    }
+
+    @Transactional(readOnly = true)
     public FranchiseSetupResponse getSetup(UUID id) {
         Franchise franchise = requireAccessibleFranchise(id);
         FranchiseSetup setup = getOrCreateSetup(franchise);
@@ -94,6 +140,16 @@ public class FranchiseService {
     public FranchiseGptMakerConnectionResponse getGptMakerConnection(UUID id) {
         Franchise franchise = requireAccessibleFranchise(id);
         return toGptMakerConnectionResponse(franchise);
+    }
+
+    @Transactional(readOnly = true)
+    public VaviveDefaultContextResponse getDefaultContext(UUID id) {
+        Franchise franchise = requireAccessibleFranchise(id);
+        return new VaviveDefaultContextResponse(
+            franchise.getId(),
+            franchise.getName(),
+            vaviveDefaultContextService.buildForFranchise(franchise)
+        );
     }
 
     @Transactional(readOnly = true)
@@ -177,6 +233,51 @@ public class FranchiseService {
         franchiseRepository.save(franchise);
 
         syncLocalAgent(franchise, agent);
+        return toGptMakerConnectionResponse(franchise);
+    }
+
+    @Transactional
+    public FranchiseGptMakerConnectionResponse provisionGptMakerAgent(UUID id, ProvisionFranchiseGptMakerAgentRequest request) {
+        requireSuperAdmin();
+        Franchise franchise = requireAccessibleFranchise(id);
+        if (request.workspaceId() == null || request.workspaceId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workspace GPTMaker nao informado");
+        }
+        if (request.agentName() == null || request.agentName().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome do agente GPTMaker nao informado");
+        }
+
+        String context = vaviveDefaultContextService.buildForFranchise(franchise);
+        String jobDescription = mergeJobDescription(context, request.jobDescription());
+
+        GptMakerCreateAgentResponse createdAgent;
+        try {
+            createdAgent = gptMakerClient.createAgent(
+                request.workspaceId(),
+                new GptMakerCreateAgentRequest(
+                    request.agentName(),
+                    null,
+                    context,
+                    request.communicationType(),
+                    request.type(),
+                    request.jobName(),
+                    request.jobSite(),
+                    jobDescription
+                )
+            );
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+
+        franchise.setWorkspaceId(request.workspaceId());
+        franchise.setWorkspaceName(resolveWorkspaceName(request.workspaceName(), franchise));
+        franchise.setAgentId(createdAgent.id());
+        franchise.setAgentName(createdAgent.name() != null && !createdAgent.name().isBlank() ? createdAgent.name() : request.agentName());
+        franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+        franchiseRepository.save(franchise);
+
+        GptMakerAgent localAgent = syncProvisionedAgent(franchise, createdAgent, request.communicationType());
+        createInitialLocalTraining(localAgent, context);
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -316,6 +417,35 @@ public class FranchiseService {
         agentRepository.save(agent);
     }
 
+    private GptMakerAgent syncProvisionedAgent(Franchise franchise, GptMakerCreateAgentResponse createdAgent, String communicationType) {
+        GptMakerAgent agent = agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), createdAgent.id())
+            .or(() -> agentRepository.findFirstByFranchiseIdAndName(franchise.getId(), franchise.getAgentName()))
+            .or(() -> agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchise.getId()))
+            .orElseGet(() -> new GptMakerAgent(
+                createdAgent.id(),
+                franchise.getAgentName(),
+                "ATIVO",
+                defaultToneOfVoice(franchise),
+                franchise
+            ));
+        agent.setExternalId(createdAgent.id());
+        agent.setName(franchise.getAgentName());
+        agent.setStatus("ATIVO");
+        agent.setToneOfVoice(resolveToneOfVoice(communicationType, franchise));
+        return agentRepository.save(agent);
+    }
+
+    private void createInitialLocalTraining(GptMakerAgent agent, String context) {
+        trainingRepository.save(new br.com.vavive.gptmaker.domain.entity.AgentTraining(
+            "Contexto inicial Vavive",
+            context,
+            "SALVO_LOCALMENTE",
+            null,
+            "Treinamento inicial salvo localmente apos o provisionamento do agente GPTMaker.",
+            agent
+        ));
+    }
+
     private GptMakerAgent updateLocalAgent(GptMakerAgent agent, String agentName, String toneOfVoice) {
         if (agentName != null && !agentName.isBlank()) {
             agent.setName(agentName);
@@ -370,5 +500,34 @@ public class FranchiseService {
 
     private String defaultToneOfVoice(Franchise franchise) {
         return "Acolhedor, claro e consultivo para a franquia " + franchise.getName();
+    }
+
+    private String resolveToneOfVoice(String communicationType, Franchise franchise) {
+        if (communicationType == null || communicationType.isBlank()) {
+            return defaultToneOfVoice(franchise);
+        }
+        return communicationType;
+    }
+
+    private String resolveWorkspaceName(String workspaceName, Franchise franchise) {
+        if (workspaceName != null && !workspaceName.isBlank()) {
+            return workspaceName;
+        }
+        try {
+            return gptMakerClient.listWorkspaces().stream()
+                .filter(item -> franchise.getWorkspaceId().equals(item.id()))
+                .map(item -> item.name())
+                .findFirst()
+                .orElse(franchise.getWorkspaceId());
+        } catch (GptMakerIntegrationException exception) {
+            return franchise.getWorkspaceId();
+        }
+    }
+
+    private String mergeJobDescription(String context, String customJobDescription) {
+        if (customJobDescription == null || customJobDescription.isBlank()) {
+            return context;
+        }
+        return customJobDescription;
     }
 }

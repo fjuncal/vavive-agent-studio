@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.integration.gptmaker;
 
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
@@ -112,6 +113,20 @@ class GptMakerClientTest {
     }
 
     @Test
+    void healthDoesNotExposeConfiguredToken() {
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            new TrackingFeignClient(),
+            new ObjectMapper()
+        );
+
+        var health = client.health();
+
+        assertFalse(health.message().contains("token-123"));
+        assertFalse(health.baseUrl().contains("token-123"));
+    }
+
+    @Test
     void diagnosticsReturnsConnectedWhenRealModeListsWorkspaces() {
         TrackingFeignClient feignClient = new TrackingFeignClient();
         ObjectMapper objectMapper = new ObjectMapper();
@@ -135,6 +150,65 @@ class GptMakerClientTest {
         assertEquals("CONNECTED", diagnostics.status());
         assertEquals(1, diagnostics.workspaceCount());
         assertEquals("Workspaces retornados: Workspace 1", diagnostics.details());
+    }
+
+    @Test
+    void createAgentReturnsMockAgentWhenMockEnabled() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "", true),
+            feignClient,
+            new ObjectMapper()
+        );
+
+        var response = client.createAgent(
+            "ws-1",
+            new GptMakerCreateAgentRequest("Assistente Vavive", null, "Contexto", "NORMAL", "SALE", "Vavive", "https://vavive.com.br", "Descricao")
+        );
+
+        assertEquals("mock-agent-created-ws-1", response.id());
+        assertEquals("Assistente Vavive", response.name());
+        assertFalse(feignClient.createAgentCalled);
+    }
+
+    @Test
+    void createAgentParsesWrappedPayloadAndCapturesRequest() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        feignClient.createAgentPayload = """
+            {
+              "data": {
+                "id": "agent-created-1",
+                "name": "Assistente Vavive - Moema",
+                "behavior": "Contexto base",
+                "communicationType": "NORMAL",
+                "type": "SALE",
+                "jobName": "Vavive",
+                "jobSite": "https://vavive.com.br",
+                "jobDescription": "Descricao"
+              }
+            }
+            """;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var response = client.createAgent(
+            "ws-1",
+            new GptMakerCreateAgentRequest("Assistente Vavive - Moema", null, "Contexto base", "NORMAL", "SALE", "Vavive", "https://vavive.com.br", "Descricao")
+        );
+
+        assertTrue(feignClient.createAgentCalled);
+        assertEquals("ws-1", feignClient.lastCreateAgentWorkspaceId);
+        assertNotNull(feignClient.lastCreateAgentRequest);
+        assertEquals("Assistente Vavive - Moema", feignClient.lastCreateAgentRequest.name());
+        assertEquals("NORMAL", feignClient.lastCreateAgentRequest.communicationType());
+        assertEquals("SALE", feignClient.lastCreateAgentRequest.type());
+        assertEquals("agent-created-1", response.id());
+        assertEquals("Assistente Vavive - Moema", response.name());
     }
 
     @Test
@@ -321,8 +395,12 @@ class GptMakerClientTest {
     private static final class TrackingFeignClient implements GptMakerFeignClient {
         boolean trainingCalled;
         boolean intentCalled;
+        boolean createAgentCalled;
         String workspacePayload = "[]";
         String agentPayload = "[]";
+        String createAgentPayload = "{}";
+        String lastCreateAgentWorkspaceId;
+        GptMakerCreateAgentRequest lastCreateAgentRequest;
 
         @Override
         public ResponseEntity<String> listWorkspaces() {
@@ -332,6 +410,14 @@ class GptMakerClientTest {
         @Override
         public ResponseEntity<String> listAgents(String workspaceId) {
             return ResponseEntity.ok(agentPayload);
+        }
+
+        @Override
+        public ResponseEntity<String> createAgent(String workspaceId, GptMakerCreateAgentRequest request) {
+            createAgentCalled = true;
+            lastCreateAgentWorkspaceId = workspaceId;
+            lastCreateAgentRequest = request;
+            return ResponseEntity.ok(createAgentPayload);
         }
 
         @Override

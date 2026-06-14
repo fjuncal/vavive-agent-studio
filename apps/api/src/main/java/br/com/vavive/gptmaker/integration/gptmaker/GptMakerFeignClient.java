@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.integration.gptmaker;
 
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
 import org.springframework.cloud.openfeign.FeignClient;
@@ -22,6 +23,12 @@ public interface GptMakerFeignClient {
 
     @GetMapping("/v2/workspace/{workspaceId}/agents")
     ResponseEntity<String> listAgents(@PathVariable String workspaceId);
+
+    @PostMapping("/v2/workspace/{workspaceId}/agents")
+    ResponseEntity<String> createAgent(
+        @PathVariable String workspaceId,
+        @RequestBody GptMakerCreateAgentRequest request
+    );
 
     @PostMapping("/v2/agent/{agentId}/trainings")
     GptMakerCreateTrainingResponse createTraining(
