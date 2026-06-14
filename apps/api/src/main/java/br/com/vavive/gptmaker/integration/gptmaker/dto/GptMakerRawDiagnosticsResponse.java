@@ -6,6 +6,7 @@ public record GptMakerRawDiagnosticsResponse(
     String endpoint,
     Integer httpStatus,
     JsonNode payload,
+    String rawPreview,
     String errorCode,
     String message,
     String responsePreview,

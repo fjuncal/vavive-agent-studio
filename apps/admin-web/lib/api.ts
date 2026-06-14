@@ -336,9 +336,9 @@ export function updateFranchiseGptMakerConnection(id: string, payload: { workspa
 }
 
 export function getGptMakerWorkspaces() {
-  return apiFetch<GptMakerWorkspaceOption[]>("/franchises/gptmaker/workspaces");
+  return apiFetch<GptMakerWorkspaceOption[]>("/gptmaker/workspaces");
 }
 
 export function getGptMakerWorkspaceAgents(workspaceId: string) {
-  return apiFetch<GptMakerAgentOption[]>(`/franchises/gptmaker/workspaces/${workspaceId}/agents`);
+  return apiFetch<GptMakerAgentOption[]>(`/gptmaker/workspaces/${workspaceId}/agents`);
 }
