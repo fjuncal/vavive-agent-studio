@@ -3,6 +3,7 @@ package br.com.vavive.gptmaker.controller;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -43,6 +44,11 @@ public class GptMakerController {
     @GetMapping("/gptmaker/diagnostics/workspaces/raw")
     public GptMakerRawDiagnosticsResponse rawWorkspaceDiagnostics() {
         return gptMakerService.rawWorkspaceDiagnostics();
+    }
+
+    @GetMapping("/gptmaker/diagnostics/workspaces/{workspaceId}/agents")
+    public GptMakerAgentDiagnosticsResponse agentDiagnostics(@PathVariable String workspaceId) {
+        return gptMakerService.agentDiagnostics(workspaceId);
     }
 
     @GetMapping("/gptmaker/debug/agents/{workspaceId}")

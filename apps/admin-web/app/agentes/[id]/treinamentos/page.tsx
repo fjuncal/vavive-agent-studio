@@ -6,8 +6,9 @@ import { Field, FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TrainingPreviewCard } from "@/components/TrainingPreviewCard";
-import { createAgentTraining, getAgentTrainings, getAgents, type AgentSummary, type TrainingSummary } from "@/lib/api";
+import { createAgentTraining, getAgentTrainings, getAgents, getGptMakerHealth, type AgentSummary, type GptMakerHealth, type TrainingSummary } from "@/lib/api";
 import { AlertCircle, BookOpenText, CheckCircle2, FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
@@ -99,6 +100,7 @@ function formatDate(value: string) {
 export default function AgentTrainingsPage() {
   const params = useParams<{ id: string }>();
   const [agent, setAgent] = useState<AgentSummary | null>(null);
+  const [gptMakerHealth, setGptMakerHealth] = useState<GptMakerHealth | null>(null);
   const [history, setHistory] = useState<TrainingSummary[]>([]);
   const [form, setForm] = useState<TrainingForm>(defaultForm);
   const [preview, setPreview] = useState("");
@@ -113,11 +115,12 @@ export default function AgentTrainingsPage() {
     }
 
     setIsLoading(true);
-    Promise.all([getAgents(), getAgentTrainings(params.id)])
-      .then(([agents, trainings]) => {
+    Promise.all([getAgents(), getAgentTrainings(params.id), getGptMakerHealth()])
+      .then(([agents, trainings, health]) => {
         const currentAgent = agents.find((item) => item.id === params.id) ?? null;
         setAgent(currentAgent);
         setHistory(trainings);
+        setGptMakerHealth(health);
         const nextForm = {
           ...defaultForm,
           title: "Treinamento comercial da franquia",
@@ -136,6 +139,8 @@ export default function AgentTrainingsPage() {
       .finally(() => setIsLoading(false));
   }, [params?.id]);
 
+  const hasRealExternalId = !!agent?.connectedToRealGptMaker;
+
   function updateField<K extends keyof TrainingForm>(field: K, value: TrainingForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
   }
@@ -150,8 +155,8 @@ export default function AgentTrainingsPage() {
     if (!params?.id) {
       return;
     }
-    if (!agent?.externalId) {
-      setError("Nao foi possivel publicar no GPTMaker. O agente ainda nao possui identificador externo configurado.");
+    if (!hasRealExternalId) {
+      setError("Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.");
       setSuccess(null);
       return;
     }
@@ -209,6 +214,40 @@ export default function AgentTrainingsPage() {
         </div>
       ) : null}
 
+      <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-ink">Conexao GPTMaker</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.
+            </p>
+          </div>
+          <StatusBadge status={hasRealExternalId ? "CONNECTED" : "ERROR"} />
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{hasRealExternalId ? "Conectado" : "Nao conectado"}</p>
+          </div>
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">External ID</p>
+            <p className="mt-2 break-all text-sm font-semibold text-ink">{agent?.externalId || "Nao configurado"}</p>
+          </div>
+          <div className="rounded-xl bg-mist px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerHealth?.mockEnabled ? "Mock" : "Real"}</p>
+          </div>
+        </div>
+        {!hasRealExternalId && agent ? (
+          <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <span>Conecte este agente a um agente GPTMaker real antes de publicar.</span>
+            <Link href={`/franquias/${agent.franchiseId}`} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700">
+              Conectar agente GPTMaker
+            </Link>
+          </div>
+        ) : null}
+      </section>
+
       <section className="grid gap-4 lg:grid-cols-3">
         {guidanceCards.map((item) => (
           <article key={item.title} className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
@@ -261,7 +300,7 @@ export default function AgentTrainingsPage() {
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
-                disabled={isSubmitting || isLoading}
+                disabled={isSubmitting || isLoading || !hasRealExternalId}
                 className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}

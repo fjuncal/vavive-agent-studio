@@ -11,4 +11,6 @@ public interface GptMakerAgentRepository extends JpaRepository<GptMakerAgent, UU
     java.util.Optional<GptMakerAgent> findFirstByFranchiseIdOrderByCreatedAtAsc(UUID franchiseId);
 
     java.util.Optional<GptMakerAgent> findFirstByFranchiseIdAndExternalId(UUID franchiseId, String externalId);
+
+    java.util.Optional<GptMakerAgent> findFirstByFranchiseIdAndName(UUID franchiseId, String name);
 }

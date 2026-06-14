@@ -70,6 +70,9 @@ public class AgentService {
     @Transactional
     public TrainingResponse addTraining(UUID agentId, CreateTrainingRequest request) {
         GptMakerAgent agent = requireAccessibleAgent(agentId);
+        if (!gptMakerClient.isRealExternalId(agent.getExternalId())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.");
+        }
         var result = gptMakerClient.sendTraining(agent.getExternalId(), request.title(), request.content());
         AgentTraining training = trainingRepository.save(new AgentTraining(
             request.title(),
@@ -137,13 +140,17 @@ public class AgentService {
     }
 
     private AgentResponse toResponse(GptMakerAgent agent) {
+        boolean connectedToRealGptMaker = gptMakerClient.isRealExternalId(agent.getExternalId());
         return new AgentResponse(
             agent.getId(),
+            agent.getFranchise().getId(),
             agent.getExternalId(),
             agent.getName(),
             agent.getStatus(),
             agent.getToneOfVoice(),
             agent.getFranchise().getName(),
+            connectedToRealGptMaker,
+            connectedToRealGptMaker ? "Conectado ao GPTMaker" : "Nao conectado ao GPTMaker real",
             agent.getCreatedAt()
         );
     }

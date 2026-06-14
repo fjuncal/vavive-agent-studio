@@ -133,6 +133,12 @@ public class FranchiseService {
     @Transactional
     public FranchiseGptMakerConnectionResponse updateGptMakerConnection(UUID id, UpdateFranchiseGptMakerConnectionRequest request) {
         requireSuperAdmin();
+        if (request.workspaceId() == null || request.workspaceId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workspace GPTMaker nao informado");
+        }
+        if (request.agentId() == null || request.agentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Agente GPTMaker nao informado");
+        }
         Franchise franchise = requireAccessibleFranchise(id);
 
         GptMakerWorkspaceOptionResponse workspace;
@@ -291,17 +297,22 @@ public class FranchiseService {
     }
 
     private void syncLocalAgent(Franchise franchise, GptMakerAgentOptionResponse agentResponse) {
-        GptMakerAgent agent = agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchise.getId())
+        GptMakerAgent agent = agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), agentResponse.id())
+            .or(() -> agentRepository.findFirstByFranchiseIdAndName(franchise.getId(), agentResponse.name()))
+            .or(() -> agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchise.getId()))
             .orElseGet(() -> new GptMakerAgent(
                 agentResponse.id(),
                 agentResponse.name(),
                 "ATIVO",
-                "",
+                defaultToneOfVoice(franchise),
                 franchise
             ));
         agent.setExternalId(agentResponse.id());
         agent.setName(agentResponse.name());
         agent.setStatus("ATIVO");
+        if (agent.getToneOfVoice() == null || agent.getToneOfVoice().isBlank()) {
+            agent.setToneOfVoice(defaultToneOfVoice(franchise));
+        }
         agentRepository.save(agent);
     }
 
@@ -355,5 +366,9 @@ public class FranchiseService {
             status,
             franchise.getGptMakerLastSyncAt()
         );
+    }
+
+    private String defaultToneOfVoice(Franchise franchise) {
+        return "Acolhedor, claro e consultivo para a franquia " + franchise.getName();
     }
 }

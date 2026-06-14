@@ -237,6 +237,59 @@ class GptMakerClientTest {
     }
 
     @Test
+    void listAgentsAcceptsDirectArrayPayload() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        feignClient.agentPayload = """
+            [
+              {
+                "id": "agent-real-1",
+                "name": "Agente Real",
+                "communicationType": "WHATSAPP",
+                "type": "COMMERCIAL",
+                "jobName": "Closer"
+              }
+            ]
+            """;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var agents = client.listAgents("ws-1");
+
+        assertEquals(1, agents.size());
+        assertEquals("Agente Real", agents.getFirst().name());
+        assertEquals("Closer", agents.getFirst().jobName());
+    }
+
+    @Test
+    void agentDiagnosticsReturnsConnectedWhenAgentsAreListed() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        ObjectMapper objectMapper = new ObjectMapper();
+        feignClient.agentPayload = """
+            [
+              { "id": "agent-1", "name": "Agente 1" },
+              { "id": "agent-2", "name": "Agente 2" }
+            ]
+            """;
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            objectMapper
+        );
+
+        var diagnostics = client.agentDiagnostics("ws-1");
+
+        assertEquals("CONNECTED", diagnostics.status());
+        assertEquals(2, diagnostics.agentCount());
+        assertEquals(java.util.List.of("Agente 1", "Agente 2"), diagnostics.agentNames());
+    }
+
+    @Test
     void diagnosticsReturnsParseErrorWhenHttp200PayloadCannotBeParsed() {
         TrackingFeignClient feignClient = new TrackingFeignClient();
         ObjectMapper objectMapper = new ObjectMapper();

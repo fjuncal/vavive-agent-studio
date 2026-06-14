@@ -46,6 +46,8 @@ export default function AgentsPage() {
                 <StatusBadge status={agent.status} />
               </div>
               <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                <p><strong className="text-ink">Conexao GPTMaker:</strong> {agent.connectionStatus}</p>
+                <p className="mt-1"><strong className="text-ink">External ID:</strong> {agent.externalId || "Nao configurado"}</p>
                 <p><strong className="text-ink">Tom:</strong> {agent.toneOfVoice}</p>
                 <p className="mt-1"><strong className="text-ink">Ultima sync:</strong> {new Date(agent.createdAt).toLocaleString("pt-BR")}</p>
               </div>

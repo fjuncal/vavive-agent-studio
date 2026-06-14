@@ -60,11 +60,14 @@ export type LeadSummary = {
 
 export type AgentSummary = {
   id: string;
+  franchiseId: string;
   externalId: string;
   name: string;
   status: string;
   toneOfVoice: string;
   franchiseName: string;
+  connectedToRealGptMaker: boolean;
+  connectionStatus: string;
   createdAt: string;
 };
 
@@ -143,6 +146,18 @@ export type GptMakerDiagnostics = {
   httpStatus?: number | null;
   errorCode?: string | null;
   endpoint?: string | null;
+  responsePreview?: string | null;
+};
+
+export type GptMakerAgentDiagnostics = {
+  workspaceId: string;
+  endpoint: string;
+  httpStatus?: number | null;
+  status: "CONNECTED" | "ERROR" | "MISSING_TOKEN" | "MOCK";
+  agentCount: number;
+  agentNames: string[];
+  message: string;
+  errorCode?: string | null;
   responsePreview?: string | null;
 };
 
@@ -341,4 +356,8 @@ export function getGptMakerWorkspaces() {
 
 export function getGptMakerWorkspaceAgents(workspaceId: string) {
   return apiFetch<GptMakerAgentOption[]>(`/gptmaker/workspaces/${workspaceId}/agents`);
+}
+
+export function getGptMakerWorkspaceAgentDiagnostics(workspaceId: string) {
+  return apiFetch<GptMakerAgentDiagnostics>(`/gptmaker/diagnostics/workspaces/${workspaceId}/agents`);
 }

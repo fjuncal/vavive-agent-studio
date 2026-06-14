@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import {
   getFranchiseById,
   getFranchiseGptMakerConnection,
+  getGptMakerWorkspaceAgentDiagnostics,
   getGptMakerDiagnostics,
   getGptMakerHealth,
   getGptMakerWorkspaceAgents,
@@ -56,6 +57,7 @@ export default function FranchiseDetailPage() {
   const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
   const [isLoadingAgents, setIsLoadingAgents] = useState(false);
   const [agentLoadError, setAgentLoadError] = useState<string | null>(null);
+  const [agentReloadKey, setAgentReloadKey] = useState(0);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const isConnected = connection?.status === "CONECTADO";
@@ -105,6 +107,30 @@ export default function FranchiseDetailPage() {
       .finally(() => setIsLoadingWorkspaces(false));
   }, [isSuperAdmin]);
 
+  async function loadAgents(workspaceId: string) {
+    setIsLoadingAgents(true);
+    setAgentLoadError(null);
+    try {
+      const items = await getGptMakerWorkspaceAgents(workspaceId);
+      setAgents(items);
+      if (!items.some((item) => item.id === selectedAgentId)) {
+        setSelectedAgentId("");
+      }
+      if (isSuperAdmin) {
+        const diagnostics = await getGptMakerWorkspaceAgentDiagnostics(workspaceId);
+        if (diagnostics.status === "ERROR") {
+          setAgentLoadError(diagnostics.message);
+        }
+      }
+    } catch (requestError) {
+      const message = requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes do workspace.";
+      setAgentLoadError(message);
+      setError(message);
+    } finally {
+      setIsLoadingAgents(false);
+    }
+  }
+
   useEffect(() => {
     if (!selectedWorkspaceId || !isSuperAdmin) {
       setAgents([]);
@@ -112,22 +138,8 @@ export default function FranchiseDetailPage() {
       return;
     }
 
-    setIsLoadingAgents(true);
-    setAgentLoadError(null);
-    getGptMakerWorkspaceAgents(selectedWorkspaceId)
-      .then((items) => {
-        setAgents(items);
-        if (!items.some((item) => item.id === selectedAgentId)) {
-          setSelectedAgentId("");
-        }
-      })
-      .catch((requestError) => {
-        const message = requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes do workspace.";
-        setAgentLoadError(message);
-        setError(message);
-      })
-      .finally(() => setIsLoadingAgents(false));
-  }, [isSuperAdmin, selectedWorkspaceId]);
+    void loadAgents(selectedWorkspaceId);
+  }, [agentReloadKey, isSuperAdmin, selectedWorkspaceId]);
 
   const workspaceStatusMessage = isLoadingWorkspaces
     ? "Carregando..."
@@ -275,7 +287,7 @@ export default function FranchiseDetailPage() {
                       : agentLoadError
                         ? "Erro ao carregar agentes"
                         : agents.length === 0
-                          ? "Nenhum agente encontrado"
+                          ? "Nenhum agente retornado para este workspace GPTMaker."
                           : `Agente(s) encontrado(s): ${agents.length}`}
                 </span>
                 <select
@@ -287,11 +299,26 @@ export default function FranchiseDetailPage() {
                   <option value="">{isLoadingAgents ? "Carregando agentes..." : "Selecione um agente"}</option>
                   {agents.map((agent) => (
                     <option key={agent.id} value={agent.id}>
-                      {agent.name}
+                      {agent.name}{agent.jobName ? ` · ${agent.jobName}` : agent.type ? ` · ${agent.type}` : ""}
                     </option>
                   ))}
                 </select>
               </label>
+
+              {agentLoadError ? (
+                <div className="flex flex-wrap items-center gap-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                  <span>{agentLoadError}</span>
+                  {selectedWorkspaceId ? (
+                    <button
+                      type="button"
+                      onClick={() => setAgentReloadKey((current) => current + 1)}
+                      className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                    >
+                      Tentar novamente
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
 
               {selectedAgent ? (
                 <div className="rounded-xl bg-mist p-4 text-sm text-slate-600">

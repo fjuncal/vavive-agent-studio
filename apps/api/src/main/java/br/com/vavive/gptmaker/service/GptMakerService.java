@@ -5,6 +5,7 @@ import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerHealthResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
 import java.util.List;
@@ -70,6 +71,11 @@ public class GptMakerService {
     public GptMakerRawDiagnosticsResponse rawWorkspaceDiagnostics() {
         requireSuperAdmin();
         return gptMakerClient.rawWorkspaceDiagnostics();
+    }
+
+    public GptMakerAgentDiagnosticsResponse agentDiagnostics(String workspaceId) {
+        requireSuperAdmin();
+        return gptMakerClient.agentDiagnostics(workspaceId);
     }
 
     public com.fasterxml.jackson.databind.JsonNode debugAgents(String workspaceId) {

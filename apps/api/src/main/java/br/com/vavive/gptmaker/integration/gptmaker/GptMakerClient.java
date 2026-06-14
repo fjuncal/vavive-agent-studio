@@ -3,6 +3,7 @@ package br.com.vavive.gptmaker.integration.gptmaker;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
@@ -350,6 +351,67 @@ public class GptMakerClient {
         }
     }
 
+    public GptMakerAgentDiagnosticsResponse agentDiagnostics(String workspaceId) {
+        String endpoint = agentsEndpoint(workspaceId);
+        if (properties.mockEnabled()) {
+            List<GptMakerAgentResponse> agents = listAgents(workspaceId);
+            return new GptMakerAgentDiagnosticsResponse(
+                workspaceId,
+                endpoint,
+                200,
+                "MOCK",
+                agents.size(),
+                agents.stream().map(GptMakerAgentResponse::name).filter(name -> name != null && !name.isBlank()).toList(),
+                "Integracao em modo mock. Nenhuma chamada real ao GPTMaker foi executada.",
+                null,
+                null
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            return new GptMakerAgentDiagnosticsResponse(
+                workspaceId,
+                endpoint,
+                null,
+                "MISSING_TOKEN",
+                0,
+                List.of(),
+                MISSING_TOKEN_MESSAGE,
+                "MISSING_TOKEN",
+                null
+            );
+        }
+        try {
+            List<GptMakerAgentResponse> agents = listAgents(workspaceId);
+            List<String> agentNames = agents.stream()
+                .map(GptMakerAgentResponse::name)
+                .filter(name -> name != null && !name.isBlank())
+                .toList();
+            return new GptMakerAgentDiagnosticsResponse(
+                workspaceId,
+                endpoint,
+                200,
+                "CONNECTED",
+                agents.size(),
+                agentNames,
+                "Conexao real com GPTMaker para agentes realizada com sucesso.",
+                null,
+                null
+            );
+        } catch (GptMakerIntegrationException exception) {
+            return new GptMakerAgentDiagnosticsResponse(
+                workspaceId,
+                endpoint,
+                exception.getHttpStatus(),
+                "ERROR",
+                0,
+                List.of(),
+                exception.getMessage(),
+                exception.getErrorCode(),
+                exception.getResponsePreview()
+            );
+        }
+    }
+
     public JsonNode debugListAgents(String workspaceId) {
         if (workspaceId == null || workspaceId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.");
@@ -611,6 +673,14 @@ public class GptMakerClient {
             .map(GptMakerAgentResponse::name)
             .filter(name -> name != null && !name.isBlank())
             .toList());
+    }
+
+    public boolean isRealExternalId(String externalId) {
+        if (externalId == null || externalId.isBlank()) {
+            return false;
+        }
+        String normalized = externalId.trim().toLowerCase();
+        return !normalized.startsWith("mock") && !normalized.startsWith("gptmaker-agent-auto-");
     }
 
     private String agentsEndpoint(String workspaceId) {

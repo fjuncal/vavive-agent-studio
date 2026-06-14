@@ -144,6 +144,28 @@ Observacoes:
 - Se o curl funciona e o backend nao, nao ajuste o front primeiro. Corrija Feign, parser ou tratamento de erro no backend.
 - Nenhum endpoint, log ou tela deve expor o token do GPTMaker.
 
+## Fluxo real GPTMaker
+
+1. Suba o backend com:
+   - `GPTMAKER_MOCK_ENABLED=false`
+   - `GPTMAKER_API_TOKEN=token_real`
+   - `GPTMAKER_BASE_URL=https://api.gptmaker.ai`
+2. Entre como `SUPER_ADMIN`.
+3. Abra o dashboard.
+   - `GET /gptmaker/diagnostics` deve retornar `CONNECTED`.
+4. Abra uma franquia em `/franquias/[id]`.
+5. Selecione um workspace real.
+6. Selecione um agent real do workspace.
+7. Salve a conexao GPTMaker.
+8. Acesse `/agentes`.
+   - O agente vinculado deve aparecer como `Conectado ao GPTMaker`.
+9. Abra `/agentes/[id]/treinamentos`.
+10. Gere o treinamento.
+11. Envie para o GPTMaker.
+12. Valide o status final:
+   - `PUBLICADO_GPTMAKER` em sucesso
+   - `PUBLICACAO_FALHOU` em erro
+
 ## Seeds e usuarios mockados
 
 - `admin@vavive.com` / `admin123`

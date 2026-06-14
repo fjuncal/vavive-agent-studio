@@ -5,11 +5,14 @@ import java.util.UUID;
 
 public record AgentResponse(
     UUID id,
+    UUID franchiseId,
     String externalId,
     String name,
     String status,
     String toneOfVoice,
     String franchiseName,
+    boolean connectedToRealGptMaker,
+    String connectionStatus,
     LocalDateTime createdAt
 ) {
 }
