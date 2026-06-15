@@ -16,6 +16,7 @@ type AuthContextValue = {
   token: string | null;
   isLoading: boolean;
   setSession: (token: string, user?: UserProfile | null) => void;
+  clearSession: () => void;
   logout: () => void;
   refreshMe: () => Promise<UserProfile | null>;
 };
@@ -24,6 +25,11 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const TOKEN_KEY = "vavive_token";
 const USER_KEY = "vavive_user";
+
+function clearStoredSession() {
+  window.localStorage.removeItem(TOKEN_KEY);
+  window.localStorage.removeItem(USER_KEY);
+}
 
 function readStoredUser(): UserProfile | null {
   if (typeof window === "undefined") {
@@ -64,8 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.localStorage.setItem(USER_KEY, JSON.stringify(profile));
       })
       .catch(() => {
-        window.localStorage.removeItem(TOKEN_KEY);
-        window.localStorage.removeItem(USER_KEY);
+        clearStoredSession();
         setToken(null);
         setUser(null);
       })
@@ -88,19 +93,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [isLoading, pathname, router, token]);
 
   function setSession(nextToken: string, nextUser?: UserProfile | null) {
+    clearStoredSession();
     window.localStorage.setItem(TOKEN_KEY, nextToken);
     setToken(nextToken);
     if (nextUser) {
       window.localStorage.setItem(USER_KEY, JSON.stringify(nextUser));
       setUser(nextUser);
+      return;
     }
+    setUser(null);
+  }
+
+  function clearSession() {
+    clearStoredSession();
+    setToken(null);
+    setUser(null);
   }
 
   function logout() {
-    window.localStorage.removeItem(TOKEN_KEY);
-    window.localStorage.removeItem(USER_KEY);
-    setToken(null);
-    setUser(null);
+    clearSession();
     startTransition(() => router.replace("/login"));
   }
 
@@ -117,7 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, setSession, logout, refreshMe }}>
+    <AuthContext.Provider value={{ user, token, isLoading, setSession, clearSession, logout, refreshMe }}>
       {children}
     </AuthContext.Provider>
   );

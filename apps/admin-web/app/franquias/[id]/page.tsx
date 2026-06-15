@@ -331,7 +331,7 @@ export default function FranchiseDetailPage() {
                     <div className="grid gap-1">
                       <h3 className="font-semibold text-ink">Criar agente GPTMaker e conectar</h3>
                       <p className="text-sm leading-6 text-slate-500">
-                        Step 1: selecionar workspace existente. Step 2: definir o agente. Step 3: revisar o contexto base. Step 4: conectar.
+                        Selecione uma workspace existente, revise o contexto base da franquia e conclua a conexao do agente.
                       </p>
                     </div>
 
@@ -381,7 +381,7 @@ export default function FranchiseDetailPage() {
                         <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={jobSite} onChange={(event) => setJobSite(event.target.value)} />
                       </label>
                       <label className="grid gap-1.5 md:col-span-2">
-                        <span className="text-sm font-medium text-slate-700">Job name</span>
+                        <span className="text-sm font-medium text-slate-700">Nome institucional</span>
                         <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={jobName} onChange={(event) => setJobName(event.target.value)} />
                       </label>
                       <label className="grid gap-1.5 md:col-span-2">

@@ -8,7 +8,7 @@ import { useState } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
-  const { setSession } = useAuth();
+  const { clearSession, refreshMe, setSession } = useAuth();
   const [email, setEmail] = useState("admin@vavive.com");
   const [password, setPassword] = useState("admin123");
   const [error, setError] = useState<string | null>(null);
@@ -19,8 +19,14 @@ export default function LoginPage() {
     setIsSubmitting(true);
 
     try {
-      const response = await login(nextEmail, nextPassword);
-      setSession(response.token, response.user);
+      clearSession();
+      const { token } = await login(nextEmail, nextPassword);
+      setSession(token);
+      const profile = await refreshMe();
+      if (!profile) {
+        setError("Nao foi possivel validar a sessao criada. Entre novamente.");
+        return;
+      }
       router.replace("/dashboard");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel entrar.");

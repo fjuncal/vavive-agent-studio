@@ -4,14 +4,17 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useAuth } from "@/lib/auth";
 import { getAgents, type AgentSummary } from "@/lib/api";
 import { Bot, FileText, GitBranch, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 export default function AgentsPage() {
+  const { user } = useAuth();
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
     getAgents()
@@ -26,9 +29,8 @@ export default function AgentsPage() {
       <PageHeader
         eyebrow="GPTMaker"
         title="Agentes"
-        description="A plataforma Vavive organiza agentes e configuracoes. Toda comunicacao real com GPTMaker deve passar pela API Java."
+        description="A plataforma Vavive organiza os agentes conectados por franquia. Toda integracao com o GPTMaker passa pela API Java."
       />
-      <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Agentes sem conexao real ao GPTMaker devem ser tratados como dados demonstrativos neste MVP.</div>
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {agents.length ? (
         <section className="grid gap-4 lg:grid-cols-2">
@@ -47,11 +49,16 @@ export default function AgentsPage() {
                 <StatusBadge status={agent.status} />
               </div>
               <div className="mt-5 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                {!agent.connectedToRealGptMaker ? <p className="mb-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Dados demonstrativos</p> : null}
+                {!agent.connectedToRealGptMaker ? <p className="mb-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Ambiente de desenvolvimento</p> : null}
                 <p><strong className="text-ink">Conexao GPTMaker:</strong> {agent.connectionStatus}</p>
-                <p className="mt-1"><strong className="text-ink">External ID:</strong> {agent.externalId || "Nao configurado"}</p>
                 <p><strong className="text-ink">Tom:</strong> {agent.toneOfVoice}</p>
-                <p className="mt-1"><strong className="text-ink">Ultima sync:</strong> {new Date(agent.createdAt).toLocaleString("pt-BR")}</p>
+                <p className="mt-1"><strong className="text-ink">Registrado em:</strong> {new Date(agent.createdAt).toLocaleString("pt-BR")}</p>
+                {isSuperAdmin ? (
+                  <details className="mt-3 rounded-lg bg-white px-3 py-2 text-xs text-slate-500">
+                    <summary className="cursor-pointer font-semibold text-slate-700">Detalhes tecnicos</summary>
+                    <p className="mt-2">Identificador externo: {agent.externalId || "Nao configurado"}</p>
+                  </details>
+                ) : null}
               </div>
               <div className="mt-5 grid gap-2 sm:grid-cols-4">
                 <Link href={`/agentes/${agent.id}`} className="rounded-xl bg-ink px-3 py-2 text-center text-xs font-semibold text-white">Detalhes</Link>
@@ -63,7 +70,7 @@ export default function AgentsPage() {
           ))}
         </section>
       ) : (
-        <EmptyState icon={Bot} title="Nenhum agente encontrado" description="Quando o backend retornar agentes cadastrados, eles aparecerao aqui. As telas detalhadas continuam mockadas neste MVP." />
+        <EmptyState icon={Bot} title="Nenhum agente encontrado" description="Quando o backend retornar agentes cadastrados, eles aparecerao aqui." />
       )}
     </AppShell>
   );

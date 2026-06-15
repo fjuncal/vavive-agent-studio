@@ -1,10 +1,13 @@
 package br.com.vavive.gptmaker;
 
 import br.com.vavive.gptmaker.domain.entity.Franchise;
+import br.com.vavive.gptmaker.domain.entity.User;
+import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
 import br.com.vavive.gptmaker.repository.UserRepository;
+import br.com.vavive.gptmaker.security.JwtService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
@@ -12,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -43,6 +47,12 @@ class FranchiseSecurityIntegrationTest {
 
     @Autowired
     private AgentTrainingRepository trainingRepository;
+
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
+    @Autowired
+    private JwtService jwtService;
 
     @Test
     void superAdminCreatesFranchiseAdminUser() throws Exception {
@@ -97,7 +107,8 @@ class FranchiseSecurityIntegrationTest {
     void adminFranquiaCannotAccessDiagnostics() throws Exception {
         mockMvc.perform(get("/gptmaker/diagnostics")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker."));
     }
 
     @Test
@@ -106,7 +117,8 @@ class FranchiseSecurityIntegrationTest {
 
         mockMvc.perform(get("/franchises/{id}", otherFranchise.getId())
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("ADMIN_FRANQUIA so pode acessar dados da propria franquia."));
     }
 
     @Test
@@ -128,7 +140,74 @@ class FranchiseSecurityIntegrationTest {
                       "jobDescription": "Contexto Vavive"
                     }
                     """))
-            .andExpect(status().isForbidden());
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker."));
+    }
+
+    @Test
+    void adminFranquiaWithoutFranchiseCannotLogin() throws Exception {
+        userRepository.save(new User(
+            "Admin sem franquia",
+            "sem-franquia@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            null
+        ));
+
+        mockMvc.perform(post("/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "email": "sem-franquia@vavive.com",
+                      "password": "admin123"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Usuario ADMIN_FRANQUIA nao possui franquia associada."));
+    }
+
+    @Test
+    void meReturnsFranchiseForAdminFranquia() throws Exception {
+        mockMvc.perform(get("/me")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.role").value("ADMIN_FRANQUIA"))
+            .andExpect(jsonPath("$.franchise.id").isNotEmpty())
+            .andExpect(jsonPath("$.franchise.name").value("Vavive Vila Mariana"));
+    }
+
+    @Test
+    void dashboardSummaryWorksForSuperAdmin() throws Exception {
+        mockMvc.perform(get("/dashboard/summary")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalLeads").value(4))
+            .andExpect(jsonPath("$.setupStatus").value("VISAO_GERAL"));
+    }
+
+    @Test
+    void dashboardSummaryWorksForAdminFranquia() throws Exception {
+        mockMvc.perform(get("/dashboard/summary")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.totalLeads").value(4))
+            .andExpect(jsonPath("$.setupStatus").isNotEmpty());
+    }
+
+    @Test
+    void leadsReturnsFriendlyErrorWhenAdminFranquiaHasNoFranchise() throws Exception {
+        User user = userRepository.save(new User(
+            "Admin sem franquia leads",
+            "sem-franquia-leads@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            null
+        ));
+
+        mockMvc.perform(get("/leads")
+                .header("Authorization", "Bearer " + jwtService.generateToken(user)))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Usuario ADMIN_FRANQUIA nao possui franquia associada."));
     }
 
     @Test

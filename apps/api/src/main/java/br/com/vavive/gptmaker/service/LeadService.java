@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.service;
 
 import br.com.vavive.gptmaker.domain.entity.Lead;
 import br.com.vavive.gptmaker.domain.entity.User;
+import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.LeadResponse;
 import br.com.vavive.gptmaker.repository.LeadRepository;
@@ -22,9 +23,12 @@ public class LeadService {
     @Transactional(readOnly = true)
     public List<LeadResponse> list() {
         User user = currentUserService.requireCurrentUser();
+        Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
+            ? null
+            : currentUserService.requireFranchise(user);
         List<Lead> leads = user.getRole() == UserRole.SUPER_ADMIN
             ? leadRepository.findAll()
-            : leadRepository.findByFranchiseId(user.getFranchise().getId());
+            : leadRepository.findByFranchiseId(franchise.getId());
         return leads.stream().map(this::toResponse).toList();
     }
 

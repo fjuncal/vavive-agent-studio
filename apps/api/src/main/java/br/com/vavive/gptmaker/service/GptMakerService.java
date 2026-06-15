@@ -91,8 +91,6 @@ public class GptMakerService {
     }
 
     private void requireSuperAdmin() {
-        if (currentUserService.requireCurrentUser().getRole() != br.com.vavive.gptmaker.domain.enums.UserRole.SUPER_ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas SUPER_ADMIN pode acessar o diagnostico bruto do GPTMaker");
-        }
+        currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker.");
     }
 }

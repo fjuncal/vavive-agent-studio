@@ -196,7 +196,7 @@ export default function AgentTrainingsPage() {
         title="Treinamento do Agente"
         description="Ensine o agente com informacoes da sua franquia sem precisar escrever prompts tecnicos."
       />
-      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Dados demonstrativos: sem agente GPTMaker real conectado, este fluxo fica apenas em modo local.</div> : null}
+      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Ambiente de desenvolvimento: sem agente GPTMaker real conectado, este fluxo permanece apenas em modo local.</div> : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -219,9 +219,7 @@ export default function AgentTrainingsPage() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-ink">Conexao GPTMaker</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.
-            </p>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.</p>
           </div>
           <StatusBadge status={hasRealExternalId ? "CONNECTED" : "ERROR"} />
         </div>
@@ -236,7 +234,7 @@ export default function AgentTrainingsPage() {
           </div>
           <div className="rounded-xl bg-mist px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerHealth?.mockEnabled ? "Mock" : "Real"}</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerHealth?.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
           </div>
         </div>
         {!hasRealExternalId && agent ? (
@@ -285,7 +283,7 @@ export default function AgentTrainingsPage() {
             <div className="rounded-2xl border border-line/80 bg-white p-4">
               <p className="text-sm font-semibold text-ink">Revisao final</p>
               <p className="mt-1 text-sm leading-6 text-slate-500">
-                Antes de enviar ao GPTMaker, revise o texto abaixo. Ele pode ser ajustado sem escrever JSON, payload ou prompt tecnico.
+                Antes de enviar ao GPTMaker, revise o texto abaixo. Ele pode ser ajustado diretamente na plataforma, sem expor detalhes tecnicos.
               </p>
               <textarea
                 className="mt-4 min-h-[220px] w-full rounded-xl border border-line bg-white px-3 py-3 text-sm leading-7 text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
@@ -323,7 +321,7 @@ export default function AgentTrainingsPage() {
                       <StatusBadge status={training.status} />
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{training.message || "Treinamento salvo."}</p>
-                    {training.mockEnabled || training.status === "SALVO_LOCALMENTE" ? <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Dados demonstrativos</p> : null}
+                    {training.mockEnabled || training.status === "SALVO_LOCALMENTE" ? <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Ambiente de desenvolvimento</p> : null}
                     {training.externalReference ? <p className="mt-2 text-xs text-slate-400">Referencia: {training.externalReference}</p> : null}
                   </article>
                 ))}

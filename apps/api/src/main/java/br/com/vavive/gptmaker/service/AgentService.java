@@ -3,6 +3,7 @@ package br.com.vavive.gptmaker.service;
 import br.com.vavive.gptmaker.domain.entity.AgentIntent;
 import br.com.vavive.gptmaker.domain.entity.AgentRule;
 import br.com.vavive.gptmaker.domain.entity.AgentTraining;
+import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
@@ -53,9 +54,12 @@ public class AgentService {
     @Transactional(readOnly = true)
     public List<AgentResponse> list() {
         User user = currentUserService.requireCurrentUser();
+        Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
+            ? null
+            : currentUserService.requireFranchise(user);
         List<GptMakerAgent> agents = user.getRole() == UserRole.SUPER_ADMIN
             ? agentRepository.findAll()
-            : agentRepository.findByFranchiseId(user.getFranchise().getId());
+            : agentRepository.findByFranchiseId(franchise.getId());
         return agents.stream().map(this::toResponse).toList();
     }
 
@@ -133,8 +137,9 @@ public class AgentService {
         User user = currentUserService.requireCurrentUser();
         GptMakerAgent agent = agentRepository.findById(agentId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Agente nao encontrado"));
-        if (user.getRole() != UserRole.SUPER_ADMIN && !agent.getFranchise().getId().equals(user.getFranchise().getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem acesso a este agente");
+        if (user.getRole() != UserRole.SUPER_ADMIN
+            && !agent.getFranchise().getId().equals(currentUserService.requireFranchise(user).getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN_FRANQUIA so pode acessar dados da propria franquia.");
         }
         return agent;
     }

@@ -8,10 +8,10 @@ import br.com.vavive.gptmaker.dto.LoginResponse;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.repository.UserRepository;
 import br.com.vavive.gptmaker.security.JwtService;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 @Service
 public class AuthService {
@@ -39,6 +39,7 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invalidas");
         }
+        currentUserService.requireFranchise(user);
         return new LoginResponse(jwtService.generateToken(user), toResponse(user));
     }
 

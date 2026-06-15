@@ -82,7 +82,7 @@ public class FranchiseService {
         if (user.getRole() == UserRole.SUPER_ADMIN) {
             return franchiseRepository.findAll().stream().map(AuthService::toFranchiseResponse).toList();
         }
-        return List.of(AuthService.toFranchiseResponse(user.getFranchise()));
+        return List.of(AuthService.toFranchiseResponse(currentUserService.requireFranchise(user)));
     }
 
     @Transactional
@@ -361,17 +361,15 @@ public class FranchiseService {
         User user = currentUserService.requireCurrentUser();
         Franchise franchise = franchiseRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Franquia nao encontrada"));
-        if (user.getRole() != UserRole.SUPER_ADMIN && !franchise.getId().equals(user.getFranchise().getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Sem acesso a esta franquia");
+        if (user.getRole() != UserRole.SUPER_ADMIN
+            && !franchise.getId().equals(currentUserService.requireFranchise(user).getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN_FRANQUIA so pode acessar dados da propria franquia.");
         }
         return franchise;
     }
 
     private void requireSuperAdmin() {
-        User user = currentUserService.requireCurrentUser();
-        if (user.getRole() != UserRole.SUPER_ADMIN) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas SUPER_ADMIN pode editar a conexao GPTMaker");
-        }
+        currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker.");
     }
 
     private GptMakerAgent resolveAgentForPublishing(Franchise franchise, FranchiseSetup setup) {

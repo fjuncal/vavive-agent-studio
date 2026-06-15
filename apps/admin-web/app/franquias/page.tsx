@@ -34,7 +34,6 @@ export default function FranchisesPage() {
         actionLabel={isSuperAdmin ? "Nova franquia" : undefined}
         actionHref={isSuperAdmin ? "/franquias/nova" : undefined}
       />
-      <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Dados demonstrativos podem aparecer enquanto a franquia ainda nao estiver conectada ao GPTMaker real.</div>
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {franchises.length ? (
         <DataTable
