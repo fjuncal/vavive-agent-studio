@@ -11,6 +11,7 @@ import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
 import br.com.vavive.gptmaker.dto.FranchiseWorkspaceMappingResponse;
+import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
@@ -97,12 +98,14 @@ public class FranchiseService {
         if (user.getRole() != UserRole.SUPER_ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas SUPER_ADMIN pode criar franquias");
         }
-        Franchise franchise = new Franchise(request.name(), request.document(), request.city(), request.state(), "ATIVA");
+        Franchise franchise = new Franchise(request.name(), request.document(), request.city(), request.state(), "PENDENTE_CONFIGURACAO");
         if (request.workspaceId() != null && !request.workspaceId().isBlank()) {
             GptMakerWorkspaceResponse workspace = requireExistingWorkspace(request.workspaceId());
+            ensureWorkspaceAvailable(workspace.id(), null);
             franchise.setWorkspaceId(workspace.id());
             franchise.setWorkspaceName(resolveProvidedWorkspaceName(request.workspaceName(), workspace));
         }
+        refreshStatus(franchise);
         return AuthService.toFranchiseResponse(franchiseRepository.save(franchise));
     }
 
@@ -168,6 +171,24 @@ public class FranchiseService {
         requireSuperAdmin();
         try {
             return gptMakerClient.listWorkspaces().stream()
+                .map(item -> new GptMakerWorkspaceOptionResponse(item.id(), item.name()))
+                .toList();
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public List<GptMakerWorkspaceOptionResponse> listAvailableWorkspaces() {
+        requireSuperAdmin();
+        try {
+            Set<String> linkedWorkspaceIds = franchiseRepository.findAll().stream()
+                .map(Franchise::getWorkspaceId)
+                .filter(item -> item != null && !item.isBlank())
+                .collect(java.util.stream.Collectors.toSet());
+            return gptMakerClient.listWorkspaces().stream()
+                .filter(item -> item.id() != null && !item.id().isBlank())
+                .filter(item -> !linkedWorkspaceIds.contains(item.id()))
                 .map(item -> new GptMakerWorkspaceOptionResponse(item.id(), item.name()))
                 .toList();
         } catch (GptMakerIntegrationException exception) {
@@ -251,6 +272,8 @@ public class FranchiseService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Agente GPTMaker nao informado");
         }
         Franchise franchise = requireAccessibleFranchise(id);
+        ensureWorkspaceAvailable(request.workspaceId(), franchise.getId());
+        requireCriticalAgentConfirmation(franchise, request.agentId(), request.confirmCriticalChange());
 
         GptMakerWorkspaceOptionResponse workspace;
         GptMakerAgentOptionResponse agent;
@@ -285,6 +308,7 @@ public class FranchiseService {
         franchise.setAgentId(agent.id());
         franchise.setAgentName(agent.name());
         franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+        refreshStatus(franchise);
         franchiseRepository.save(franchise);
 
         syncLocalAgent(franchise, agent);
@@ -296,9 +320,13 @@ public class FranchiseService {
         requireSuperAdmin();
         Franchise franchise = requireAccessibleFranchise(id);
         GptMakerWorkspaceResponse workspace = requireExistingWorkspace(request.workspaceId());
+        ensureWorkspaceAvailable(workspace.id(), franchise.getId());
         boolean workspaceChanged = franchise.getWorkspaceId() != null
             && !franchise.getWorkspaceId().isBlank()
             && !Objects.equals(franchise.getWorkspaceId(), workspace.id());
+        if (workspaceChanged && !Boolean.TRUE.equals(request.confirmCriticalChange())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trocar workspace e uma acao critica. Confirme para continuar.");
+        }
 
         franchise.setWorkspaceId(workspace.id());
         franchise.setWorkspaceName(resolveProvidedWorkspaceName(request.workspaceName(), workspace));
@@ -307,6 +335,39 @@ public class FranchiseService {
             franchise.setAgentName(null);
             franchise.setGptMakerLastSyncAt(null);
         }
+        refreshStatus(franchise);
+        franchiseRepository.save(franchise);
+        return toGptMakerConnectionResponse(franchise);
+    }
+
+    @Transactional
+    public FranchiseGptMakerConnectionResponse unlinkGptMakerWorkspace(UUID id, CriticalChangeRequest request) {
+        requireSuperAdmin();
+        if (!Boolean.TRUE.equals(request.confirmCriticalChange())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Desvincular workspace e uma acao critica. Confirme para continuar.");
+        }
+        Franchise franchise = requireAccessibleFranchise(id);
+        franchise.setWorkspaceId(null);
+        franchise.setWorkspaceName(null);
+        franchise.setAgentId(null);
+        franchise.setAgentName(null);
+        franchise.setGptMakerLastSyncAt(null);
+        refreshStatus(franchise);
+        franchiseRepository.save(franchise);
+        return toGptMakerConnectionResponse(franchise);
+    }
+
+    @Transactional
+    public FranchiseGptMakerConnectionResponse clearGptMakerAgent(UUID id, CriticalChangeRequest request) {
+        requireSuperAdmin();
+        if (!Boolean.TRUE.equals(request.confirmCriticalChange())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Limpar agente e uma acao critica. Confirme para continuar.");
+        }
+        Franchise franchise = requireAccessibleFranchise(id);
+        franchise.setAgentId(null);
+        franchise.setAgentName(null);
+        franchise.setGptMakerLastSyncAt(null);
+        refreshStatus(franchise);
         franchiseRepository.save(franchise);
         return toGptMakerConnectionResponse(franchise);
     }
@@ -321,6 +382,8 @@ public class FranchiseService {
         if (request.agentName() == null || request.agentName().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nome do agente GPTMaker nao informado");
         }
+        ensureWorkspaceAvailable(request.workspaceId(), franchise.getId());
+        requireCriticalAgentConfirmation(franchise, request.agentName(), request.confirmCriticalChange());
 
         String context = vaviveDefaultContextService.buildForFranchise(franchise);
         String jobDescription = mergeJobDescription(context, request.jobDescription());
@@ -349,6 +412,7 @@ public class FranchiseService {
         franchise.setAgentId(createdAgent.id());
         franchise.setAgentName(createdAgent.name() != null && !createdAgent.name().isBlank() ? createdAgent.name() : request.agentName());
         franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+        refreshStatus(franchise);
         franchiseRepository.save(franchise);
 
         GptMakerAgent localAgent = syncProvisionedAgent(franchise, createdAgent, request.communicationType());
@@ -558,7 +622,7 @@ public class FranchiseService {
     }
 
     private FranchiseGptMakerConnectionResponse toGptMakerConnectionResponse(Franchise franchise) {
-        String status = franchise.getWorkspaceId() != null && franchise.getAgentId() != null ? "CONECTADO" : "NAO_CONECTADO";
+        String status = franchise.resolvedStatus();
         return new FranchiseGptMakerConnectionResponse(
             franchise.getId(),
             franchise.getName(),
@@ -619,6 +683,30 @@ public class FranchiseService {
             return workspace.name();
         }
         return workspace.id();
+    }
+
+    private void ensureWorkspaceAvailable(String workspaceId, UUID currentFranchiseId) {
+        franchiseRepository.findFirstByWorkspaceId(workspaceId)
+            .filter(existing -> currentFranchiseId == null || !existing.getId().equals(currentFranchiseId))
+            .ifPresent(existing -> {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta workspace GPTMaker ja esta vinculada a outra franquia.");
+            });
+    }
+
+    private void requireCriticalAgentConfirmation(Franchise franchise, String nextAgentReference, Boolean confirmed) {
+        boolean hasExistingAgent = franchise.getAgentId() != null && !franchise.getAgentId().isBlank();
+        boolean changingAgent = hasExistingAgent
+            && nextAgentReference != null
+            && !nextAgentReference.isBlank()
+            && !Objects.equals(franchise.getAgentId(), nextAgentReference)
+            && !Objects.equals(franchise.getAgentName(), nextAgentReference);
+        if (changingAgent && !Boolean.TRUE.equals(confirmed)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Trocar agente e uma acao critica. Confirme para continuar.");
+        }
+    }
+
+    private void refreshStatus(Franchise franchise) {
+        franchise.setStatus(franchise.resolvedStatus());
     }
 
     private String mergeJobDescription(String context, String customJobDescription) {

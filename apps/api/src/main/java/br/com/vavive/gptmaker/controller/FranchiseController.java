@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
+import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
@@ -19,6 +20,7 @@ import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -73,6 +75,11 @@ public class FranchiseController {
         return franchiseService.listWorkspaces();
     }
 
+    @GetMapping("/franchises/gptmaker/available-workspaces")
+    public List<GptMakerWorkspaceOptionResponse> listAvailableWorkspaces() {
+        return franchiseService.listAvailableWorkspaces();
+    }
+
     @GetMapping("/franchises/gptmaker/workspace-mapping")
     public FranchiseWorkspaceMappingResponse workspaceMapping() {
         return franchiseService.workspaceMapping();
@@ -88,6 +95,11 @@ public class FranchiseController {
         return franchiseService.linkGptMakerWorkspace(id, request);
     }
 
+    @DeleteMapping("/franchises/{id}/gptmaker/workspace")
+    public FranchiseGptMakerConnectionResponse unlinkGptMakerWorkspace(@PathVariable UUID id, @RequestBody CriticalChangeRequest request) {
+        return franchiseService.unlinkGptMakerWorkspace(id, request);
+    }
+
     @GetMapping("/franchises/{id}/gptmaker/default-context")
     public VaviveDefaultContextResponse getDefaultContext(@PathVariable UUID id) {
         return franchiseService.getDefaultContext(id);
@@ -96,6 +108,11 @@ public class FranchiseController {
     @PostMapping("/franchises/{id}/gptmaker/agent")
     public FranchiseGptMakerConnectionResponse provisionGptMakerAgent(@PathVariable UUID id, @Valid @RequestBody ProvisionFranchiseGptMakerAgentRequest request) {
         return franchiseService.provisionGptMakerAgent(id, request);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/agent")
+    public FranchiseGptMakerConnectionResponse clearGptMakerAgent(@PathVariable UUID id, @RequestBody CriticalChangeRequest request) {
+        return franchiseService.clearGptMakerAgent(id, request);
     }
 
     @GetMapping("/franchises/{id}/setup")

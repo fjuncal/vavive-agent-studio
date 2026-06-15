@@ -11,16 +11,6 @@ import { Building2, Link2, PlugZap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-function franchiseConnectionStatus(franchise: FranchiseSummary) {
-  if (!franchise.workspaceId) {
-    return "SEM_WORKSPACE";
-  }
-  if (!franchise.agentId) {
-    return "SEM_AGENTE";
-  }
-  return "CONECTADA";
-}
-
 function StatCard({ label, value, description }: { label: string; value: number; description: string }) {
   return (
     <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
@@ -63,8 +53,9 @@ export default function FranchisesPage() {
       .finally(() => setIsLoadingMapping(false));
   }, [isSuperAdmin]);
 
-  const connectedCount = useMemo(() => franchises.filter((franchise) => Boolean(franchise.workspaceId)).length, [franchises]);
-  const pendingCount = useMemo(() => franchises.filter((franchise) => !franchise.workspaceId).length, [franchises]);
+  const activeCount = useMemo(() => franchises.filter((franchise) => franchise.status === "ATIVA").length, [franchises]);
+  const withoutAgentCount = useMemo(() => franchises.filter((franchise) => franchise.status === "SEM_AGENTE").length, [franchises]);
+  const pendingCount = useMemo(() => franchises.filter((franchise) => franchise.status === "PENDENTE_CONFIGURACAO").length, [franchises]);
   const unlinkedWorkspaceCount = mapping?.unlinkedWorkspaces.length ?? 0;
 
   return (
@@ -72,7 +63,7 @@ export default function FranchisesPage() {
       <PageHeader
         eyebrow="Rede"
         title="Franquias"
-        description="Gerencie unidades, workspaces GPTMaker e agentes conectados sem misturar configuracoes globais com a operacao do franqueado."
+        description={isSuperAdmin ? "Gerencie unidades, workspaces GPTMaker e agentes conectados." : "Acompanhe o status da sua franquia."}
         actionLabel={isSuperAdmin ? "Nova franquia" : undefined}
         actionHref={isSuperAdmin ? "/franquias/nova" : undefined}
       />
@@ -80,10 +71,10 @@ export default function FranchisesPage() {
 
       {isSuperAdmin ? (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Workspaces GPTMaker" value={(mapping?.linked.length ?? 0) + unlinkedWorkspaceCount} description={isLoadingMapping ? "Carregando..." : "Workspaces reais encontrados."} />
-          <StatCard label="Franquias conectadas" value={connectedCount} description="Franquias com workspace definida." />
-          <StatCard label="Franquias pendentes" value={pendingCount} description="Aguardando conexao GPTMaker." />
-          <StatCard label="Workspaces sem franquia" value={unlinkedWorkspaceCount} description="Disponiveis para vinculo." />
+          <StatCard label="Franquias ativas" value={activeCount} description="Com workspace e agente conectados." />
+          <StatCard label="Franquias sem agente" value={withoutAgentCount} description="Workspace conectada, agente pendente." />
+          <StatCard label="Franquias pendentes" value={pendingCount} description="Aguardando configuracao da matriz." />
+          <StatCard label="Workspaces disponiveis" value={unlinkedWorkspaceCount} description={isLoadingMapping ? "Carregando..." : "Reais e sem franquia."} />
         </section>
       ) : null}
 
@@ -145,15 +136,19 @@ export default function FranchisesPage() {
         </section>
       ) : null}
 
+      {!isSuperAdmin && franchises[0]?.status === "PENDENTE_CONFIGURACAO" ? (
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Sua franquia ainda nao esta ativa. Aguarde a configuracao pela matriz.</p>
+      ) : null}
+
       {franchises.length ? (
         <DataTable
           rows={franchises}
           columns={[
             { header: "Franquia", cell: (franchise) => <Link className="font-semibold text-ink hover:text-brand-700" href={`/franquias/${franchise.id}`}>{franchise.name}</Link> },
             { header: "Cidade", cell: (franchise) => `${franchise.city} / ${franchise.state}` },
-            { header: "Workspace", cell: (franchise) => franchise.workspaceName ?? "Sem workspace" },
+            ...(isSuperAdmin ? [{ header: "Workspace", cell: (franchise: FranchiseSummary) => franchise.workspaceName ?? "Sem workspace" }] : []),
             { header: "Agente", cell: (franchise) => franchise.agentName ?? "Sem agente" },
-            { header: "Status", cell: (franchise) => <StatusBadge status={franchiseConnectionStatus(franchise)} /> }
+            { header: "Status", cell: (franchise) => <StatusBadge status={franchise.status} /> }
           ]}
         />
       ) : (

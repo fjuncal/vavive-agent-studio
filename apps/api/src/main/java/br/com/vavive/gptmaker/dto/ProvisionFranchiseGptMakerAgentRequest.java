@@ -9,6 +9,7 @@ public record ProvisionFranchiseGptMakerAgentRequest(
     String avatar,
     @NotBlank String communicationType,
     @NotBlank String type,
+    Boolean confirmCriticalChange,
     String jobName,
     String jobSite,
     String jobDescription

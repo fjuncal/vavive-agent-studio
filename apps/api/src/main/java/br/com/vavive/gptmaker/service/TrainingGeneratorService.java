@@ -6,9 +6,18 @@ import org.springframework.stereotype.Service;
 
 @Service
 public class TrainingGeneratorService {
+    private final VaviveDefaultContextService vaviveDefaultContextService;
+
+    public TrainingGeneratorService(VaviveDefaultContextService vaviveDefaultContextService) {
+        this.vaviveDefaultContextService = vaviveDefaultContextService;
+    }
+
     public GeneratedTraining generate(Franchise franchise, FranchiseSetup setup) {
         String title = "Treinamento Vavive - " + franchise.getName();
         String content = """
+            CONTEXTO BASE VAVIVE:
+            %s
+
             Franquia: %s
             Documento: %s
             Cidade/Estado: %s / %s
@@ -35,6 +44,7 @@ public class TrainingGeneratorService {
             Tom de voz:
             %s
             """.formatted(
+            safe(vaviveDefaultContextService.buildForFranchise(franchise)),
             franchise.getName(),
             safe(franchise.getDocument()),
             safe(franchise.getCity()),

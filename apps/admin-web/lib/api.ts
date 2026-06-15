@@ -256,6 +256,7 @@ export type ProvisionFranchiseGptMakerAgentPayload = {
   avatar?: string;
   communicationType: "FORMAL" | "NORMAL" | "RELAXED";
   type: "SUPPORT" | "SALE" | "PERSONAL";
+  confirmCriticalChange?: boolean;
   jobName?: string;
   jobSite?: string;
   jobDescription?: string;
@@ -451,14 +452,28 @@ export function provisionFranchiseGptMakerAgent(id: string, payload: ProvisionFr
   });
 }
 
-export function linkFranchiseWorkspace(id: string, payload: { workspaceId: string; workspaceName?: string }) {
+export function linkFranchiseWorkspace(id: string, payload: { workspaceId: string; workspaceName?: string; confirmCriticalChange?: boolean }) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/workspace`, {
     method: "POST",
     body: JSON.stringify(payload)
   });
 }
 
-export function updateFranchiseGptMakerConnection(id: string, payload: { workspaceId: string; agentId: string }) {
+export function unlinkFranchiseWorkspace(id: string, payload: { confirmCriticalChange: boolean }) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/workspace`, {
+    method: "DELETE",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function clearFranchiseAgent(id: string, payload: { confirmCriticalChange: boolean }) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/agent`, {
+    method: "DELETE",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateFranchiseGptMakerConnection(id: string, payload: { workspaceId: string; agentId: string; confirmCriticalChange?: boolean }) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`, {
     method: "POST",
     body: JSON.stringify(payload)
@@ -467,6 +482,10 @@ export function updateFranchiseGptMakerConnection(id: string, payload: { workspa
 
 export function getGptMakerWorkspaces() {
   return apiFetch<GptMakerWorkspaceOption[]>("/franchises/gptmaker/workspaces");
+}
+
+export function getAvailableGptMakerWorkspaces() {
+  return apiFetch<GptMakerWorkspaceOption[]>("/franchises/gptmaker/available-workspaces");
 }
 
 export function getGptMakerWorkspaceAgents(workspaceId: string) {

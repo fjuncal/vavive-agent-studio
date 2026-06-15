@@ -67,7 +67,7 @@ public class AuthService {
             franchise.getDocument(),
             franchise.getCity(),
             franchise.getState(),
-            franchise.getStatus(),
+            franchise.resolvedStatus(),
             franchise.getWorkspaceId(),
             franchise.getWorkspaceName(),
             franchise.getAgentId(),

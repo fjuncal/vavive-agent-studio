@@ -129,4 +129,17 @@ public class Franchise {
     public LocalDateTime getCreatedAt() {
         return createdAt;
     }
+
+    public String resolvedStatus() {
+        if ("INATIVA".equals(status)) {
+            return "INATIVA";
+        }
+        if (workspaceId == null || workspaceId.isBlank()) {
+            return "PENDENTE_CONFIGURACAO";
+        }
+        if (agentId == null || agentId.isBlank()) {
+            return "SEM_AGENTE";
+        }
+        return "ATIVA";
+    }
 }

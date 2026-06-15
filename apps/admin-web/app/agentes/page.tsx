@@ -60,13 +60,15 @@ export default function AgentsPage() {
               </div>
 
               <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <div className="flex items-center gap-2 font-semibold text-ink">
-                    <PlugZap size={16} />
-                    Workspace
+                {isSuperAdmin ? (
+                  <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                    <div className="flex items-center gap-2 font-semibold text-ink">
+                      <PlugZap size={16} />
+                      Workspace
+                    </div>
+                    <p className="mt-2">{franchise.workspaceName ?? "Sem workspace vinculada"}</p>
                   </div>
-                  <p className="mt-2">{franchise.workspaceName ?? "Sem workspace vinculada"}</p>
-                </div>
+                ) : null}
                 <div className="rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
                   <div className="flex items-center gap-2 font-semibold text-ink">
                     <Bot size={16} />
@@ -75,6 +77,10 @@ export default function AgentsPage() {
                   <p className="mt-2">{franchise.agentName ?? "Sem agente conectado"}</p>
                 </div>
               </div>
+
+              {!isSuperAdmin && franchise.status === "PENDENTE_CONFIGURACAO" ? (
+                <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-800">Sua franquia ainda nao esta ativa. Aguarde a configuracao pela matriz.</p>
+              ) : null}
 
               <div className="mt-5 flex flex-wrap gap-2">
                 <Link href={`/franquias/${franchise.id}`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">

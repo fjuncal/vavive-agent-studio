@@ -3,7 +3,7 @@
 import { AppShell } from "@/components/AppShell";
 import { FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
-import { createFranchise, getGptMakerWorkspaces, type GptMakerWorkspaceOption } from "@/lib/api";
+import { createFranchise, getAvailableGptMakerWorkspaces, type GptMakerWorkspaceOption } from "@/lib/api";
 import { PlugZap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -30,7 +30,7 @@ export default function NewFranchisePage() {
 
   useEffect(() => {
     setIsLoadingWorkspaces(true);
-    getGptMakerWorkspaces()
+    getAvailableGptMakerWorkspaces()
       .then((items) => {
         setWorkspaces(items);
         const workspaceIdFromUrl = new URLSearchParams(window.location.search).get("workspaceId");
@@ -71,7 +71,7 @@ export default function NewFranchisePage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Nova franquia"
-        description="Crie a unidade local e, se possivel, vincule uma workspace GPTMaker ja existente. O agente sera conectado em uma etapa separada."
+        description="Crie a unidade, vincule uma workspace disponivel quando houver e siga para a configuracao do administrador e do agente."
       />
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <form onSubmit={handleSubmit}>
@@ -103,7 +103,7 @@ export default function NewFranchisePage() {
                 <div>
                   <h2 className="font-semibold text-ink">Workspace GPTMaker</h2>
                   <p className="mt-1 text-sm leading-6 text-slate-500">
-                    A workspace precisa existir previamente no GPTMaker. Voce pode vincular agora ou deixar a franquia pendente para conectar depois.
+                    A workspace precisa existir previamente no GPTMaker. Apenas workspaces ainda nao vinculadas aparecem aqui.
                   </p>
                 </div>
               </div>
@@ -115,7 +115,7 @@ export default function NewFranchisePage() {
                   onChange={(event) => setSelectedWorkspaceId(event.target.value)}
                   disabled={isSubmitting || isLoadingWorkspaces}
                 >
-                  <option value="">Criar franquia sem workspace por enquanto</option>
+                  <option value="">Criar sem workspace por enquanto</option>
                   {workspaces.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
                       {workspace.name || "Workspace sem nome"}
@@ -136,12 +136,11 @@ export default function NewFranchisePage() {
           </FormSection>
         </form>
         <aside className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <h2 className="font-semibold text-ink">Fluxo recomendado</h2>
+          <h2 className="font-semibold text-ink">Fluxo</h2>
           <div className="mt-4 grid gap-3 text-sm text-slate-600">
-            <p className="rounded-xl bg-slate-50 p-3">1. Cadastrar dados da franquia.</p>
-            <p className="rounded-xl bg-slate-50 p-3">2. Criar administrador da franquia.</p>
-            <p className="rounded-xl bg-slate-50 p-3">3. Vincular uma workspace GPTMaker existente.</p>
-            <p className="rounded-xl bg-slate-50 p-3">4. Vincular ou criar o agente GPTMaker.</p>
+            <p className="rounded-xl bg-slate-50 p-3">1. Criar franquia.</p>
+            <p className="rounded-xl bg-slate-50 p-3">2. Criar administrador.</p>
+            <p className="rounded-xl bg-slate-50 p-3">3. Configurar agente.</p>
           </div>
         </aside>
       </div>

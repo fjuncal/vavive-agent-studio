@@ -1,21 +1,24 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import {
+  clearFranchiseAgent,
   createFranchiseAdminUser,
+  getAvailableGptMakerWorkspaces,
   getFranchiseAdminUser,
   getFranchiseById,
   getFranchiseDefaultContext,
   getFranchiseGptMakerConnection,
   getGptMakerHealth,
   getGptMakerWorkspaceAgents,
-  getGptMakerWorkspaces,
   linkFranchiseWorkspace,
   provisionFranchiseGptMakerAgent,
+  unlinkFranchiseWorkspace,
   updateFranchiseGptMakerConnection,
   type FranchiseAdminUser,
   type FranchiseGptMakerConnection,
@@ -77,9 +80,11 @@ export default function FranchiseDetailPage() {
   const [isSavingAgent, setIsSavingAgent] = useState(false);
   const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
   const [isLoadingWorkspaceAgents, setIsLoadingWorkspaceAgents] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<null | "replace-workspace" | "unlink-workspace" | "replace-agent" | "clear-agent">(null);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const isConnected = connection?.status === "CONECTADO";
+  const isConnected = connection?.status === "ATIVA";
+  const workspaceIdForAgentActions = selectedWorkspaceId || connection?.workspaceId || "";
   const selectedWorkspace = useMemo(
     () => workspaces.find((workspace) => workspace.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
@@ -109,7 +114,7 @@ export default function FranchiseDetailPage() {
         setConnection(connectionData);
         setHealth(healthData);
         setAdminUser(adminData);
-        setSelectedWorkspaceId(connectionData.workspaceId ?? "");
+        setSelectedWorkspaceId("");
         setAgentName(connectionData.agentName ?? `Assistente Vavive - ${franchiseData.name}`);
         setJobDescription(contextData?.context ?? "");
       })
@@ -126,7 +131,7 @@ export default function FranchiseDetailPage() {
 
     setIsLoadingWorkspaces(true);
     setWorkspaceError(null);
-    getGptMakerWorkspaces()
+    getAvailableGptMakerWorkspaces()
       .then(setWorkspaces)
       .catch((requestError) => {
         setWorkspaceError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os workspaces GPTMaker.");
@@ -135,7 +140,7 @@ export default function FranchiseDetailPage() {
   }, [isSuperAdmin]);
 
   useEffect(() => {
-    if (!isSuperAdmin || !selectedWorkspaceId) {
+    if (!isSuperAdmin || !workspaceIdForAgentActions) {
       setWorkspaceAgents([]);
       setSelectedExistingAgentId("");
       return;
@@ -143,7 +148,7 @@ export default function FranchiseDetailPage() {
 
     setIsLoadingWorkspaceAgents(true);
     setAgentListError(null);
-    getGptMakerWorkspaceAgents(selectedWorkspaceId)
+    getGptMakerWorkspaceAgents(workspaceIdForAgentActions)
       .then((items) => {
         setWorkspaceAgents(items);
         setSelectedExistingAgentId(items[0]?.id ?? "");
@@ -154,7 +159,7 @@ export default function FranchiseDetailPage() {
         setAgentListError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes deste workspace.");
       })
       .finally(() => setIsLoadingWorkspaceAgents(false));
-  }, [isSuperAdmin, selectedWorkspaceId]);
+  }, [isSuperAdmin, workspaceIdForAgentActions]);
 
   async function handleCreateAdminUser() {
     if (!params?.id) {
@@ -188,8 +193,8 @@ export default function FranchiseDetailPage() {
   }
 
   async function handleLinkExistingAgent() {
-    if (!params?.id || !selectedWorkspaceId || !selectedExistingAgentId) {
-      setError("Selecione um workspace e um agente GPTMaker existente.");
+    if (!params?.id || !workspaceIdForAgentActions || !selectedExistingAgentId) {
+      setError("Selecione uma franquia configurada e um agente GPTMaker existente.");
       setSuccess(null);
       return;
     }
@@ -199,10 +204,13 @@ export default function FranchiseDetailPage() {
     setSuccess(null);
     try {
       const response = await updateFranchiseGptMakerConnection(params.id, {
-        workspaceId: selectedWorkspaceId,
-        agentId: selectedExistingAgentId
+        workspaceId: workspaceIdForAgentActions,
+        agentId: selectedExistingAgentId,
+        confirmCriticalChange: confirmAction === "replace-agent"
       });
       setConnection(response);
+      setFranchise((current) => current ? { ...current, status: response.status, agentId: response.agentId, agentName: response.agentName } : current);
+      setConfirmAction(null);
       setSuccess("Agente existente vinculado a franquia com sucesso.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel vincular o agente existente.");
@@ -224,17 +232,21 @@ export default function FranchiseDetailPage() {
     try {
       const response = await linkFranchiseWorkspace(params.id, {
         workspaceId: selectedWorkspaceId,
-        workspaceName: selectedWorkspace?.name
+        workspaceName: selectedWorkspace?.name,
+        confirmCriticalChange: confirmAction === "replace-workspace"
       });
       setConnection(response);
       setFranchise((current) => current ? {
         ...current,
+        status: response.status,
         workspaceId: response.workspaceId,
         workspaceName: response.workspaceName,
         agentId: response.agentId,
         agentName: response.agentName,
         gptMakerLastSyncAt: response.lastSyncAt
       } : current);
+      setSelectedWorkspaceId("");
+      setConfirmAction(null);
       setSuccess("Workspace GPTMaker vinculada a franquia.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel vincular a workspace.");
@@ -243,9 +255,66 @@ export default function FranchiseDetailPage() {
     }
   }
 
+  async function handleUnlinkWorkspace() {
+    if (!params?.id) {
+      return;
+    }
+
+    setIsSavingAgent(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await unlinkFranchiseWorkspace(params.id, { confirmCriticalChange: true });
+      setConnection(response);
+      setFranchise((current) => current ? {
+        ...current,
+        status: response.status,
+        workspaceId: null,
+        workspaceName: null,
+        agentId: null,
+        agentName: null,
+        gptMakerLastSyncAt: null
+      } : current);
+      setSelectedWorkspaceId("");
+      setConfirmAction(null);
+      setSuccess("Workspace removida da franquia.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel desvincular a workspace.");
+    } finally {
+      setIsSavingAgent(false);
+    }
+  }
+
+  async function handleClearAgent() {
+    if (!params?.id) {
+      return;
+    }
+
+    setIsSavingAgent(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await clearFranchiseAgent(params.id, { confirmCriticalChange: true });
+      setConnection(response);
+      setFranchise((current) => current ? {
+        ...current,
+        status: response.status,
+        agentId: null,
+        agentName: null,
+        gptMakerLastSyncAt: null
+      } : current);
+      setConfirmAction(null);
+      setSuccess("Agente desvinculado da franquia.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel limpar o agente.");
+    } finally {
+      setIsSavingAgent(false);
+    }
+  }
+
   async function handleProvisionAgent() {
-    if (!params?.id || !selectedWorkspaceId) {
-      setError("Selecione um workspace GPTMaker existente.");
+    if (!params?.id || !workspaceIdForAgentActions) {
+      setError("Selecione uma franquia configurada.");
       setSuccess(null);
       return;
     }
@@ -260,17 +329,28 @@ export default function FranchiseDetailPage() {
     setSuccess(null);
     try {
       const response = await provisionFranchiseGptMakerAgent(params.id, {
-        workspaceId: selectedWorkspaceId,
-        workspaceName: selectedWorkspace?.name,
+        workspaceId: workspaceIdForAgentActions,
+        workspaceName: selectedWorkspace?.name ?? connection?.workspaceName ?? undefined,
         agentName,
         avatar: selectedAvatar || undefined,
         communicationType,
         type: objectiveType,
+        confirmCriticalChange: confirmAction === "replace-agent",
         jobName,
         jobSite,
         jobDescription
       });
       setConnection(response);
+      setFranchise((current) => current ? {
+        ...current,
+        status: response.status,
+        workspaceId: response.workspaceId,
+        workspaceName: response.workspaceName,
+        agentId: response.agentId,
+        agentName: response.agentName,
+        gptMakerLastSyncAt: response.lastSyncAt
+      } : current);
+      setConfirmAction(null);
       setSuccess("Agente GPTMaker criado e conectado com sucesso.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel criar o agente GPTMaker.");
@@ -284,7 +364,7 @@ export default function FranchiseDetailPage() {
       <PageHeader
         eyebrow="Franquia"
         title={franchise?.name ?? "Carregando franquia"}
-        description="Cadastre a unidade e o administrador primeiro. A conexao com o GPTMaker e uma etapa opcional e pode ser feita depois."
+        description={isSuperAdmin ? "Cadastre a unidade, o administrador e finalize a conexao com o GPTMaker." : "Acompanhe o status da sua franquia e das configuracoes liberadas pela matriz."}
       />
 
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -305,9 +385,9 @@ export default function FranchiseDetailPage() {
         </article>
         <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
           <PlugZap className="text-brand-700" size={22} />
-          <h2 className="mt-4 font-semibold text-ink">Conexao GPTMaker</h2>
-          <p className="mt-2 text-sm text-slate-500">{connection?.workspaceName ?? "Nao conectada"}</p>
-          <StatusBadge status={connection?.status ?? "NAO_CONECTADO"} />
+          <h2 className="mt-4 font-semibold text-ink">{isSuperAdmin ? "Workspace GPTMaker" : "Status da franquia"}</h2>
+          <p className="mt-2 text-sm text-slate-500">{isSuperAdmin ? (connection?.workspaceName ?? "Nao conectada") : (franchise?.status === "PENDENTE_CONFIGURACAO" ? "Configuracao pendente pela matriz" : "Franquia configurada")}</p>
+          <StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} />
         </article>
         <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
           <Bot className="text-brand-700" size={22} />
@@ -318,7 +398,7 @@ export default function FranchiseDetailPage() {
         <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
           <CheckCircle2 className="text-brand-700" size={22} />
           <h2 className="mt-4 font-semibold text-ink">Proximos passos</h2>
-          <p className="mt-2 text-sm text-slate-500">{adminUser ? "Franqueado ja pode acessar." : "Crie o administrador."}</p>
+          <p className="mt-2 text-sm text-slate-500">{franchise?.status === "PENDENTE_CONFIGURACAO" ? "Finalize a configuracao para ativar a franquia." : adminUser ? "Franqueado ja pode acessar." : "Crie o administrador."}</p>
         </article>
       </section>
 
@@ -370,21 +450,25 @@ export default function FranchiseDetailPage() {
         </section>
       </section>
 
+      {!isSuperAdmin && franchise?.status === "PENDENTE_CONFIGURACAO" ? (
+        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Franquia ainda nao ativa. A matriz precisa finalizar a configuracao.</p>
+      ) : null}
+
       <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-ink">Etapas 3 e 4: conexao GPTMaker</h2>
+            <h2 className="text-lg font-semibold text-ink">{isSuperAdmin ? "Etapas 3 e 4: conexao GPTMaker" : "Configuracao da franquia"}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">
-              Opcional para o login do franqueado. Use um agente existente quando o workspace ja estiver no limite.
+              {isSuperAdmin ? "Use um agente existente quando a workspace ja estiver no limite. Trocas e desvinculos exigem confirmacao." : "A matriz gerencia a integracao tecnica. Aqui voce acompanha apenas o status da sua franquia."}
             </p>
           </div>
-          <StatusBadge status={connection?.status ?? "NAO_CONECTADO"} />
+          <StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} />
         </div>
 
         <div className="mt-5 grid gap-3 text-sm text-slate-600 sm:grid-cols-3">
           <div className="rounded-xl bg-slate-50 p-4">
-            <p className="font-semibold text-ink">Workspace atual</p>
-            <p className="mt-1">{connection?.workspaceName ?? "Nao conectado"}</p>
+            <p className="font-semibold text-ink">{isSuperAdmin ? "Workspace atual" : "Status"}</p>
+            <p className="mt-1">{isSuperAdmin ? (connection?.workspaceName ?? "Nao conectado") : franchise?.status?.replaceAll("_", " ")}</p>
           </div>
           <div className="rounded-xl bg-slate-50 p-4">
             <p className="font-semibold text-ink">Agente atual</p>
@@ -398,7 +482,7 @@ export default function FranchiseDetailPage() {
 
         {!isSuperAdmin ? (
           <p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-            A conexao GPTMaker e gerenciada pelo SUPER_ADMIN. O franqueado pode operar a propria unidade sem acessar workspaces globais.
+            A matriz gerencia a integracao do agente. O franqueado nao acessa workspaces globais e visualiza apenas o status da propria franquia.
           </p>
         ) : (
           <div className="mt-5 grid gap-5">
@@ -422,18 +506,39 @@ export default function FranchiseDetailPage() {
               </select>
             </label>
 
-            {selectedWorkspaceId && selectedWorkspaceId !== connection?.workspaceId ? (
-              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
-                <p className="font-semibold">Workspace selecionada ainda nao esta salva nesta franquia.</p>
-                <p className="mt-1">Ao trocar a workspace, o agente conectado anteriormente sera removido para evitar vinculo incorreto.</p>
+            {connection?.workspaceId ? (
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => void handleLinkWorkspace()}
+                  onClick={() => setConfirmAction("unlink-workspace")}
+                  className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-line"
+                >
+                  Desvincular workspace
+                </button>
+                {connection?.agentId ? (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmAction("clear-agent")}
+                    className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-700 ring-1 ring-line"
+                  >
+                    Limpar agente
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {selectedWorkspaceId ? (
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-semibold">{connection?.workspaceId ? "Nova workspace selecionada." : "Workspace selecionada ainda nao esta salva nesta franquia."}</p>
+                <p className="mt-1">{connection?.workspaceId ? "Essa acao pode desconectar a franquia do agente GPTMaker. Confirme para continuar." : "A franquia passara a usar essa workspace e ficara pronta para configurar o agente."}</p>
+                <button
+                  type="button"
+                  onClick={() => connection?.workspaceId ? setConfirmAction("replace-workspace") : void handleLinkWorkspace()}
                   disabled={isSavingAgent}
                   className="mt-3 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSavingAgent ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
-                  Linkar workspace
+                  {connection?.workspaceId ? "Trocar workspace" : "Linkar workspace"}
                 </button>
               </div>
             ) : null}
@@ -469,7 +574,7 @@ export default function FranchiseDetailPage() {
                     className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
                     value={selectedExistingAgentId}
                     onChange={(event) => setSelectedExistingAgentId(event.target.value)}
-                    disabled={!selectedWorkspaceId || isLoadingWorkspaceAgents}
+                    disabled={!workspaceIdForAgentActions || isLoadingWorkspaceAgents}
                   >
                     <option value="">{isLoadingWorkspaceAgents ? "Carregando agentes..." : "Selecione um agente"}</option>
                     {workspaceAgents.map((agent) => (
@@ -480,15 +585,21 @@ export default function FranchiseDetailPage() {
                   </select>
                   <button
                     type="button"
-                    onClick={() => void handleLinkExistingAgent()}
-                    disabled={isSavingAgent || !selectedWorkspaceId || !selectedExistingAgentId}
+                    disabled={isSavingAgent || !workspaceIdForAgentActions || !selectedExistingAgentId}
+                    onClick={() => {
+                      if (connection?.agentId) {
+                        setConfirmAction("replace-agent");
+                        return;
+                      }
+                      void handleLinkExistingAgent();
+                    }}
                     className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSavingAgent ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
                     Vincular agente a franquia
                   </button>
                 </div>
-                {!isLoadingWorkspaceAgents && selectedWorkspaceId && !workspaceAgents.length && !agentListError ? (
+                {!isLoadingWorkspaceAgents && workspaceIdForAgentActions && !workspaceAgents.length && !agentListError ? (
                   <EmptyState icon={Bot} title="Nenhum agente encontrado" description="Este workspace nao retornou agentes disponiveis para vinculo." />
                 ) : null}
               </div>
@@ -546,8 +657,14 @@ export default function FranchiseDetailPage() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => void handleProvisionAgent()}
-                  disabled={isSavingAgent || !selectedWorkspaceId}
+                  disabled={isSavingAgent || !workspaceIdForAgentActions}
+                  onClick={() => {
+                    if (connection?.agentId) {
+                      setConfirmAction("replace-agent");
+                      return;
+                    }
+                    void handleProvisionAgent();
+                  }}
                   className="mt-4 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {isSavingAgent ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
@@ -566,6 +683,36 @@ export default function FranchiseDetailPage() {
           <p className="mt-3 text-sm font-semibold text-ink">{health.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
         </section>
       ) : null}
+
+      <ConfirmDialog
+        isOpen={confirmAction !== null}
+        isSubmitting={isSavingAgent}
+        title="Confirmar alteracao critica"
+        description="Essa acao pode desconectar a franquia do agente GPTMaker. Confirme para continuar."
+        confirmLabel="Confirmar"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          if (confirmAction === "replace-workspace") {
+            void handleLinkWorkspace();
+            return;
+          }
+          if (confirmAction === "unlink-workspace") {
+            void handleUnlinkWorkspace();
+            return;
+          }
+          if (confirmAction === "clear-agent") {
+            void handleClearAgent();
+            return;
+          }
+          if (confirmAction === "replace-agent") {
+            if (connectionMode === "link") {
+              void handleLinkExistingAgent();
+              return;
+            }
+            void handleProvisionAgent();
+          }
+        }}
+      />
     </AppShell>
   );
 }

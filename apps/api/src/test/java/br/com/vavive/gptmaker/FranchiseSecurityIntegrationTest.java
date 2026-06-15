@@ -3,18 +3,22 @@ package br.com.vavive.gptmaker;
 import br.com.vavive.gptmaker.domain.entity.DefaultAgentText;
 import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
+import br.com.vavive.gptmaker.domain.entity.Lead;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.DefaultAgentTextCategory;
+import br.com.vavive.gptmaker.domain.enums.LeadStatus;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
 import br.com.vavive.gptmaker.repository.DefaultAgentTextRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
+import br.com.vavive.gptmaker.repository.LeadRepository;
 import br.com.vavive.gptmaker.repository.UserRepository;
 import br.com.vavive.gptmaker.security.JwtService;
 import br.com.vavive.gptmaker.service.VaviveDefaultContextService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -56,6 +60,9 @@ class FranchiseSecurityIntegrationTest {
     private AgentTrainingRepository trainingRepository;
 
     @Autowired
+    private LeadRepository leadRepository;
+
+    @Autowired
     private DefaultAgentTextRepository defaultAgentTextRepository;
 
     @Autowired
@@ -66,6 +73,55 @@ class FranchiseSecurityIntegrationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @BeforeEach
+    void setUpBaseData() {
+        if (userRepository.findByEmailIgnoreCase("admin@vavive.com").isEmpty()) {
+            userRepository.save(new User(
+                "Admin Vavive",
+                "admin@vavive.com",
+                passwordEncoder.encode("admin123"),
+                UserRole.SUPER_ADMIN,
+                null
+            ));
+        }
+
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseGet(() -> {
+            Franchise created = new Franchise("Vavive Vila Mariana", "12.345.678/0001-90", "Sao Paulo", "SP", "ATIVA");
+            created.setWorkspaceId("mock-workspace-vavive");
+            created.setWorkspaceName("Workspace Vavive Demo");
+            created.setAgentId("mock-agent-mock-workspace-vavive-01");
+            created.setAgentName("Assistente Comercial");
+            created.setStatus("ATIVA");
+            return franchiseRepository.save(created);
+        });
+
+        if (userRepository.findByEmailIgnoreCase("franquia@vavive.com").isEmpty()) {
+            userRepository.save(new User(
+                "Gestora Vila Mariana",
+                "franquia@vavive.com",
+                passwordEncoder.encode("admin123"),
+                UserRole.ADMIN_FRANQUIA,
+                franchise
+            ));
+        }
+
+        GptMakerAgent agent = agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), "mock-agent-mock-workspace-vavive-01")
+            .orElseGet(() -> agentRepository.save(new GptMakerAgent(
+                "mock-agent-mock-workspace-vavive-01",
+                "Assistente Comercial",
+                "ATIVO",
+                "Acolhedor, objetivo e consultivo",
+                franchise
+            )));
+
+        if (leadRepository.count() == 0) {
+            leadRepository.save(new Lead("Mariana Alves", "+55 11 90000-1001", "Acompanhante hospitalar", "WhatsApp", LeadStatus.NOVO, franchise, agent));
+            leadRepository.save(new Lead("Ricardo Lima", "+55 11 90000-1002", "Cuidador por hora", "Instagram", LeadStatus.EM_ATENDIMENTO, franchise, agent));
+            leadRepository.save(new Lead("Beatriz Souza", "+55 11 90000-1003", "Cuidador noturno", "WhatsApp", LeadStatus.CONVERTIDO, franchise, agent));
+            leadRepository.save(new Lead("Carlos Mendes", "+55 11 90000-1004", "Pos-cirurgico", "Site", LeadStatus.FINALIZADO, franchise, agent));
+        }
+    }
 
     @Test
     void superAdminCreatesFranchiseAdminUser() throws Exception {
@@ -134,6 +190,10 @@ class FranchiseSecurityIntegrationTest {
             .andExpect(status().isForbidden());
 
         mockMvc.perform(get("/franchises/gptmaker/workspaces/{workspaceId}/agents", "mock-workspace-vavive")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/franchises/gptmaker/available-workspaces")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isForbidden());
     }
@@ -208,7 +268,8 @@ class FranchiseSecurityIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.role").value("ADMIN_FRANQUIA"))
             .andExpect(jsonPath("$.franchise.id").isNotEmpty())
-            .andExpect(jsonPath("$.franchise.name").value("Vavive Vila Mariana"));
+            .andExpect(jsonPath("$.franchise.name").value("Vavive Vila Mariana"))
+            .andExpect(jsonPath("$.franchise.status").value("ATIVA"));
     }
 
     @Test
@@ -303,20 +364,20 @@ class FranchiseSecurityIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "workspaceId": "mock-workspace-vavive",
-                      "agentId": "mock-agent-mock-workspace-vavive-01"
+                      "workspaceId": "mock-workspace-sp",
+                      "agentId": "mock-agent-mock-workspace-sp-01"
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.workspaceId").value("mock-workspace-vavive"))
-            .andExpect(jsonPath("$.workspaceName").value("Workspace Vavive Demo"))
-            .andExpect(jsonPath("$.agentId").value("mock-agent-mock-workspace-vavive-01"))
+            .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
+            .andExpect(jsonPath("$.workspaceName").value("Workspace Sao Paulo"))
+            .andExpect(jsonPath("$.agentId").value("mock-agent-mock-workspace-sp-01"))
             .andExpect(jsonPath("$.agentName").value("Assistente Comercial"))
-            .andExpect(jsonPath("$.status").value("CONECTADO"));
+            .andExpect(jsonPath("$.status").value("ATIVA"));
 
         Franchise updated = franchiseRepository.findById(franchise.getId()).orElseThrow();
-        assertThat(updated.getWorkspaceId()).isEqualTo("mock-workspace-vavive");
-        assertThat(updated.getAgentId()).isEqualTo("mock-agent-mock-workspace-vavive-01");
+        assertThat(updated.getWorkspaceId()).isEqualTo("mock-workspace-sp");
+        assertThat(updated.getAgentId()).isEqualTo("mock-agent-mock-workspace-sp-01");
         assertThat(agentRepository.findByFranchiseId(franchise.getId())).hasSize(1);
         assertThat(trainingRepository.count()).isEqualTo(trainingCount);
     }
@@ -332,13 +393,14 @@ class FranchiseSecurityIntegrationTest {
                       "document": "66.666.666/0001-66",
                       "city": "Sao Paulo",
                       "state": "SP",
-                      "workspaceId": "mock-workspace-vavive"
+                      "workspaceId": "mock-workspace-sp"
                     }
                     """))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$.workspaceId").value("mock-workspace-vavive"))
-            .andExpect(jsonPath("$.workspaceName").value("Workspace Vavive Demo"))
-            .andExpect(jsonPath("$.agentId").doesNotExist());
+            .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
+            .andExpect(jsonPath("$.workspaceName").value("Workspace Sao Paulo"))
+            .andExpect(jsonPath("$.agentId").doesNotExist())
+            .andExpect(jsonPath("$.status").value("SEM_AGENTE"));
     }
 
     @Test
@@ -356,7 +418,8 @@ class FranchiseSecurityIntegrationTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workspaceId").doesNotExist())
-            .andExpect(jsonPath("$.agentId").doesNotExist());
+            .andExpect(jsonPath("$.agentId").doesNotExist())
+            .andExpect(jsonPath("$.status").value("PENDENTE_CONFIGURACAO"));
     }
 
     @Test
@@ -374,7 +437,8 @@ class FranchiseSecurityIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
             .andExpect(jsonPath("$.workspaceName").value("Workspace Sao Paulo"))
-            .andExpect(jsonPath("$.agentId").doesNotExist());
+            .andExpect(jsonPath("$.agentId").doesNotExist())
+            .andExpect(jsonPath("$.status").value("SEM_AGENTE"));
     }
 
     @Test
@@ -393,13 +457,15 @@ class FranchiseSecurityIntegrationTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("""
                     {
-                      "workspaceId": "mock-workspace-sp"
+                      "workspaceId": "mock-workspace-sp",
+                      "confirmCriticalChange": true
                     }
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
             .andExpect(jsonPath("$.agentId").doesNotExist())
-            .andExpect(jsonPath("$.agentName").doesNotExist());
+            .andExpect(jsonPath("$.agentName").doesNotExist())
+            .andExpect(jsonPath("$.status").value("SEM_AGENTE"));
 
         Franchise updated = franchiseRepository.findById(franchise.getId()).orElseThrow();
         assertThat(updated.getAgentId()).isNull();
@@ -430,6 +496,89 @@ class FranchiseSecurityIntegrationTest {
         mockMvc.perform(get("/franchises/gptmaker/workspace-mapping")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void availableWorkspacesDoNotReturnLinkedWorkspace() throws Exception {
+        mockMvc.perform(get("/franchises/gptmaker/available-workspaces")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.id == 'mock-workspace-vavive')]").doesNotExist())
+            .andExpect(jsonPath("$[?(@.id == 'mock-workspace-sp')]").exists());
+    }
+
+    @Test
+    void cannotLinkWorkspaceAlreadyUsedByAnotherFranchise() throws Exception {
+        Franchise franchise = franchiseRepository.save(new Franchise("Vavive Nova", "15.151.151/0001-15", "Sao Paulo", "SP", "PENDENTE_CONFIGURACAO"));
+
+        mockMvc.perform(post("/franchises/{id}/gptmaker/workspace", franchise.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "workspaceId": "mock-workspace-vavive"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Esta workspace GPTMaker ja esta vinculada a outra franquia."));
+    }
+
+    @Test
+    void changingWorkspaceRequiresConfirmation() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        mockMvc.perform(post("/franchises/{id}/gptmaker/workspace", franchise.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "workspaceId": "mock-workspace-sp"
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Trocar workspace e uma acao critica. Confirme para continuar."));
+    }
+
+    @Test
+    void unlinkWorkspaceRequiresConfirmation() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/franchises/{id}/gptmaker/workspace", franchise.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Desvincular workspace e uma acao critica. Confirme para continuar."));
+    }
+
+    @Test
+    void clearAgentRequiresConfirmation() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete("/franchises/{id}/gptmaker/agent", franchise.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Limpar agente e uma acao critica. Confirme para continuar."));
+    }
+
+    @Test
+    void adminFranquiaWithoutWorkspaceSeesFranchiseAsNotActive() throws Exception {
+        Franchise franchise = new Franchise("Vavive Pendente", "16.161.161/0001-16", "Sao Paulo", "SP", "PENDENTE_CONFIGURACAO");
+        franchise = franchiseRepository.save(franchise);
+        userRepository.save(new User(
+            "Franquia Pendente",
+            "pendente@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            franchise
+        ));
+
+        mockMvc.perform(get("/me")
+                .header("Authorization", bearerToken("pendente@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.franchise.status").value("PENDENTE_CONFIGURACAO"));
     }
 
     @Test

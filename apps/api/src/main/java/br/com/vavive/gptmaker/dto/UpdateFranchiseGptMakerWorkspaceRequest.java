@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record UpdateFranchiseGptMakerWorkspaceRequest(
     @NotBlank String workspaceId,
-    String workspaceName
+    String workspaceName,
+    Boolean confirmCriticalChange
 ) {
 }
