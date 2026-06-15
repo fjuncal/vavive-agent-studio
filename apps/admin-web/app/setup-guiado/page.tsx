@@ -10,8 +10,10 @@ import { useAuth } from "@/lib/auth";
 import {
   getFranchiseSetup,
   getFranchises,
+  getDefaultAgentTexts,
   publishFranchiseAgent,
   saveFranchiseSetup,
+  type DefaultAgentText,
   type FranchiseSetup,
   type FranchiseSummary,
   type PublishAgentResult,
@@ -23,32 +25,10 @@ import { useEffect, useMemo, useState } from "react";
 
 const setupSteps = ["Dados da Franquia", "Servicos", "Precos", "Regioes", "Horarios", "FAQ", "Regras", "Tom de Voz", "Revisao Final"];
 
-const ruleTemplates = [
-  {
-    title: "Nunca inventar preco",
-    description: "Quando o preco nao estiver aprovado, o agente deve explicar que a equipe valida e retorna."
-  },
-  {
-    title: "Nunca confirmar agenda sem validacao",
-    description: "A conversa coleta dados, mas a confirmacao final depende da operacao humana."
-  },
-  {
-    title: "Perguntar servico quando faltar",
-    description: "Antes de sugerir preco ou disponibilidade, o agente precisa identificar o servico."
-  },
-  {
-    title: "Perguntar horas quando faltar",
-    description: "Sem carga horaria nao existe proposta confiavel."
-  },
-  {
-    title: "Perguntar bairro ou CEP quando faltar",
-    description: "A cobertura deve ser validada com base na regiao atendida."
-  },
-  {
-    title: "Transferir para humano em caso de reclamacao",
-    description: "Situacoes sensiveis devem sair do fluxo automatico."
-  }
-];
+type RuleTemplate = {
+  title: string;
+  description: string;
+};
 
 type SetupFormState = {
   franchiseName: string;
@@ -84,7 +64,7 @@ function normalizeValue(value?: string | null) {
   return value ?? "";
 }
 
-function splitRules(rawRules?: string | null) {
+function splitRules(rawRules: string | null | undefined, ruleTemplates: RuleTemplate[]) {
   const lines = normalizeValue(rawRules)
     .split("\n")
     .map((line) => line.trim())
@@ -96,8 +76,8 @@ function splitRules(rawRules?: string | null) {
   return { selectedTitles, customRules };
 }
 
-function toFormState(setup: FranchiseSetup): SetupFormState {
-  const parsedRules = splitRules(setup.rules);
+function toFormState(setup: FranchiseSetup, ruleTemplates: RuleTemplate[]): SetupFormState {
+  const parsedRules = splitRules(setup.rules, ruleTemplates);
   return {
     franchiseName: normalizeValue(setup.franchiseName),
     document: normalizeValue(setup.document),
@@ -177,6 +157,7 @@ function SectionSummary({ title, content }: { title: string; content: string }) 
 export default function GuidedSetupPage() {
   const { user } = useAuth();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
+  const [defaultTexts, setDefaultTexts] = useState<DefaultAgentText[]>([]);
   const [selectedFranchiseId, setSelectedFranchiseId] = useState<string>("");
   const [setup, setSetup] = useState<FranchiseSetup | null>(null);
   const [form, setForm] = useState<SetupFormState>(emptyForm);
@@ -189,7 +170,17 @@ export default function GuidedSetupPage() {
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishAgentResult | null>(null);
 
-  const progressLabel = setup ? `${setup.completionPercentage}% concluido • ${setup.setupStatus.replaceAll("_", " ")}` : "Carregando configuracao";
+  const ruleTemplates = useMemo(
+    () => defaultTexts
+      .filter((text) => text.active && text.category === "REGRAS_ATENDIMENTO")
+      .map((text) => ({ title: text.title, description: text.content })),
+    [defaultTexts]
+  );
+  const toneSuggestions = useMemo(
+    () => defaultTexts.filter((text) => text.active && text.category === "TOM_DE_VOZ"),
+    [defaultTexts]
+  );
+  const progressLabel = setup ? `${setup.completionPercentage}% concluido - ${setup.setupStatus.replaceAll("_", " ")}` : "Carregando configuracao";
   const previewTitle = useMemo(() => `Treinamento ${form.franchiseName || "Vavive"}`, [form.franchiseName]);
   const previewContent = useMemo(() => setup?.lastGeneratedTraining || buildTrainingPreview(form, selectedRules), [form, selectedRules, setup?.lastGeneratedTraining]);
 
@@ -216,6 +207,17 @@ export default function GuidedSetupPage() {
   }, [user]);
 
   useEffect(() => {
+    if (user?.role !== "SUPER_ADMIN") {
+      setDefaultTexts([]);
+      return;
+    }
+
+    getDefaultAgentTexts()
+      .then((items) => setDefaultTexts(items.filter((item) => item.active)))
+      .catch(() => setDefaultTexts([]));
+  }, [user?.role]);
+
+  useEffect(() => {
     if (!selectedFranchiseId) {
       return;
     }
@@ -228,14 +230,14 @@ export default function GuidedSetupPage() {
     getFranchiseSetup(selectedFranchiseId)
       .then((response) => {
         setSetup(response);
-        setForm(toFormState(response));
-        setSelectedRules(splitRules(response.rules).selectedTitles);
+        setForm(toFormState(response, ruleTemplates));
+        setSelectedRules(splitRules(response.rules, ruleTemplates).selectedTitles);
       })
       .catch((requestError) => {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o setup da franquia.");
       })
       .finally(() => setIsLoading(false));
-  }, [selectedFranchiseId]);
+  }, [selectedFranchiseId, ruleTemplates]);
 
   function updateField<K extends keyof SetupFormState>(field: K, value: SetupFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -278,8 +280,8 @@ export default function GuidedSetupPage() {
     try {
       const response = await saveFranchiseSetup(selectedFranchiseId, buildPayload());
       setSetup(response);
-      setForm(toFormState(response));
-      setSelectedRules(splitRules(response.rules).selectedTitles);
+      setForm(toFormState(response, ruleTemplates));
+      setSelectedRules(splitRules(response.rules, ruleTemplates).selectedTitles);
       setSuccessMessage("Etapa salva com sucesso.");
       return response;
     } catch (requestError) {
@@ -448,21 +450,25 @@ export default function GuidedSetupPage() {
           {!isLoading && currentStep === 6 ? (
             <div className="grid gap-5">
               <section className="grid gap-4">
-                <FormSection title="Regras" description="Essas regras orientam o comportamento seguro do agente na conversa.">
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    {ruleTemplates.map((rule) => (
-                      <RuleBuilderCard
-                        key={rule.title}
-                        title={rule.title}
-                        description={rule.description}
-                        checked={selectedRules.includes(rule.title)}
-                        onCheckedChange={(checked) => toggleRule(rule.title, checked)}
-                      />
-                    ))}
-                  </div>
+                <FormSection title="Regras" description="Sugestoes ativas cadastradas pela matriz. Campos especificos da franquia ficam em regras adicionais.">
+                  {ruleTemplates.length ? (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      {ruleTemplates.map((rule) => (
+                        <RuleBuilderCard
+                          key={rule.title}
+                          title={rule.title}
+                          description={rule.description}
+                          checked={selectedRules.includes(rule.title)}
+                          onCheckedChange={(checked) => toggleRule(rule.title, checked)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Ainda nao ha textos padrao ativos para regras de atendimento.</p>
+                  )}
                 </FormSection>
               </section>
-              <FormSection title="Regras adicionais" description="Use este campo para orientacoes especficas da operacao local.">
+              <FormSection title="Regras adicionais" description="Use este campo para orientacoes especificas da operacao local.">
                 <Field label="Regras complementares" placeholder="Uma regra por linha" textarea value={form.customRules} onChange={(value) => updateField("customRules", value)} />
               </FormSection>
             </div>
@@ -470,6 +476,21 @@ export default function GuidedSetupPage() {
 
           {!isLoading && currentStep === 7 ? (
             <FormSection title="Tom de Voz" description="Descreva como o agente deve soar nas conversas com leads e familiares.">
+              {toneSuggestions.length ? (
+                <div className="grid gap-3">
+                  {toneSuggestions.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => updateField("toneOfVoice", item.content)}
+                      className="rounded-2xl bg-slate-50 p-4 text-left text-sm text-slate-600 transition hover:bg-slate-100"
+                    >
+                      <span className="font-semibold text-ink">{item.title}</span>
+                      <span className="mt-2 block whitespace-pre-line leading-6">{item.content}</span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <Field label="Tom de voz" placeholder="Acolhedor, objetivo, consultivo e sem promessas nao validadas" textarea value={form.toneOfVoice} onChange={(value) => updateField("toneOfVoice", value)} />
             </FormSection>
           ) : null}
@@ -491,7 +512,7 @@ export default function GuidedSetupPage() {
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">Publicacao</p>
                       <h2 className="mt-2 text-lg font-semibold text-ink">Publicar Agente</h2>
                       <p className="mt-2 text-sm leading-6 text-slate-500">
-                        O fluxo gera o treinamento, salva o historico no banco da Vavive, envia ao backend protegido e registra o resultado do GPTMaker mockado.
+                        O fluxo gera o treinamento, salva o historico no banco da Vavive e envia pelo backend protegido quando houver agente conectado.
                       </p>
                     </div>
                     <span className={clsx("rounded-full px-3 py-1 text-xs font-semibold", setup?.setupStatus === "PRONTO_PARA_PUBLICAR" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
@@ -533,7 +554,7 @@ export default function GuidedSetupPage() {
                     >
                       <p className="font-semibold">{publishResult.success ? "Publicacao concluida" : "Publicacao nao concluida"}</p>
                       <p className="mt-2">{publishResult.message}</p>
-                      <p className="mt-2">Referencia externa: {publishResult.externalReference || "Nao retornada"}</p>
+                      <p className="mt-2">Registro da integracao: {publishResult.externalReference || "Nao retornado"}</p>
                       {!publishResult.success ? <p className="mt-2">O treinamento foi salvo localmente para nova tentativa.</p> : null}
                     </div>
                   ) : null}
@@ -549,7 +570,7 @@ export default function GuidedSetupPage() {
               <div className="text-sm text-slate-500">
                 {setup ? (
                   <>
-                    Setup status: <span className="font-semibold text-ink">{setup.setupStatus.replaceAll("_", " ")}</span> • ultima publicacao:{" "}
+                    Status do setup: <span className="font-semibold text-ink">{setup.setupStatus.replaceAll("_", " ")}</span> - ultima publicacao:{" "}
                     <span className="font-semibold text-ink">{formatDateTime(setup.lastPublishedAt)}</span>
                   </>
                 ) : (

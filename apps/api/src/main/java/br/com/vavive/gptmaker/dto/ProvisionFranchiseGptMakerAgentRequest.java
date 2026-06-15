@@ -6,6 +6,7 @@ public record ProvisionFranchiseGptMakerAgentRequest(
     @NotBlank String workspaceId,
     String workspaceName,
     @NotBlank String agentName,
+    String avatar,
     @NotBlank String communicationType,
     @NotBlank String type,
     String jobName,

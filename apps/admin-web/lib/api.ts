@@ -76,6 +76,8 @@ export type CreateFranchisePayload = {
   document?: string;
   city: string;
   state: string;
+  workspaceId?: string;
+  workspaceName?: string;
 };
 
 export type FranchiseSetup = {
@@ -200,6 +202,33 @@ export type FranchiseGptMakerConnection = {
   lastSyncAt?: string | null;
 };
 
+export type WorkspaceMappingLinked = {
+  workspaceId: string;
+  workspaceName?: string | null;
+  franchiseId: string;
+  franchiseName: string;
+  agentId?: string | null;
+  agentName?: string | null;
+};
+
+export type WorkspaceMappingUnlinkedWorkspace = {
+  workspaceId: string;
+  workspaceName?: string | null;
+};
+
+export type WorkspaceMappingFranchiseWithoutWorkspace = {
+  franchiseId: string;
+  franchiseName: string;
+  city: string;
+  state: string;
+};
+
+export type WorkspaceMapping = {
+  linked: WorkspaceMappingLinked[];
+  unlinkedWorkspaces: WorkspaceMappingUnlinkedWorkspace[];
+  franchisesWithoutWorkspace: WorkspaceMappingFranchiseWithoutWorkspace[];
+};
+
 export type FranchiseAdminUser = {
   id: string;
   name: string;
@@ -224,11 +253,37 @@ export type ProvisionFranchiseGptMakerAgentPayload = {
   workspaceId: string;
   workspaceName?: string;
   agentName: string;
+  avatar?: string;
   communicationType: "FORMAL" | "NORMAL" | "RELAXED";
   type: "SUPPORT" | "SALE" | "PERSONAL";
   jobName?: string;
   jobSite?: string;
   jobDescription?: string;
+};
+
+export type DefaultAgentTextCategory =
+  | "CONTEXTO_VAVIVE"
+  | "REGRAS_ATENDIMENTO"
+  | "TOM_DE_VOZ"
+  | "SERVICOS"
+  | "FAQ"
+  | "RESTRICOES";
+
+export type DefaultAgentText = {
+  id: string;
+  title: string;
+  category: DefaultAgentTextCategory;
+  content: string;
+  active: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type DefaultAgentTextPayload = {
+  title: string;
+  category: DefaultAgentTextCategory;
+  content: string;
+  active?: boolean;
 };
 
 function getStoredToken(): string | null {
@@ -396,6 +451,13 @@ export function provisionFranchiseGptMakerAgent(id: string, payload: ProvisionFr
   });
 }
 
+export function linkFranchiseWorkspace(id: string, payload: { workspaceId: string; workspaceName?: string }) {
+  return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/workspace`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function updateFranchiseGptMakerConnection(id: string, payload: { workspaceId: string; agentId: string }) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`, {
     method: "POST",
@@ -413,4 +475,32 @@ export function getGptMakerWorkspaceAgents(workspaceId: string) {
 
 export function getGptMakerWorkspaceAgentDiagnostics(workspaceId: string) {
   return apiFetch<GptMakerAgentDiagnostics>(`/gptmaker/diagnostics/workspaces/${workspaceId}/agents`);
+}
+
+export function getWorkspaceMapping() {
+  return apiFetch<WorkspaceMapping>("/franchises/gptmaker/workspace-mapping");
+}
+
+export function getDefaultAgentTexts() {
+  return apiFetch<DefaultAgentText[]>("/default-agent-texts");
+}
+
+export function createDefaultAgentText(payload: DefaultAgentTextPayload) {
+  return apiFetch<DefaultAgentText>("/default-agent-texts", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateDefaultAgentText(id: string, payload: DefaultAgentTextPayload) {
+  return apiFetch<DefaultAgentText>(`/default-agent-texts/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function toggleDefaultAgentText(id: string) {
+  return apiFetch<DefaultAgentText>(`/default-agent-texts/${id}/toggle`, {
+    method: "PATCH"
+  });
 }

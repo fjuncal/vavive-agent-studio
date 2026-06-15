@@ -5,12 +5,14 @@ import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
+import br.com.vavive.gptmaker.dto.FranchiseWorkspaceMappingResponse;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.service.FranchiseService;
@@ -71,9 +73,19 @@ public class FranchiseController {
         return franchiseService.listWorkspaces();
     }
 
+    @GetMapping("/franchises/gptmaker/workspace-mapping")
+    public FranchiseWorkspaceMappingResponse workspaceMapping() {
+        return franchiseService.workspaceMapping();
+    }
+
     @GetMapping("/franchises/gptmaker/workspaces/{workspaceId}/agents")
     public List<GptMakerAgentOptionResponse> listWorkspaceAgents(@PathVariable String workspaceId) {
         return franchiseService.listWorkspaceAgents(workspaceId);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/workspace")
+    public FranchiseGptMakerConnectionResponse linkGptMakerWorkspace(@PathVariable UUID id, @Valid @RequestBody UpdateFranchiseGptMakerWorkspaceRequest request) {
+        return franchiseService.linkGptMakerWorkspace(id, request);
     }
 
     @GetMapping("/franchises/{id}/gptmaker/default-context")

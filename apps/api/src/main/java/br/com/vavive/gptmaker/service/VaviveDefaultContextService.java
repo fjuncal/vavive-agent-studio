@@ -1,14 +1,30 @@
 package br.com.vavive.gptmaker.service;
 
 import br.com.vavive.gptmaker.domain.entity.Franchise;
+import br.com.vavive.gptmaker.repository.DefaultAgentTextRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 @Service
 public class VaviveDefaultContextService {
+    private final DefaultAgentTextRepository defaultAgentTextRepository;
+
+    public VaviveDefaultContextService(DefaultAgentTextRepository defaultAgentTextRepository) {
+        this.defaultAgentTextRepository = defaultAgentTextRepository;
+    }
+
     public String buildForFranchise(Franchise franchise) {
         String franchiseLine = franchise == null
             ? "Franquia: Vavive."
             : "Franquia: " + franchise.getName() + " - " + franchise.getCity() + "/" + franchise.getState() + ".";
+
+        List<String> activeTexts = defaultAgentTextRepository.findByActiveTrueOrderByCategoryAscTitleAsc().stream()
+            .map(text -> "[" + text.getCategory().name() + "] " + text.getTitle() + "\n" + text.getContent())
+            .toList();
+
+        if (!activeTexts.isEmpty()) {
+            return String.join("\n\n", List.of(franchiseLine, String.join("\n\n", activeTexts)));
+        }
 
         return String.join("\n",
             "A Vavive e uma empresa de servicos de limpeza e cuidados.",

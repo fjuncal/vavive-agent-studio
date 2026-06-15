@@ -6,18 +6,38 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
-import { getFranchises, getGptMakerWorkspaces, type FranchiseSummary, type GptMakerWorkspaceOption } from "@/lib/api";
-import { Building2, PlugZap } from "lucide-react";
+import { getFranchises, getWorkspaceMapping, type FranchiseSummary, type WorkspaceMapping } from "@/lib/api";
+import { Building2, Link2, PlugZap } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+function franchiseConnectionStatus(franchise: FranchiseSummary) {
+  if (!franchise.workspaceId) {
+    return "SEM_WORKSPACE";
+  }
+  if (!franchise.agentId) {
+    return "SEM_AGENTE";
+  }
+  return "CONECTADA";
+}
+
+function StatCard({ label, value, description }: { label: string; value: number; description: string }) {
+  return (
+    <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-3 text-3xl font-semibold tracking-tight text-ink">{value}</p>
+      <p className="mt-2 text-sm text-slate-500">{description}</p>
+    </article>
+  );
+}
 
 export default function FranchisesPage() {
   const { user } = useAuth();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
-  const [workspaces, setWorkspaces] = useState<GptMakerWorkspaceOption[]>([]);
+  const [mapping, setMapping] = useState<WorkspaceMapping | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
-  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
+  const [mappingError, setMappingError] = useState<string | null>(null);
+  const [isLoadingMapping, setIsLoadingMapping] = useState(false);
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
@@ -33,74 +53,115 @@ export default function FranchisesPage() {
       return;
     }
 
-    setIsLoadingWorkspaces(true);
-    setWorkspaceError(null);
-    getGptMakerWorkspaces()
-      .then(setWorkspaces)
+    setIsLoadingMapping(true);
+    setMappingError(null);
+    getWorkspaceMapping()
+      .then(setMapping)
       .catch((requestError) => {
-        setWorkspaceError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os workspaces GPTMaker.");
+        setMappingError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o mapa GPTMaker.");
       })
-      .finally(() => setIsLoadingWorkspaces(false));
+      .finally(() => setIsLoadingMapping(false));
   }, [isSuperAdmin]);
+
+  const connectedCount = useMemo(() => franchises.filter((franchise) => Boolean(franchise.workspaceId)).length, [franchises]);
+  const pendingCount = useMemo(() => franchises.filter((franchise) => !franchise.workspaceId).length, [franchises]);
+  const unlinkedWorkspaceCount = mapping?.unlinkedWorkspaces.length ?? 0;
 
   return (
     <AppShell>
       <PageHeader
         eyebrow="Rede"
         title="Franquias"
-        description="Veja unidades, responsaveis e volume comercial. Usuarios ADMIN_FRANQUIA devem visualizar apenas sua propria unidade."
+        description="Gerencie unidades, workspaces GPTMaker e agentes conectados sem misturar configuracoes globais com a operacao do franqueado."
         actionLabel={isSuperAdmin ? "Nova franquia" : undefined}
         actionHref={isSuperAdmin ? "/franquias/nova" : undefined}
       />
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+
+      {isSuperAdmin ? (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard label="Workspaces GPTMaker" value={(mapping?.linked.length ?? 0) + unlinkedWorkspaceCount} description={isLoadingMapping ? "Carregando..." : "Workspaces reais encontrados."} />
+          <StatCard label="Franquias conectadas" value={connectedCount} description="Franquias com workspace definida." />
+          <StatCard label="Franquias pendentes" value={pendingCount} description="Aguardando conexao GPTMaker." />
+          <StatCard label="Workspaces sem franquia" value={unlinkedWorkspaceCount} description="Disponiveis para vinculo." />
+        </section>
+      ) : null}
+
+      {isSuperAdmin ? (
+        <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Conexao</p>
+              <h2 className="mt-2 text-lg font-semibold text-ink">Pendencias de conexao</h2>
+              <p className="mt-2 text-sm text-slate-500">Resolva franquias sem workspace e workspaces reais ainda sem franquia.</p>
+            </div>
+            {mappingError ? <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Falha ao carregar</span> : null}
+          </div>
+          {mappingError ? <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{mappingError}</p> : null}
+          <div className="mt-5 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <h3 className="font-semibold text-ink">Franquias sem workspace</h3>
+              <div className="mt-3 grid gap-3">
+                {mapping?.franchisesWithoutWorkspace.length ? mapping.franchisesWithoutWorkspace.map((item) => (
+                  <div key={item.franchiseId} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-ink">{item.franchiseName}</p>
+                      <p className="text-sm text-slate-500">{item.city} / {item.state}</p>
+                    </div>
+                    <Link href={`/franquias/${item.franchiseId}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                      <Link2 size={14} />
+                      Linkar workspace
+                    </Link>
+                  </div>
+                )) : (
+                  <p className="rounded-xl bg-white p-4 text-sm text-slate-500">Nao ha franquias pendentes de workspace.</p>
+                )}
+              </div>
+            </div>
+            <div className="rounded-2xl bg-slate-50 p-4">
+              <h3 className="font-semibold text-ink">Workspaces sem franquia</h3>
+              <div className="mt-3 grid gap-3">
+                {mapping?.unlinkedWorkspaces.length ? mapping.unlinkedWorkspaces.map((workspace) => (
+                  <div key={workspace.workspaceId} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <p className="font-semibold text-ink">{workspace.workspaceName || "Workspace sem nome"}</p>
+                      <p className="text-sm text-slate-500">Disponivel para uma franquia.</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Link href={`/franquias/nova?workspaceId=${encodeURIComponent(workspace.workspaceId)}`} className="rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                        Criar franquia
+                      </Link>
+                      <Link href="/franquias" className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-line">
+                        Linkar existente
+                      </Link>
+                    </div>
+                  </div>
+                )) : (
+                  <p className="rounded-xl bg-white p-4 text-sm text-slate-500">Nao ha workspaces sem franquia.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       {franchises.length ? (
         <DataTable
           rows={franchises}
           columns={[
             { header: "Franquia", cell: (franchise) => <Link className="font-semibold text-ink hover:text-brand-700" href={`/franquias/${franchise.id}`}>{franchise.name}</Link> },
             { header: "Cidade", cell: (franchise) => `${franchise.city} / ${franchise.state}` },
-            { header: "Documento", cell: (franchise) => franchise.document ?? "-" },
-            { header: "Criada em", cell: (franchise) => franchise.createdAt ? new Date(franchise.createdAt).toLocaleDateString("pt-BR") : "-" },
-            { header: "Status", cell: (franchise) => <StatusBadge status={franchise.status} /> }
+            { header: "Workspace", cell: (franchise) => franchise.workspaceName ?? "Sem workspace" },
+            { header: "Agente", cell: (franchise) => franchise.agentName ?? "Sem agente" },
+            { header: "Status", cell: (franchise) => <StatusBadge status={franchiseConnectionStatus(franchise)} /> }
           ]}
         />
       ) : (
-        <EmptyState icon={Building2} title="Nenhuma franquia cadastrada" description="Quando o backend retornar franquias cadastradas, elas serao listadas aqui." />
+        <EmptyState icon={Building2} title="Nenhuma franquia cadastrada" description="Ainda nao ha dados reais para exibir." />
       )}
 
-      {isSuperAdmin ? (
-        <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">GPTMaker</p>
-              <h2 className="mt-2 text-lg font-semibold text-ink">Workspaces GPTMaker</h2>
-              <p className="mt-2 text-sm text-slate-500">Workspaces disponiveis para conectar agentes das franquias.</p>
-            </div>
-            <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-semibold text-brand-700">
-              {isLoadingWorkspaces ? "Carregando..." : `${workspaces.length} workspace(s)`}
-            </span>
-          </div>
-          {workspaceError ? <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{workspaceError}</p> : null}
-          {workspaces.length ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {workspaces.map((workspace) => (
-                <article key={workspace.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                  <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-brand-700 shadow-sm">
-                      <PlugZap size={18} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-ink">{workspace.name || "Workspace sem nome"}</h3>
-                      <p className="mt-1 text-sm text-slate-500">Disponivel para vinculo de agentes.</p>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : !isLoadingWorkspaces && !workspaceError ? (
-            <EmptyState icon={PlugZap} title="Nenhum workspace encontrado" description="Ainda nao ha dados reais para exibir." />
-          ) : null}
-        </section>
+      {isSuperAdmin && mapping && !mapping.linked.length && !mapping.unlinkedWorkspaces.length && !mapping.franchisesWithoutWorkspace.length ? (
+        <EmptyState icon={PlugZap} title="Nenhuma conexao GPTMaker encontrada" description="Quando houver workspaces ou franquias reais, o mapa de conexao aparecera aqui." />
       ) : null}
     </AppShell>
   );

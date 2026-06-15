@@ -5,6 +5,7 @@ import {
   Bot,
   Building2,
   ClipboardCheck,
+  FileText,
   LayoutDashboard,
   MessageSquareText,
   Route,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth";
 
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -23,6 +25,10 @@ const nav = [
 
 export function Sidebar() {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const visibleNav = user?.role === "SUPER_ADMIN"
+    ? [...nav, { href: "/configuracoes/textos-padrao", label: "Textos padrao", icon: FileText }]
+    : nav;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-line/80 bg-white/78 px-5 py-5 shadow-soft backdrop-blur-xl lg:flex lg:flex-col">
@@ -37,7 +43,7 @@ export function Sidebar() {
       </Link>
 
       <nav className="mt-8 flex flex-1 flex-col gap-1">
-        {nav.map((item) => {
+        {visibleNav.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.href || pathname.startsWith(item.href + "/");
           return (

@@ -6,6 +6,8 @@ public record CreateFranchiseRequest(
     @NotBlank String name,
     String document,
     @NotBlank String city,
-    @NotBlank String state
+    @NotBlank String state,
+    String workspaceId,
+    String workspaceName
 ) {
 }

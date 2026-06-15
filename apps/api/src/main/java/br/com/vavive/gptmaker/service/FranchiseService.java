@@ -10,25 +10,31 @@ import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
+import br.com.vavive.gptmaker.dto.FranchiseWorkspaceMappingResponse;
 import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
 import br.com.vavive.gptmaker.repository.UserRepository;
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -92,6 +98,11 @@ public class FranchiseService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Apenas SUPER_ADMIN pode criar franquias");
         }
         Franchise franchise = new Franchise(request.name(), request.document(), request.city(), request.state(), "ATIVA");
+        if (request.workspaceId() != null && !request.workspaceId().isBlank()) {
+            GptMakerWorkspaceResponse workspace = requireExistingWorkspace(request.workspaceId());
+            franchise.setWorkspaceId(workspace.id());
+            franchise.setWorkspaceName(resolveProvidedWorkspaceName(request.workspaceName(), workspace));
+        }
         return AuthService.toFranchiseResponse(franchiseRepository.save(franchise));
     }
 
@@ -162,6 +173,50 @@ public class FranchiseService {
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
+    }
+
+    @Transactional(readOnly = true)
+    public FranchiseWorkspaceMappingResponse workspaceMapping() {
+        requireSuperAdmin();
+        List<GptMakerWorkspaceResponse> workspaces;
+        try {
+            workspaces = gptMakerClient.listWorkspaces();
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+
+        List<Franchise> franchises = franchiseRepository.findAll();
+        Set<String> linkedWorkspaceIds = new HashSet<>();
+        List<FranchiseWorkspaceMappingResponse.LinkedWorkspaceFranchiseResponse> linked = franchises.stream()
+            .filter(franchise -> franchise.getWorkspaceId() != null && !franchise.getWorkspaceId().isBlank())
+            .peek(franchise -> linkedWorkspaceIds.add(franchise.getWorkspaceId()))
+            .map(franchise -> new FranchiseWorkspaceMappingResponse.LinkedWorkspaceFranchiseResponse(
+                franchise.getWorkspaceId(),
+                franchise.getWorkspaceName(),
+                franchise.getId(),
+                franchise.getName(),
+                franchise.getAgentId(),
+                franchise.getAgentName()
+            ))
+            .toList();
+
+        List<FranchiseWorkspaceMappingResponse.UnlinkedWorkspaceResponse> unlinkedWorkspaces = workspaces.stream()
+            .filter(workspace -> workspace.id() != null && !workspace.id().isBlank())
+            .filter(workspace -> !linkedWorkspaceIds.contains(workspace.id()))
+            .map(workspace -> new FranchiseWorkspaceMappingResponse.UnlinkedWorkspaceResponse(workspace.id(), workspace.name()))
+            .toList();
+
+        List<FranchiseWorkspaceMappingResponse.FranchiseWithoutWorkspaceResponse> franchisesWithoutWorkspace = franchises.stream()
+            .filter(franchise -> franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank())
+            .map(franchise -> new FranchiseWorkspaceMappingResponse.FranchiseWithoutWorkspaceResponse(
+                franchise.getId(),
+                franchise.getName(),
+                franchise.getCity(),
+                franchise.getState()
+            ))
+            .toList();
+
+        return new FranchiseWorkspaceMappingResponse(linked, unlinkedWorkspaces, franchisesWithoutWorkspace);
     }
 
     @Transactional(readOnly = true)
@@ -237,6 +292,26 @@ public class FranchiseService {
     }
 
     @Transactional
+    public FranchiseGptMakerConnectionResponse linkGptMakerWorkspace(UUID id, UpdateFranchiseGptMakerWorkspaceRequest request) {
+        requireSuperAdmin();
+        Franchise franchise = requireAccessibleFranchise(id);
+        GptMakerWorkspaceResponse workspace = requireExistingWorkspace(request.workspaceId());
+        boolean workspaceChanged = franchise.getWorkspaceId() != null
+            && !franchise.getWorkspaceId().isBlank()
+            && !Objects.equals(franchise.getWorkspaceId(), workspace.id());
+
+        franchise.setWorkspaceId(workspace.id());
+        franchise.setWorkspaceName(resolveProvidedWorkspaceName(request.workspaceName(), workspace));
+        if (workspaceChanged) {
+            franchise.setAgentId(null);
+            franchise.setAgentName(null);
+            franchise.setGptMakerLastSyncAt(null);
+        }
+        franchiseRepository.save(franchise);
+        return toGptMakerConnectionResponse(franchise);
+    }
+
+    @Transactional
     public FranchiseGptMakerConnectionResponse provisionGptMakerAgent(UUID id, ProvisionFranchiseGptMakerAgentRequest request) {
         requireSuperAdmin();
         Franchise franchise = requireAccessibleFranchise(id);
@@ -256,7 +331,7 @@ public class FranchiseService {
                 request.workspaceId(),
                 new GptMakerCreateAgentRequest(
                     request.agentName(),
-                    null,
+                    request.avatar(),
                     context,
                     request.communicationType(),
                     request.type(),
@@ -520,6 +595,30 @@ public class FranchiseService {
         } catch (GptMakerIntegrationException exception) {
             return franchise.getWorkspaceId();
         }
+    }
+
+    private GptMakerWorkspaceResponse requireExistingWorkspace(String workspaceId) {
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workspace GPTMaker nao informado");
+        }
+        try {
+            return gptMakerClient.listWorkspaces().stream()
+                .filter(item -> workspaceId.equals(item.id()))
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workspace GPTMaker nao encontrado"));
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+    }
+
+    private String resolveProvidedWorkspaceName(String workspaceName, GptMakerWorkspaceResponse workspace) {
+        if (workspaceName != null && !workspaceName.isBlank()) {
+            return workspaceName;
+        }
+        if (workspace.name() != null && !workspace.name().isBlank()) {
+            return workspace.name();
+        }
+        return workspace.id();
     }
 
     private String mergeJobDescription(String context, String customJobDescription) {

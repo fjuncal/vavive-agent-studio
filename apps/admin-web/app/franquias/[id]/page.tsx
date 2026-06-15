@@ -14,6 +14,7 @@ import {
   getGptMakerHealth,
   getGptMakerWorkspaceAgents,
   getGptMakerWorkspaces,
+  linkFranchiseWorkspace,
   provisionFranchiseGptMakerAgent,
   updateFranchiseGptMakerConnection,
   type FranchiseAdminUser,
@@ -38,6 +39,13 @@ function formatDateTime(value?: string | null) {
   }).format(new Date(value));
 }
 
+const avatarOptions = [
+  { label: "Sem avatar", value: "" },
+  { label: "Profissional feminino", value: "https://assets.vavive.com/avatar-profissional-feminino.png" },
+  { label: "Profissional masculino", value: "https://assets.vavive.com/avatar-profissional-masculino.png" },
+  { label: "Neutro Vavive", value: "https://assets.vavive.com/avatar-neutro-vavive.png" }
+];
+
 export default function FranchiseDetailPage() {
   const params = useParams<{ id: string }>();
   const { user } = useAuth();
@@ -53,6 +61,7 @@ export default function FranchiseDetailPage() {
   const [agentName, setAgentName] = useState("");
   const [communicationType, setCommunicationType] = useState<"FORMAL" | "NORMAL" | "RELAXED">("NORMAL");
   const [objectiveType, setObjectiveType] = useState<"SUPPORT" | "SALE" | "PERSONAL">("SALE");
+  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [jobName, setJobName] = useState("Vavive");
   const [jobSite, setJobSite] = useState("https://vavive.com.br");
   const [jobDescription, setJobDescription] = useState("");
@@ -202,6 +211,38 @@ export default function FranchiseDetailPage() {
     }
   }
 
+  async function handleLinkWorkspace() {
+    if (!params?.id || !selectedWorkspaceId) {
+      setError("Selecione uma workspace GPTMaker existente.");
+      setSuccess(null);
+      return;
+    }
+
+    setIsSavingAgent(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const response = await linkFranchiseWorkspace(params.id, {
+        workspaceId: selectedWorkspaceId,
+        workspaceName: selectedWorkspace?.name
+      });
+      setConnection(response);
+      setFranchise((current) => current ? {
+        ...current,
+        workspaceId: response.workspaceId,
+        workspaceName: response.workspaceName,
+        agentId: response.agentId,
+        agentName: response.agentName,
+        gptMakerLastSyncAt: response.lastSyncAt
+      } : current);
+      setSuccess("Workspace GPTMaker vinculada a franquia.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel vincular a workspace.");
+    } finally {
+      setIsSavingAgent(false);
+    }
+  }
+
   async function handleProvisionAgent() {
     if (!params?.id || !selectedWorkspaceId) {
       setError("Selecione um workspace GPTMaker existente.");
@@ -222,6 +263,7 @@ export default function FranchiseDetailPage() {
         workspaceId: selectedWorkspaceId,
         workspaceName: selectedWorkspace?.name,
         agentName,
+        avatar: selectedAvatar || undefined,
         communicationType,
         type: objectiveType,
         jobName,
@@ -380,24 +422,44 @@ export default function FranchiseDetailPage() {
               </select>
             </label>
 
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setConnectionMode("link")}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold ${connectionMode === "link" ? "bg-ink text-white" : "bg-slate-100 text-slate-700"}`}
-              >
-                Vincular agente existente
-              </button>
-              <button
-                type="button"
-                onClick={() => setConnectionMode("create")}
-                className={`rounded-xl px-4 py-2 text-sm font-semibold ${connectionMode === "create" ? "bg-ink text-white" : "bg-slate-100 text-slate-700"}`}
-              >
-                Criar novo agente GPTMaker
-              </button>
-            </div>
+            {selectedWorkspaceId && selectedWorkspaceId !== connection?.workspaceId ? (
+              <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-semibold">Workspace selecionada ainda nao esta salva nesta franquia.</p>
+                <p className="mt-1">Ao trocar a workspace, o agente conectado anteriormente sera removido para evitar vinculo incorreto.</p>
+                <button
+                  type="button"
+                  onClick={() => void handleLinkWorkspace()}
+                  disabled={isSavingAgent}
+                  className="mt-3 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSavingAgent ? <Loader2 size={16} className="animate-spin" /> : <PlugZap size={16} />}
+                  Linkar workspace
+                </button>
+              </div>
+            ) : null}
 
-            {connectionMode === "link" ? (
+            {connection?.workspaceId ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode("link")}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold ${connectionMode === "link" ? "bg-ink text-white" : "bg-slate-100 text-slate-700"}`}
+                >
+                  Vincular agente existente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConnectionMode("create")}
+                  className={`rounded-xl px-4 py-2 text-sm font-semibold ${connectionMode === "create" ? "bg-ink text-white" : "bg-slate-100 text-slate-700"}`}
+                >
+                  Criar novo agente GPTMaker
+                </button>
+              </div>
+            ) : (
+              <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Linke uma workspace antes de vincular ou criar o agente GPTMaker.</p>
+            )}
+
+            {connection?.workspaceId && connectionMode === "link" ? (
               <div className="rounded-2xl border border-line/80 bg-white p-4">
                 <h3 className="font-semibold text-ink">Vincular agente existente</h3>
                 <p className="mt-2 text-sm text-slate-500">Ideal quando o workspace ja possui agentes criados ou atingiu o limite no GPTMaker.</p>
@@ -430,7 +492,7 @@ export default function FranchiseDetailPage() {
                   <EmptyState icon={Bot} title="Nenhum agente encontrado" description="Este workspace nao retornou agentes disponiveis para vinculo." />
                 ) : null}
               </div>
-            ) : (
+            ) : connection?.workspaceId ? (
               <div className="rounded-2xl border border-line/80 bg-white p-4">
                 <h3 className="font-semibold text-ink">Criar novo agente GPTMaker</h3>
                 <p className="mt-2 text-sm text-slate-500">Use esta opcao somente quando o workspace permitir novos agentes.</p>
@@ -453,6 +515,16 @@ export default function FranchiseDetailPage() {
                       <option value="SALE">Comercial</option>
                       <option value="SUPPORT">Suporte</option>
                       <option value="PERSONAL">Personalizado</option>
+                    </select>
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-sm font-medium text-slate-700">Avatar</span>
+                    <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedAvatar} onChange={(event) => setSelectedAvatar(event.target.value)}>
+                      {avatarOptions.map((option) => (
+                        <option key={option.label} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <label className="grid gap-1.5">
@@ -482,7 +554,7 @@ export default function FranchiseDetailPage() {
                   Criar e conectar agente
                 </button>
               </div>
-            )}
+            ) : null}
           </div>
         )}
       </section>

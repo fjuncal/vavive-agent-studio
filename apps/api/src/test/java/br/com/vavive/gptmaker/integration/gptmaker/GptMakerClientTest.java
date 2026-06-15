@@ -203,13 +203,14 @@ class GptMakerClientTest {
 
         var response = client.createAgent(
             "ws-1",
-            new GptMakerCreateAgentRequest("Assistente Vavive - Moema", null, "Contexto base", "NORMAL", "SALE", "Vavive", "https://vavive.com.br", "Descricao")
+            new GptMakerCreateAgentRequest("Assistente Vavive - Moema", "https://cdn.vavive.com/avatar.png", "Contexto base", "NORMAL", "SALE", "Vavive", "https://vavive.com.br", "Descricao")
         );
 
         assertTrue(feignClient.createAgentCalled);
         assertEquals("ws-1", feignClient.lastCreateAgentWorkspaceId);
         assertNotNull(feignClient.lastCreateAgentRequest);
         assertEquals("Assistente Vavive - Moema", feignClient.lastCreateAgentRequest.name());
+        assertEquals("https://cdn.vavive.com/avatar.png", feignClient.lastCreateAgentRequest.avatar());
         assertEquals("NORMAL", feignClient.lastCreateAgentRequest.communicationType());
         assertEquals("SALE", feignClient.lastCreateAgentRequest.type());
         assertEquals("agent-created-1", response.id());
