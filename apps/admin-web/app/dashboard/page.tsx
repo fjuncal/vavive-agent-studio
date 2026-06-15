@@ -10,23 +10,25 @@ import {
   getAgentTrainings,
   getAgents,
   getDashboardSummary,
+  getFranchises,
   getFranchiseSetup,
-  getGptMakerDiagnostics,
   getGptMakerHealth,
+  getGptMakerWorkspaces,
   getLeads,
   type AgentSummary,
   type DashboardSummary,
   type FranchiseSetup,
-  type GptMakerDiagnostics,
+  type FranchiseSummary,
   type GptMakerHealth,
+  type GptMakerWorkspaceOption,
   type LeadSummary,
   type TrainingSummary
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { BadgeCheck, Bot, Building2, FileText, MessageCircle, ShieldCheck, TrendingUp, UsersRound } from "lucide-react";
+import { Bot, Building2, FileText, MessageCircle, PlugZap, TrendingUp, UsersRound } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-function formatPublication(value?: string | null) {
+function formatDate(value?: string | null) {
   if (!value) {
     return "Ainda nao publicado";
   }
@@ -45,93 +47,100 @@ export default function DashboardPage() {
   const { isLoading: isAuthLoading, user } = useAuth();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [isSummaryLoading, setIsSummaryLoading] = useState(true);
-
-  const [recentLeads, setRecentLeads] = useState<LeadSummary[]>([]);
+  const [leads, setLeads] = useState<LeadSummary[]>([]);
   const [leadsError, setLeadsError] = useState<string | null>(null);
-  const [isLeadsLoading, setIsLeadsLoading] = useState(true);
-
-  const [gptMakerHealth, setGptMakerHealth] = useState<GptMakerHealth | null>(null);
+  const [health, setHealth] = useState<GptMakerHealth | null>(null);
   const [healthError, setHealthError] = useState<string | null>(null);
-  const [isHealthLoading, setIsHealthLoading] = useState(true);
+  const [lastIntegrationCheck, setLastIntegrationCheck] = useState<string | null>(null);
 
-  const [gptMakerDiagnostics, setGptMakerDiagnostics] = useState<GptMakerDiagnostics | null>(null);
-  const [diagnosticsError, setDiagnosticsError] = useState<string | null>(null);
-  const [isDiagnosticsLoading, setIsDiagnosticsLoading] = useState(false);
-
+  const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
+  const [franchiseError, setFranchiseError] = useState<string | null>(null);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [agentsError, setAgentsError] = useState<string | null>(null);
+  const [workspaces, setWorkspaces] = useState<GptMakerWorkspaceOption[]>([]);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+
   const [franchiseSetup, setFranchiseSetup] = useState<FranchiseSetup | null>(null);
   const [franchiseSetupError, setFranchiseSetupError] = useState<string | null>(null);
-  const [recentTrainings, setRecentTrainings] = useState<TrainingSummary[]>([]);
+  const [trainings, setTrainings] = useState<TrainingSummary[]>([]);
   const [trainingsError, setTrainingsError] = useState<string | null>(null);
 
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const currentAgent = agents[0] ?? null;
-  const connectedAgent = useMemo(
-    () => agents.find((agent) => agent.connectedToRealGptMaker) ?? currentAgent,
-    [agents, currentAgent]
+  const connectedFranchises = franchises.filter((franchise) => franchise.workspaceId && franchise.agentId).length;
+  const connectedAgents = agents.filter((agent) => agent.connectedToRealGptMaker).length;
+  const currentAgent = useMemo(
+    () => agents.find((agent) => agent.connectedToRealGptMaker) ?? agents[0] ?? null,
+    [agents]
   );
+  const recentLeads = leads.slice(0, 4);
+  const integrationStatus = healthError ? "Nao conectado" : health?.status === "READY" || workspaces.length > 0 ? "Conectado" : "Nao conectado";
 
   useEffect(() => {
     if (isAuthLoading || !user) {
       return;
     }
 
-    setIsSummaryLoading(true);
     setSummaryError(null);
     getDashboardSummary()
       .then(setSummary)
       .catch((requestError) => {
         setSummaryError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o resumo.");
-      })
-      .finally(() => setIsSummaryLoading(false));
+      });
 
-    setIsLeadsLoading(true);
     setLeadsError(null);
     getLeads()
-      .then((items) => setRecentLeads(items.slice(0, 4)))
+      .then(setLeads)
       .catch((requestError) => {
         setLeadsError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os leads.");
-      })
-      .finally(() => setIsLeadsLoading(false));
+      });
 
-    setIsHealthLoading(true);
     setHealthError(null);
     getGptMakerHealth()
-      .then(setGptMakerHealth)
+      .then((response) => {
+        setHealth(response);
+        setLastIntegrationCheck(new Date().toLocaleString("pt-BR"));
+      })
       .catch((requestError) => {
         setHealthError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o status da integracao.");
-      })
-      .finally(() => setIsHealthLoading(false));
+        setLastIntegrationCheck(new Date().toLocaleString("pt-BR"));
+      });
   }, [isAuthLoading, user]);
 
   useEffect(() => {
     if (isAuthLoading || !user || !isSuperAdmin) {
-      setGptMakerDiagnostics(null);
-      setDiagnosticsError(null);
-      setIsDiagnosticsLoading(false);
+      setFranchises([]);
+      setAgents([]);
+      setWorkspaces([]);
       return;
     }
 
-    setIsDiagnosticsLoading(true);
-    setDiagnosticsError(null);
-    getGptMakerDiagnostics()
-      .then(setGptMakerDiagnostics)
+    setFranchiseError(null);
+    getFranchises()
+      .then(setFranchises)
       .catch((requestError) => {
-        setDiagnosticsError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o status detalhado da integracao.");
-      })
-      .finally(() => setIsDiagnosticsLoading(false));
+        setFranchiseError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar as franquias.");
+      });
+
+    setAgentsError(null);
+    getAgents()
+      .then(setAgents)
+      .catch((requestError) => {
+        setAgentsError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os agentes.");
+      });
+
+    setWorkspaceError(null);
+    getGptMakerWorkspaces()
+      .then(setWorkspaces)
+      .catch((requestError) => {
+        setWorkspaceError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os workspaces GPTMaker.");
+      });
   }, [isAuthLoading, isSuperAdmin, user]);
 
   useEffect(() => {
     if (isAuthLoading || !user || user.role !== "ADMIN_FRANQUIA") {
-      setAgents([]);
-      setAgentsError(null);
       setFranchiseSetup(null);
-      setFranchiseSetupError(null);
-      setRecentTrainings([]);
-      setTrainingsError(null);
+      setTrainings([]);
+      setAgents([]);
       return;
     }
 
@@ -139,7 +148,6 @@ export default function DashboardPage() {
     if (!franchiseId) {
       setFranchiseSetupError("Usuario ADMIN_FRANQUIA nao possui franquia associada.");
       setAgentsError("Usuario ADMIN_FRANQUIA nao possui franquia associada.");
-      setTrainingsError("Usuario ADMIN_FRANQUIA nao possui franquia associada.");
       return;
     }
 
@@ -156,14 +164,13 @@ export default function DashboardPage() {
         setAgents(items);
         const firstAgent = items[0];
         if (!firstAgent) {
-          setRecentTrainings([]);
-          setTrainingsError(null);
+          setTrainings([]);
           return;
         }
 
         setTrainingsError(null);
         getAgentTrainings(firstAgent.id)
-          .then((trainings) => setRecentTrainings(trainings.slice(0, 3)))
+          .then((items) => setTrainings(items.slice(0, 3)))
           .catch((requestError) => {
             setTrainingsError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os treinamentos.");
           });
@@ -178,231 +185,140 @@ export default function DashboardPage() {
       <PageHeader
         eyebrow="Operacao Vavive"
         title="Dashboard"
-        description={
-          isSuperAdmin
-            ? "Acompanhe a operacao da rede, a saude da integracao GPTMaker e os principais indicadores comerciais."
-            : "Acompanhe os indicadores da sua franquia, o status do agente conectado e a evolucao da configuracao da unidade."
-        }
+        description={isSuperAdmin ? "Visao executiva da rede e da integracao GPTMaker." : "Visao operacional da sua franquia."}
       />
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        <StatCard label="Total de leads" value={isSummaryLoading ? "..." : String(summary?.totalLeads ?? 0)} hint={summaryError ?? "Atualizado pelo backend"} icon={UsersRound} />
-        <StatCard label="Novos leads" value={isSummaryLoading ? "..." : String(summary?.newLeads ?? 0)} hint={summaryError ?? "Aguardando primeiro contato"} icon={MessageCircle} />
-        <StatCard label="Em atendimento" value={isSummaryLoading ? "..." : String(summary?.activeLeads ?? 0)} hint={summaryError ?? "Conversas em andamento"} icon={TrendingUp} />
-        <StatCard label="Finalizadas" value={isSummaryLoading ? "..." : String(summary?.finishedChats ?? 0)} hint={summaryError ?? "Atendimentos encerrados"} icon={BadgeCheck} />
-        <StatCard label="Conversao" value={isSummaryLoading ? "..." : `${summary?.conversionRate?.toFixed(1).replace(".", ",") ?? "0,0"}%`} hint={summaryError ?? "Calculada a partir dos leads reais"} icon={TrendingUp} />
-      </section>
-
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Status de configuracao</p>
-          <p className="mt-3 text-lg font-semibold text-ink">{isSummaryLoading ? "..." : formatSetupStatus(summary?.setupStatus)}</p>
-          {summaryError ? <p className="mt-2 text-sm text-rose-700">{summaryError}</p> : null}
-        </div>
-        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">% concluido</p>
-          <p className="mt-3 text-lg font-semibold text-ink">{isSummaryLoading ? "..." : `${summary?.completionPercentage ?? 0}%`}</p>
-        </div>
-        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Ultima publicacao</p>
-          <p className="mt-3 text-sm font-semibold text-ink">{isSummaryLoading ? "..." : formatPublication(summary?.lastPublicationAt)}</p>
-        </div>
-        <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Ultimo treinamento</p>
-          <p className="mt-3 text-sm font-semibold text-ink">{isSummaryLoading ? "..." : summary?.lastTrainingTitle || "Nenhum treinamento registrado"}</p>
-        </div>
-      </section>
-
       {isSuperAdmin ? (
-        <section className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <h2 className="font-semibold text-ink">Historico de evolucao</h2>
-                <p className="mt-1 text-sm text-slate-500">Historico de evolucao ainda nao disponivel.</p>
-              </div>
-              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">Em preparacao</span>
-            </div>
-            <div className="mt-6">
-              <EmptyState icon={TrendingUp} title="Sem serie historica no backend" description="Os cards acima ja mostram dados reais. O historico consolidado sera integrado nas proximas etapas." />
-            </div>
-          </div>
-          <div className="rounded-2xl border border-line/80 bg-ink p-5 text-white shadow-soft">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-100">Visao geral</p>
-            <h2 className="mt-4 text-xl font-semibold">Operacao centralizada</h2>
-            <p className="mt-3 text-sm leading-7 text-white/70">
-              O painel principal agora depende dos dados reais do backend. Falhas isoladas da integracao GPTMaker nao interrompem o restante da operacao.
-            </p>
-            <div className="mt-6 h-2 rounded-full bg-white/10">
-              <div className="h-2 rounded-full bg-brand-500" style={{ width: `${summary?.completionPercentage ?? 0}%` }} />
-            </div>
-            <p className="mt-3 text-xs text-white/60">
-              {isSummaryLoading ? "Carregando progresso..." : `${summary?.completionPercentage ?? 0}% concluido - ${formatSetupStatus(summary?.setupStatus)}`}
-            </p>
-          </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard label="Total de franquias" value={String(franchises.length)} hint={franchiseError ?? "Dados reais do backend"} icon={Building2} />
+          <StatCard label="Franquias conectadas" value={String(connectedFranchises)} hint="Com workspace e agente vinculados" icon={PlugZap} />
+          <StatCard label="Agentes conectados" value={String(connectedAgents)} hint={agentsError ?? "Agentes reais cadastrados"} icon={Bot} />
+          <StatCard label="Leads reais" value={String(summary?.totalLeads ?? leads.length)} hint={summaryError ?? "Base de leads do backend"} icon={UsersRound} />
+          <StatCard label="Workspaces GPTMaker" value={String(workspaces.length)} hint={workspaceError ?? "Disponiveis para vinculo"} icon={PlugZap} />
         </section>
       ) : (
-        <section className="grid gap-4 xl:grid-cols-3">
-          <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Agente conectado</p>
-                <h2 className="mt-2 text-lg font-semibold text-ink">{connectedAgent?.name ?? "Nenhum agente vinculado"}</h2>
-              </div>
-              <StatusBadge status={connectedAgent?.status ?? "NAO_CONECTADO"} />
-            </div>
-            <p className="mt-3 text-sm text-slate-500">
-              {agentsError
-                ? agentsError
-                : connectedAgent?.connectionStatus ?? "Conecte o agente da franquia para continuar a operacao assistida."}
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
-                <FileText size={20} />
-              </div>
-              <div>
-                <h2 className="font-semibold text-ink">Ultimos treinamentos</h2>
-                <p className="mt-1 text-sm text-slate-500">Historico salvo pela API da Vavive.</p>
-              </div>
-            </div>
-            {trainingsError ? <p className="mt-4 text-sm text-rose-700">{trainingsError}</p> : null}
-            {recentTrainings.length ? (
-              <div className="mt-4 grid gap-3">
-                {recentTrainings.map((training) => (
-                  <div key={training.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-ink">{training.title}</p>
-                        <p className="mt-1 text-xs text-slate-500">{formatPublication(training.createdAt)}</p>
-                      </div>
-                      <StatusBadge status={training.status} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-500">Nenhum treinamento salvo para esta franquia.</p>
-            )}
-          </div>
-
-          <div className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
-                <Building2 size={20} />
-              </div>
-              <div>
-                <h2 className="font-semibold text-ink">Configuracao da franquia</h2>
-                <p className="mt-1 text-sm text-slate-500">Resumo operacional da unidade.</p>
-              </div>
-            </div>
-            {franchiseSetupError ? <p className="mt-4 text-sm text-rose-700">{franchiseSetupError}</p> : null}
-            <div className="mt-4 grid gap-3">
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Responsavel</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{franchiseSetup?.responsibleName || "Nao informado"}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{formatSetupStatus(franchiseSetup?.setupStatus)}</p>
-              </div>
-              <div className="rounded-xl bg-slate-50 px-4 py-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Conclusao</p>
-                <p className="mt-2 text-sm font-semibold text-ink">{franchiseSetup?.completionPercentage ?? 0}%</p>
-              </div>
-            </div>
-          </div>
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+          <StatCard label="Sua franquia" value={user?.franchise?.name ?? "Nao associada"} hint={user?.franchise ? `${user.franchise.city} / ${user.franchise.state}` : "Verifique o cadastro"} icon={Building2} />
+          <StatCard label="Leads da franquia" value={String(summary?.totalLeads ?? leads.length)} hint={summaryError ?? "Dados reais do backend"} icon={MessageCircle} />
+          <StatCard label="Agente conectado" value={currentAgent?.name ?? "Nao conectado"} hint={agentsError ?? currentAgent?.connectionStatus ?? "Aguardando vinculo"} icon={Bot} />
+          <StatCard label="Treinamentos" value={String(trainings.length)} hint={trainingsError ?? "Ultimos registros salvos"} icon={FileText} />
+          <StatCard label="Configuracao" value={`${franchiseSetup?.completionPercentage ?? summary?.completionPercentage ?? 0}%`} hint={franchiseSetupError ?? formatSetupStatus(franchiseSetup?.setupStatus ?? summary?.setupStatus)} icon={TrendingUp} />
         </section>
       )}
 
       <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Integracao</p>
-            <h2 className="mt-2 text-lg font-semibold text-ink">Status da integracao GPTMaker</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              A plataforma publica via backend da Vavive. O painel mostra apenas o estado necessario para operar com seguranca.
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">GPTMaker</p>
+            <h2 className="mt-2 text-lg font-semibold text-ink">Status da integracao</h2>
+            <p className="mt-2 text-sm text-slate-500">
+              {healthError ?? health?.message ?? "Consultando status da integracao."}
             </p>
           </div>
-          <StatusBadge status={gptMakerHealth?.status ?? "MOCK"} />
+          <StatusBadge status={integrationStatus === "Conectado" ? "CONNECTED" : "ERROR"} />
         </div>
-        <div className="mt-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Ambiente</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerHealth?.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
-          </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
+        <div className="mt-5 grid gap-3 md:grid-cols-4">
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{isHealthLoading ? "Carregando..." : gptMakerHealth?.status ?? "Indisponivel"}</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{integrationStatus}</p>
           </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Uso no painel</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{isSuperAdmin ? "Visao geral da rede" : "Uso da sua franquia"}</p>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Workspaces encontrados</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{isSuperAdmin ? workspaces.length : "Restrito ao SUPER_ADMIN"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Ambiente</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{health?.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
+          </div>
+          <div className="rounded-xl bg-slate-50 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Ultima verificacao</p>
+            <p className="mt-2 text-sm font-semibold text-ink">{lastIntegrationCheck ?? "Pendente"}</p>
           </div>
         </div>
-        <p className={`mt-4 rounded-xl px-4 py-3 text-sm ${healthError ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-600"}`}>
-          {healthError ?? gptMakerHealth?.message ?? "Carregando status da integracao GPTMaker..."}
-        </p>
-        {isSuperAdmin && gptMakerHealth ? (
-          <details className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-            <summary className="cursor-pointer font-semibold text-ink">Detalhes tecnicos</summary>
-            <div className="mt-3 grid gap-2">
-              <p>Base configurada: {gptMakerHealth.baseUrl}</p>
-              <p>Token configurado: {gptMakerHealth.tokenConfigured ? "Sim" : "Nao"}</p>
-            </div>
-          </details>
-        ) : null}
       </section>
 
       {isSuperAdmin ? (
-        <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Integracao</p>
-              <h2 className="mt-2 text-lg font-semibold text-ink">Status da integracao</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-500">
-                Esta visao detalhada fica restrita ao SUPER_ADMIN para apoiar validacoes do ambiente sem poluir a interface principal.
-              </p>
-            </div>
-            <StatusBadge status={gptMakerDiagnostics?.status ?? "MOCK"} />
-          </div>
-          <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <div className="rounded-xl bg-mist px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Ambiente</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
-            </div>
-            <div className="rounded-xl bg-mist px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Workspaces</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{isDiagnosticsLoading ? "..." : gptMakerDiagnostics?.workspaceCount ?? 0}</p>
-            </div>
-            <div className="rounded-xl bg-mist px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Token configurado</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{gptMakerDiagnostics?.tokenConfigured ? "Sim" : "Nao"}</p>
-            </div>
-            <div className="rounded-xl bg-mist px-4 py-3">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-              <p className="mt-2 text-sm font-semibold text-ink">{isDiagnosticsLoading ? "Carregando..." : gptMakerDiagnostics?.status ?? "Indisponivel"}</p>
-            </div>
-          </div>
-          <p className={`mt-4 rounded-xl px-4 py-3 text-sm ${diagnosticsError ? "bg-rose-50 text-rose-700" : "bg-slate-50 text-slate-600"}`}>
-            {diagnosticsError ?? gptMakerDiagnostics?.message ?? "Carregando status detalhado da integracao..."}
-          </p>
-          {gptMakerDiagnostics?.details ? (
-            <details className="mt-3 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
-              <summary className="cursor-pointer font-semibold text-ink">Detalhes tecnicos</summary>
-              <div className="mt-3 grid gap-2">
-                <p>{gptMakerDiagnostics.details}</p>
-                {gptMakerDiagnostics.httpStatus ? <p>HTTP: {gptMakerDiagnostics.httpStatus}</p> : null}
-                {gptMakerDiagnostics.errorCode ? <p>Codigo: {gptMakerDiagnostics.errorCode}</p> : null}
-                {gptMakerDiagnostics.endpoint ? <p>Rota consultada: {gptMakerDiagnostics.endpoint}</p> : null}
-                {gptMakerDiagnostics.responsePreview ? <p>Retorno resumido: {gptMakerDiagnostics.responsePreview}</p> : null}
+        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Workspaces GPTMaker</h2>
+            {workspaceError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{workspaceError}</p> : null}
+            {workspaces.length ? (
+              <div className="mt-4 grid gap-3">
+                {workspaces.slice(0, 5).map((workspace) => (
+                  <div key={workspace.id} className="rounded-xl bg-slate-50 px-4 py-3">
+                    <p className="font-semibold text-ink">{workspace.name || "Workspace sem nome"}</p>
+                    <p className="mt-1 text-sm text-slate-500">Disponivel para conectar franquias.</p>
+                  </div>
+                ))}
               </div>
-            </details>
-          ) : null}
+            ) : !workspaceError ? (
+              <EmptyState icon={PlugZap} title="Nenhum workspace encontrado" description="Ainda nao ha dados reais para exibir." />
+            ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Franquias recentes</h2>
+            {franchiseError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{franchiseError}</p> : null}
+            {franchises.length ? (
+              <div className="mt-4 grid gap-3">
+                {franchises.slice(0, 5).map((franchise) => (
+                  <div key={franchise.id} className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+                    <div>
+                      <p className="font-semibold text-ink">{franchise.name}</p>
+                      <p className="mt-1 text-sm text-slate-500">{franchise.city} / {franchise.state}</p>
+                    </div>
+                    <StatusBadge status={franchise.workspaceId && franchise.agentId ? "CONECTADO" : "PENDENTE"} />
+                  </div>
+                ))}
+              </div>
+            ) : !franchiseError ? (
+              <EmptyState icon={Building2} title="Nenhuma franquia cadastrada" description="Ainda nao ha dados reais para exibir." />
+            ) : null}
+          </section>
         </section>
-      ) : null}
+      ) : (
+        <section className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Agente da franquia</h2>
+            {agentsError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{agentsError}</p> : null}
+            {currentAgent ? (
+              <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-semibold text-ink">{currentAgent.name}</p>
+                    <p className="mt-1 text-sm text-slate-500">{currentAgent.connectionStatus}</p>
+                  </div>
+                  <StatusBadge status={currentAgent.status} />
+                </div>
+              </div>
+            ) : !agentsError ? (
+              <EmptyState icon={Bot} title="Nenhum agente conectado" description="A conexao com o GPTMaker pode ser configurada pelo SUPER_ADMIN." />
+            ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Ultimos treinamentos</h2>
+            {trainingsError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{trainingsError}</p> : null}
+            {trainings.length ? (
+              <div className="mt-4 grid gap-3">
+                {trainings.map((training) => (
+                  <div key={training.id} className="rounded-xl bg-slate-50 px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-semibold text-ink">{training.title}</p>
+                        <p className="mt-1 text-sm text-slate-500">{formatDate(training.createdAt)}</p>
+                      </div>
+                      <StatusBadge status={training.status} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : !trainingsError ? (
+              <EmptyState icon={FileText} title="Nenhum treinamento salvo" description="Ainda nao ha dados reais para exibir." />
+            ) : null}
+          </section>
+        </section>
+      )}
 
       <section className="grid gap-3">
         <h2 className="text-lg font-semibold text-ink">Leads recentes</h2>
@@ -418,13 +334,9 @@ export default function DashboardPage() {
               { header: "Status", cell: (lead) => <StatusBadge status={lead.status} /> }
             ]}
           />
-        ) : (
-          <EmptyState
-            icon={MessageCircle}
-            title={isLeadsLoading ? "Carregando leads" : "Nenhum lead recente"}
-            description={isLeadsLoading ? "Consultando dados reais do backend." : "Quando houver leads cadastrados, eles aparecerao aqui."}
-          />
-        )}
+        ) : !leadsError ? (
+          <EmptyState icon={MessageCircle} title="Nenhum lead recente" description="Ainda nao ha dados reais para exibir." />
+        ) : null}
       </section>
     </AppShell>
   );

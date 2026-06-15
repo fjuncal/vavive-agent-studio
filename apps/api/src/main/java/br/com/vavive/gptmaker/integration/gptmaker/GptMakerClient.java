@@ -25,6 +25,7 @@ import org.springframework.stereotype.Component;
 public class GptMakerClient {
     private static final String MISSING_TOKEN_MESSAGE = "Token da API GPTMaker nao configurado no backend.";
     private static final String PARSE_ERROR_MESSAGE = "GPTMaker respondeu, mas o backend nao conseguiu interpretar o payload.";
+    private static final String WORKSPACE_AGENT_LIMIT_MESSAGE = "Este workspace ja atingiu o limite de agentes no GPTMaker. Escolha outro workspace ou remova um agente diretamente no GPTMaker.";
     private static final String WORKSPACES_ENDPOINT = "/v2/workspaces";
     private static final String AGENTS_ENDPOINT_TEMPLATE = "/v2/workspace/%s/agents";
     private static final Logger log = LoggerFactory.getLogger(GptMakerClient.class);
@@ -167,6 +168,17 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel criar o agente no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
         } catch (FeignException exception) {
             log.warn("GPTMaker POST {} status={} bodyPreview={}", endpoint, exception.status(), preview(exception.contentUTF8()));
+            if (isWorkspaceAgentLimitError(exception)) {
+                throw new GptMakerIntegrationException(
+                    "GPTMAKER_AGENT_LIMIT",
+                    WORKSPACE_AGENT_LIMIT_MESSAGE,
+                    extractDetails(exception),
+                    exception.status() > 0 ? exception.status() : null,
+                    endpoint,
+                    preview(exception.contentUTF8())
+                );
+            }
+
             String message = exception.status() == 404
                 ? "Workspace GPTMaker nao encontrado."
                 : exception.status() == 400
@@ -655,6 +667,9 @@ public class GptMakerClient {
     }
 
     private String resolveFriendlyMessage(FeignException exception) {
+        if (isWorkspaceAgentLimitError(exception)) {
+            return WORKSPACE_AGENT_LIMIT_MESSAGE;
+        }
         if (exception.status() == 401 || exception.status() == 403) {
             return "Nao foi possivel autenticar na API GPTMaker. Verifique o token configurado no backend.";
         }
@@ -732,6 +747,17 @@ public class GptMakerClient {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    private boolean isWorkspaceAgentLimitError(FeignException exception) {
+        String content = exception.contentUTF8();
+        String message = exception.getMessage();
+        return containsWorkspaceAgentLimit(content) || containsWorkspaceAgentLimit(message);
+    }
+
+    private boolean containsWorkspaceAgentLimit(String value) {
+        return value != null
+            && value.toLowerCase().contains("workspace already have the maximum number of assistants");
     }
 
     private String sanitize(String value) {

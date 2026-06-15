@@ -8,6 +8,11 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRes
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import feign.FeignException;
+import feign.Request;
+import feign.Response;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
@@ -212,6 +217,37 @@ class GptMakerClientTest {
     }
 
     @Test
+    void createAgentReturnsFriendlyErrorWhenWorkspaceReachedAgentLimit() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        feignClient.createAgentException = feignException(
+            400,
+            """
+            {
+              "message": "Workspace already have the maximum number of assistants"
+            }
+            """
+        );
+
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            new ObjectMapper()
+        );
+
+        GptMakerClient.GptMakerIntegrationException exception = assertThrows(
+            GptMakerClient.GptMakerIntegrationException.class,
+            () -> client.createAgent(
+                "ws-1",
+                new GptMakerCreateAgentRequest("Assistente Vavive", null, "Contexto", "NORMAL", "SALE", "Vavive", "https://vavive.com.br", "Descricao")
+            )
+        );
+
+        assertEquals("GPTMAKER_AGENT_LIMIT", exception.getErrorCode());
+        assertEquals("Este workspace ja atingiu o limite de agentes no GPTMaker. Escolha outro workspace ou remova um agente diretamente no GPTMaker.", exception.getMessage());
+        assertEquals(400, exception.getHttpStatus());
+    }
+
+    @Test
     void listWorkspacesAcceptsWrappedDataPayload() {
         TrackingFeignClient feignClient = new TrackingFeignClient();
         ObjectMapper objectMapper = new ObjectMapper();
@@ -396,6 +432,7 @@ class GptMakerClientTest {
         boolean trainingCalled;
         boolean intentCalled;
         boolean createAgentCalled;
+        RuntimeException createAgentException;
         String workspacePayload = "[]";
         String agentPayload = "[]";
         String createAgentPayload = "{}";
@@ -417,6 +454,9 @@ class GptMakerClientTest {
             createAgentCalled = true;
             lastCreateAgentWorkspaceId = workspaceId;
             lastCreateAgentRequest = request;
+            if (createAgentException != null) {
+                throw createAgentException;
+            }
             return ResponseEntity.ok(createAgentPayload);
         }
 
@@ -431,5 +471,23 @@ class GptMakerClientTest {
             intentCalled = true;
             return new GptMakerCreateIntentResponse(true, "intent-1");
         }
+    }
+
+    private static FeignException feignException(int status, String body) {
+        Request request = Request.create(
+            Request.HttpMethod.POST,
+            "/v2/workspace/ws-1/agents",
+            Map.of(),
+            null,
+            StandardCharsets.UTF_8,
+            null
+        );
+        Response response = Response.builder()
+            .status(status)
+            .reason("Bad Request")
+            .request(request)
+            .body(body, StandardCharsets.UTF_8)
+            .build();
+        return FeignException.errorStatus("createAgent", response);
     }
 }

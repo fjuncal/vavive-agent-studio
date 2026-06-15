@@ -266,7 +266,7 @@ public class FranchiseService {
                 )
             );
         } catch (GptMakerIntegrationException exception) {
-            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }
 
         franchise.setWorkspaceId(request.workspaceId());
@@ -527,5 +527,14 @@ public class FranchiseService {
             return context;
         }
         return customJobDescription;
+    }
+
+    private HttpStatus statusForGptMakerException(GptMakerIntegrationException exception) {
+        if ("GPTMAKER_AGENT_LIMIT".equals(exception.getErrorCode())
+            || "INVALID_WORKSPACE".equals(exception.getErrorCode())
+            || "INVALID_AGENT_NAME".equals(exception.getErrorCode())) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        return HttpStatus.BAD_GATEWAY;
     }
 }

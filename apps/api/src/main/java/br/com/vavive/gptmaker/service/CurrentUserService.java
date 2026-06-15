@@ -22,7 +22,7 @@ public class CurrentUserService {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao autenticado");
         }
-        return userRepository.findByEmailIgnoreCase(authentication.getName())
+        return userRepository.findByEmailIgnoreCaseWithFranchise(authentication.getName())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao encontrado"));
     }
 

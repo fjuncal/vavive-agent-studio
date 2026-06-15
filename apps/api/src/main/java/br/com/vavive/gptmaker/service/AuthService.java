@@ -33,7 +33,7 @@ public class AuthService {
     }
 
     public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByEmailIgnoreCase(request.email())
+        User user = userRepository.findByEmailIgnoreCaseWithFranchise(request.email())
             .filter(User::isActive)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Credenciais invalidas"));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {

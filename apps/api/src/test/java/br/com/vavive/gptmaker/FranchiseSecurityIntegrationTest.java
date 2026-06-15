@@ -57,6 +57,8 @@ class FranchiseSecurityIntegrationTest {
     @Test
     void superAdminCreatesFranchiseAdminUser() throws Exception {
         Franchise franchise = franchiseRepository.save(new Franchise("Vavive Moema", "11.111.111/0001-11", "Sao Paulo", "SP", "ATIVA"));
+        long agentCount = agentRepository.count();
+        long trainingCount = trainingRepository.count();
 
         mockMvc.perform(post("/franchises/{id}/admin-user", franchise.getId())
                 .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
@@ -77,6 +79,18 @@ class FranchiseSecurityIntegrationTest {
         var createdUser = userRepository.findByEmailIgnoreCase("moema@vavive.com").orElseThrow();
         assertThat(createdUser.getFranchise().getId()).isEqualTo(franchise.getId());
         assertThat(createdUser.getPasswordHash()).isNotEqualTo("admin123");
+
+        Franchise unchangedFranchise = franchiseRepository.findById(franchise.getId()).orElseThrow();
+        assertThat(unchangedFranchise.getWorkspaceId()).isNull();
+        assertThat(unchangedFranchise.getAgentId()).isNull();
+        assertThat(agentRepository.count()).isEqualTo(agentCount);
+        assertThat(trainingRepository.count()).isEqualTo(trainingCount);
+
+        mockMvc.perform(get("/me")
+                .header("Authorization", bearerToken("moema@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.role").value("ADMIN_FRANQUIA"))
+            .andExpect(jsonPath("$.franchise.id").value(franchise.getId().toString()));
     }
 
     @Test
@@ -99,6 +113,14 @@ class FranchiseSecurityIntegrationTest {
     @Test
     void adminFranquiaCannotListGlobalWorkspaces() throws Exception {
         mockMvc.perform(get("/gptmaker/workspaces")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/franchises/gptmaker/workspaces")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/franchises/gptmaker/workspaces/{workspaceId}/agents", "mock-workspace-vavive")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isForbidden());
     }
@@ -256,6 +278,34 @@ class FranchiseSecurityIntegrationTest {
         assertThat(trainings).isNotEmpty();
         assertThat(trainings.getFirst().getStatus()).isEqualTo("SALVO_LOCALMENTE");
         assertThat(trainings.getFirst().getContent()).contains("A Vavive e uma empresa de servicos de limpeza e cuidados.");
+    }
+
+    @Test
+    void superAdminCanLinkExistingGptMakerAgent() throws Exception {
+        Franchise franchise = franchiseRepository.save(new Franchise("Vavive Jardins", "55.555.555/0001-55", "Sao Paulo", "SP", "ATIVA"));
+        long trainingCount = trainingRepository.count();
+
+        mockMvc.perform(post("/franchises/{id}/gptmaker-connection", franchise.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "workspaceId": "mock-workspace-vavive",
+                      "agentId": "mock-agent-mock-workspace-vavive-01"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.workspaceId").value("mock-workspace-vavive"))
+            .andExpect(jsonPath("$.workspaceName").value("Workspace Vavive Demo"))
+            .andExpect(jsonPath("$.agentId").value("mock-agent-mock-workspace-vavive-01"))
+            .andExpect(jsonPath("$.agentName").value("Assistente Comercial"))
+            .andExpect(jsonPath("$.status").value("CONECTADO"));
+
+        Franchise updated = franchiseRepository.findById(franchise.getId()).orElseThrow();
+        assertThat(updated.getWorkspaceId()).isEqualTo("mock-workspace-vavive");
+        assertThat(updated.getAgentId()).isEqualTo("mock-agent-mock-workspace-vavive-01");
+        assertThat(agentRepository.findByFranchiseId(franchise.getId())).hasSize(1);
+        assertThat(trainingRepository.count()).isEqualTo(trainingCount);
     }
 
     private String bearerToken(String email, String password) throws Exception {

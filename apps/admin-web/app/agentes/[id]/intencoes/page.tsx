@@ -13,6 +13,9 @@ export default async function AgentIntentionsPage({ params }: { params: Promise<
         title="Intencoes do agente"
         description="Defina os tipos de pedido que o agente deve reconhecer antes de responder ou transferir atendimento."
       />
+      <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        Configuracao demonstrativa - sera integrada ao GPTMaker nas proximas etapas.
+      </div>
       <section className="grid gap-4 lg:grid-cols-2">
         {intentTemplates.map((intent) => (
           <article key={intent.title} className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
@@ -26,8 +29,8 @@ export default async function AgentIntentionsPage({ params }: { params: Promise<
                 <p className="mt-3 rounded-xl bg-slate-50 p-3 text-sm text-slate-500">Exemplo: "{intent.example}"</p>
               </div>
             </div>
-            <button className="mt-5 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
-              <Plus size={16} /> Adicionar intencao
+            <button className="mt-5 inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-600" disabled>
+              <Plus size={16} /> Integracao futura
             </button>
           </article>
         ))}
