@@ -64,6 +64,11 @@ public class AgentService {
     }
 
     @Transactional(readOnly = true)
+    public AgentResponse get(UUID agentId) {
+        return toResponse(requireAccessibleAgent(agentId));
+    }
+
+    @Transactional(readOnly = true)
     public List<TrainingResponse> listTrainings(UUID agentId) {
         GptMakerAgent agent = requireAccessibleAgent(agentId);
         return trainingRepository.findByAgentIdOrderByCreatedAtDesc(agent.getId()).stream()
@@ -151,6 +156,7 @@ public class AgentService {
             agent.getFranchise().getId(),
             agent.getExternalId(),
             agent.getName(),
+            agent.getAvatar(),
             agent.getStatus(),
             agent.getToneOfVoice(),
             agent.getFranchise().getName(),

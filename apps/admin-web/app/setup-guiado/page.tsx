@@ -23,7 +23,7 @@ import clsx from "clsx";
 import { AlertCircle, CheckCircle2, Loader2, Send, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const setupSteps = ["Dados da Franquia", "Servicos", "Precos", "Regioes", "Horarios", "FAQ", "Regras", "Tom de Voz", "Revisao Final"];
+const setupSteps = ["Escolher franquia", "Dados da franquia", "Textos padrao", "Complementos", "Gerar treinamento", "Enviar para GPTMaker"];
 
 type RuleTemplate = {
   title: string;
@@ -176,10 +176,6 @@ export default function GuidedSetupPage() {
       .map((text) => ({ title: text.title, description: text.content })),
     [defaultTexts]
   );
-  const toneSuggestions = useMemo(
-    () => defaultTexts.filter((text) => text.active && text.category === "TOM_DE_VOZ"),
-    [defaultTexts]
-  );
   const progressLabel = setup ? `${setup.completionPercentage}% concluido - ${setup.setupStatus.replaceAll("_", " ")}` : "Carregando configuracao";
   const previewTitle = useMemo(() => `Treinamento ${form.franchiseName || "Vavive"}`, [form.franchiseName]);
   const previewContent = useMemo(() => setup?.lastGeneratedTraining || buildTrainingPreview(form, selectedRules), [form, selectedRules, setup?.lastGeneratedTraining]);
@@ -207,15 +203,10 @@ export default function GuidedSetupPage() {
   }, [user]);
 
   useEffect(() => {
-    if (user?.role !== "SUPER_ADMIN") {
-      setDefaultTexts([]);
-      return;
-    }
-
     getDefaultAgentTexts()
       .then((items) => setDefaultTexts(items.filter((item) => item.active)))
       .catch(() => setDefaultTexts([]));
-  }, [user?.role]);
+  }, []);
 
   useEffect(() => {
     if (!selectedFranchiseId) {
@@ -364,7 +355,7 @@ export default function GuidedSetupPage() {
         <Stepper
           steps={setupSteps}
           current={currentStep}
-          completed={setup ? setupSteps.map((_, index) => (index < Math.floor((setup.completionPercentage / 100) * 8) ? index : -1)).filter((index) => index >= 0) : []}
+          completed={setup ? setupSteps.map((_, index) => (index < Math.floor((setup.completionPercentage / 100) * (setupSteps.length - 1)) ? index : -1)).filter((index) => index >= 0) : []}
           progressLabel={progressLabel}
           onStepClick={(index) => {
             if (isSaving || isPublishing) {
@@ -405,7 +396,7 @@ export default function GuidedSetupPage() {
             </section>
           ) : null}
 
-          {!isLoading && currentStep === 0 ? (
+          {!isLoading && currentStep === 1 ? (
             <FormSection title="Dados da Franquia" description="Base comercial e operacional usada em todo o treinamento do agente.">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field label="Nome comercial" placeholder="Vavive Vila Mariana" value={form.franchiseName} onChange={(value) => updateField("franchiseName", value)} />
@@ -417,38 +408,49 @@ export default function GuidedSetupPage() {
             </FormSection>
           ) : null}
 
-          {!isLoading && currentStep === 1 ? (
-            <FormSection title="Servicos" description="Liste os servicos que o agente pode apresentar ou usar para triagem.">
-              <Field label="Servicos oferecidos" placeholder="Cuidador por hora, plantao noturno, acompanhamento hospitalar" textarea value={form.services} onChange={(value) => updateField("services", value)} />
-            </FormSection>
-          ) : null}
-
           {!isLoading && currentStep === 2 ? (
-            <FormSection title="Precos" description="Explique como o agente deve responder quando o cliente pedir valores.">
-              <Field label="Precos e diretrizes comerciais" placeholder="Faixas aprovadas, condicoes e quando escalar para humano" textarea value={form.prices} onChange={(value) => updateField("prices", value)} />
+            <FormSection title="Textos padrao aplicados" description="Sugestoes ativas cadastradas pela matriz para orientar regras, tom de voz e treinamento.">
+              {defaultTexts.length ? (
+                <div className="grid gap-3">
+                  {defaultTexts.map((item) => (
+                    <article key={item.id} className="rounded-2xl border border-line/80 bg-white p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-500">{item.category.replaceAll("_", " ")}</p>
+                          <h3 className="mt-1 font-semibold text-ink">{item.title}</h3>
+                        </div>
+                        {item.category === "TOM_DE_VOZ" ? (
+                          <button type="button" onClick={() => updateField("toneOfVoice", item.content)} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                            Usar como tom
+                          </button>
+                        ) : item.category === "REGRAS_ATENDIMENTO" ? (
+                          <button type="button" onClick={() => toggleRule(item.title, true)} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
+                            Aplicar regra
+                          </button>
+                        ) : null}
+                      </div>
+                      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{item.content}</p>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Ainda nao ha textos padrao ativos cadastrados pela matriz.</p>
+              )}
             </FormSection>
           ) : null}
 
           {!isLoading && currentStep === 3 ? (
-            <FormSection title="Regioes" description="Defina bairros, cidades e regras de cobertura.">
-              <Field label="Regioes atendidas" placeholder="Bairros, cidades, CEPs ou excecoes importantes" textarea value={form.regions} onChange={(value) => updateField("regions", value)} />
-            </FormSection>
-          ) : null}
-
-          {!isLoading && currentStep === 4 ? (
-            <FormSection title="Horarios" description="Informe disponibilidade de atendimento, janelas e plantao.">
-              <Field label="Horarios e disponibilidade" placeholder="Horario comercial, plantao e restricoes" textarea value={form.schedules} onChange={(value) => updateField("schedules", value)} />
-            </FormSection>
-          ) : null}
-
-          {!isLoading && currentStep === 5 ? (
-            <FormSection title="FAQ" description="Adicione respostas aprovadas para as perguntas mais frequentes.">
-              <Field label="FAQ aprovado" placeholder="Pergunta: ... / Resposta: ..." textarea value={form.faq} onChange={(value) => updateField("faq", value)} />
-            </FormSection>
-          ) : null}
-
-          {!isLoading && currentStep === 6 ? (
             <div className="grid gap-5">
+              <FormSection title="Complementos da franquia" description="Complete as informacoes locais que deixam o agente pronto para atendimento real.">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Servicos oferecidos" placeholder="Cuidador por hora, plantao noturno, acompanhamento hospitalar" textarea value={form.services} onChange={(value) => updateField("services", value)} />
+                  <Field label="Precos e diretrizes comerciais" placeholder="Faixas aprovadas, condicoes e quando escalar para humano" textarea value={form.prices} onChange={(value) => updateField("prices", value)} />
+                  <Field label="Regioes atendidas" placeholder="Bairros, cidades, CEPs ou excecoes importantes" textarea value={form.regions} onChange={(value) => updateField("regions", value)} />
+                  <Field label="Horarios e disponibilidade" placeholder="Horario comercial, plantao e restricoes" textarea value={form.schedules} onChange={(value) => updateField("schedules", value)} />
+                  <Field label="FAQ aprovado" placeholder="Pergunta: ... / Resposta: ..." textarea value={form.faq} onChange={(value) => updateField("faq", value)} />
+                  <Field label="Tom de voz" placeholder="Acolhedor, objetivo, consultivo e sem promessas nao validadas" textarea value={form.toneOfVoice} onChange={(value) => updateField("toneOfVoice", value)} />
+                </div>
+              </FormSection>
               <section className="grid gap-4">
                 <FormSection title="Regras" description="Sugestoes ativas cadastradas pela matriz. Campos especificos da franquia ficam em regras adicionais.">
                   {ruleTemplates.length ? (
@@ -474,28 +476,7 @@ export default function GuidedSetupPage() {
             </div>
           ) : null}
 
-          {!isLoading && currentStep === 7 ? (
-            <FormSection title="Tom de Voz" description="Descreva como o agente deve soar nas conversas com leads e familiares.">
-              {toneSuggestions.length ? (
-                <div className="grid gap-3">
-                  {toneSuggestions.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => updateField("toneOfVoice", item.content)}
-                      className="rounded-2xl bg-slate-50 p-4 text-left text-sm text-slate-600 transition hover:bg-slate-100"
-                    >
-                      <span className="font-semibold text-ink">{item.title}</span>
-                      <span className="mt-2 block whitespace-pre-line leading-6">{item.content}</span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              <Field label="Tom de voz" placeholder="Acolhedor, objetivo, consultivo e sem promessas nao validadas" textarea value={form.toneOfVoice} onChange={(value) => updateField("toneOfVoice", value)} />
-            </FormSection>
-          ) : null}
-
-          {!isLoading && currentStep === 8 ? (
+          {!isLoading && currentStep >= 4 ? (
             <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
               <section className="grid gap-5">
                 <FormSection title="Revisao final" description="Confira todo o contexto salvo antes de gerar e publicar o agente.">
@@ -554,7 +535,7 @@ export default function GuidedSetupPage() {
                     >
                       <p className="font-semibold">{publishResult.success ? "Publicacao concluida" : "Publicacao nao concluida"}</p>
                       <p className="mt-2">{publishResult.message}</p>
-                      <p className="mt-2">Registro da integracao: {publishResult.externalReference || "Nao retornado"}</p>
+                      <p className="mt-2">Referencia do envio: {publishResult.externalReference || "Nao retornada"}</p>
                       {!publishResult.success ? <p className="mt-2">O treinamento foi salvo localmente para nova tentativa.</p> : null}
                     </div>
                   ) : null}

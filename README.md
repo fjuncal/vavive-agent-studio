@@ -82,21 +82,29 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 ## Fluxo de nova franquia
 
 1. `SUPER_ADMIN` cria a franquia no Vavive Agent Studio.
-2. `SUPER_ADMIN` cria o usuario `ADMIN_FRANQUIA`.
-3. A workspace precisa existir previamente no GPTMaker.
-4. `SUPER_ADMIN` seleciona uma workspace existente.
-5. `SUPER_ADMIN` cria o agente GPTMaker da franquia pela plataforma.
-6. O sistema salva `workspaceId`, `workspaceName`, `agentId`, `agentName` e a sincronizacao local.
-7. O sistema cria ou atualiza o `GptMakerAgent` local e salva um treinamento inicial local com o contexto padrao Vavive.
-8. `ADMIN_FRANQUIA` entra e acessa apenas a propria franquia, seus leads, agentes e configuracoes permitidas.
+2. Pode vincular uma workspace GPTMaker existente ou deixar a franquia pendente.
+3. `SUPER_ADMIN` cria o usuario `ADMIN_FRANQUIA`.
+4. `SUPER_ADMIN` cria um agente GPTMaker ou vincula um agente existente da workspace.
+5. O sistema salva `workspaceId`, `workspaceName`, `agentId`, `agentName`, avatar e sincronizacao local.
+6. Textos padrao ativos da matriz alimentam setup, contexto inicial e treinamentos.
+7. `ADMIN_FRANQUIA` entra e acessa apenas a propria franquia, agente, leads e configuracoes permitidas.
+8. Chat GPTMaker, assumir atendimento e disparos automaticos ficam para uma etapa futura.
 
 ## Regras do MVP
 
 - Nao criar workspace GPTMaker automaticamente.
 - Nao inventar endpoint de criacao de workspace.
 - Apenas `SUPER_ADMIN` pode listar workspaces GPTMaker, acessar diagnostics e provisionar ou trocar agente GPTMaker.
-- `ADMIN_FRANQUIA` nao pode listar workspaces globais, nao pode acessar diagnostics GPTMaker e nao pode alterar a conexao GPTMaker da franquia.
+- `ADMIN_FRANQUIA` nao ve o conceito de workspace, nao pode acessar diagnostics GPTMaker e nao pode alterar a conexao GPTMaker da franquia.
 - Nao implementar chat, webhooks ou disparos pos-atendimento neste MVP.
+
+## Roadmap de conversas
+
+- Conversas GPTMaker com historico real por franquia.
+- Assumir atendimento humano quando necessario.
+- Enviar mensagem manual pela matriz ou franquia autorizada.
+- Devolver atendimento para IA.
+- Disparo automatico pos-atendimento fechado.
 
 ## Como testar GPTMaker real
 
@@ -115,9 +123,9 @@ Documentacao oficial: https://developer.gptmaker.ai/api-reference/introduction
 ## Seeds e usuarios de teste
 
 - `admin@vavive.com` / `admin123`
-- `franquia@vavive.com` / `admin123`
+- `franquia@vavive.com` / `admin123`, criado somente quando existir uma franquia real com workspace associada.
 
-O seed inicial cria uma franquia de exemplo, um `ADMIN_FRANQUIA`, um agente local mockado e alguns leads.
+O seed inicial nao cria franquias, leads ou agentes falsos. Em desenvolvimento, crie ou vincule dados reais pelo fluxo da plataforma.
 
 ## Importante para agentes de IA / OpenCode / Codex
 

@@ -547,6 +547,7 @@ public class FranchiseService {
             ));
         agent.setExternalId(agentResponse.id());
         agent.setName(agentResponse.name());
+        agent.setAvatar(agentResponse.avatar());
         agent.setStatus("ATIVO");
         if (agent.getToneOfVoice() == null || agent.getToneOfVoice().isBlank()) {
             agent.setToneOfVoice(defaultToneOfVoice(franchise));
@@ -567,6 +568,7 @@ public class FranchiseService {
             ));
         agent.setExternalId(createdAgent.id());
         agent.setName(franchise.getAgentName());
+        agent.setAvatar(createdAgent.avatar());
         agent.setStatus("ATIVO");
         agent.setToneOfVoice(resolveToneOfVoice(communicationType, franchise));
         return agentRepository.save(agent);

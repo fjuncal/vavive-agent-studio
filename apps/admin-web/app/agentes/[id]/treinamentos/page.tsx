@@ -6,7 +6,7 @@ import { Field, FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TrainingPreviewCard } from "@/components/TrainingPreviewCard";
-import { createAgentTraining, getAgentTrainings, getAgents, getGptMakerHealth, type AgentSummary, type GptMakerHealth, type TrainingSummary } from "@/lib/api";
+import { createAgentTraining, getAgent, getAgentTrainings, getGptMakerHealth, type AgentSummary, type GptMakerHealth, type TrainingSummary } from "@/lib/api";
 import { AlertCircle, BookOpenText, CheckCircle2, FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -38,8 +38,8 @@ const defaultForm: TrainingForm = {
 
 const guidanceCards = [
   {
-    title: "Nao escreva prompt tecnico",
-    description: "Preencha os blocos com informacoes da operacao. O sistema organiza o texto final para voce."
+    title: "Use linguagem da operacao",
+    description: "Preencha os blocos com informacoes da franquia. O sistema organiza o texto final para voce."
   },
   {
     title: "Revise antes de enviar",
@@ -115,9 +115,8 @@ export default function AgentTrainingsPage() {
     }
 
     setIsLoading(true);
-    Promise.all([getAgents(), getAgentTrainings(params.id), getGptMakerHealth()])
-      .then(([agents, trainings, health]) => {
-        const currentAgent = agents.find((item) => item.id === params.id) ?? null;
+    Promise.all([getAgent(params.id), getAgentTrainings(params.id), getGptMakerHealth()])
+      .then(([currentAgent, trainings, health]) => {
         setAgent(currentAgent);
         setHistory(trainings);
         setGptMakerHealth(health);
@@ -194,7 +193,7 @@ export default function AgentTrainingsPage() {
       <PageHeader
         eyebrow="Treinamento"
         title="Treinamento do Agente"
-        description="Ensine o agente com informacoes da sua franquia sem precisar escrever prompts tecnicos."
+        description="Ensine o agente com informacoes da sua franquia e revise o conteudo antes de publicar."
       />
       {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Ambiente de desenvolvimento: sem agente GPTMaker real conectado, este fluxo permanece apenas em modo local.</div> : null}
 
@@ -223,14 +222,10 @@ export default function AgentTrainingsPage() {
           </div>
           <StatusBadge status={hasRealExternalId ? "CONNECTED" : "ERROR"} />
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-3">
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
           <div className="rounded-xl bg-mist px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
             <p className="mt-2 text-sm font-semibold text-ink">{hasRealExternalId ? "Conectado" : "Nao conectado"}</p>
-          </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">External ID</p>
-            <p className="mt-2 break-all text-sm font-semibold text-ink">{agent?.externalId || "Nao configurado"}</p>
           </div>
           <div className="rounded-xl bg-mist px-4 py-3">
             <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>

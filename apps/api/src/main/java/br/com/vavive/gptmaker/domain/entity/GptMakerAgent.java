@@ -19,6 +19,7 @@ public class GptMakerAgent {
 
     private String externalId;
     private String name;
+    private String avatar;
     private String status;
     private String toneOfVoice;
 
@@ -62,6 +63,14 @@ public class GptMakerAgent {
 
     public void setName(String name) {
         this.name = name;
+    }
+
+    public String getAvatar() {
+        return avatar;
+    }
+
+    public void setAvatar(String avatar) {
+        this.avatar = avatar;
     }
 
     public String getStatus() {

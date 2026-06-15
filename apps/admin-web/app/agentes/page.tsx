@@ -5,30 +5,40 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
-import { getFranchises, type FranchiseSummary } from "@/lib/api";
+import { getAgents, getFranchises, type AgentSummary, type FranchiseSummary } from "@/lib/api";
 import { Bot, Building2, FileText, PlugZap } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
 function statusFor(franchise: FranchiseSummary) {
   if (!franchise.workspaceId) {
-    return "SEM_WORKSPACE";
+    return "PENDENTE_CONFIGURACAO";
   }
   if (!franchise.agentId) {
     return "SEM_AGENTE";
   }
-  return "CONECTADO";
+  return franchise.status || "ATIVA";
 }
 
 export default function AgentsPage() {
   const { user } = useAuth();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
+  const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [error, setError] = useState<string | null>(null);
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
-    getFranchises()
-      .then(setFranchises)
+    Promise.allSettled([getFranchises(), getAgents()])
+      .then(([franchiseResult, agentResult]) => {
+        if (franchiseResult.status === "fulfilled") {
+          setFranchises(franchiseResult.value);
+        } else {
+          throw franchiseResult.reason;
+        }
+        if (agentResult.status === "fulfilled") {
+          setAgents(agentResult.value);
+        }
+      })
       .catch((requestError) => {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar as franquias.");
       });
@@ -46,11 +56,19 @@ export default function AgentsPage() {
         <section className="grid gap-4 lg:grid-cols-2">
           {franchises.map((franchise) => (
             <article key={franchise.id} className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+              {(() => {
+                const agent = agents.find((item) => item.franchiseId === franchise.id);
+                return (
+                  <>
               <div className="flex items-start justify-between gap-4">
                 <div className="flex gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
-                    <Building2 size={22} />
-                  </div>
+                  {agent?.avatar ? (
+                    <img src={agent.avatar} alt={agent.name} className="h-12 w-12 rounded-2xl object-cover ring-1 ring-line" />
+                  ) : (
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                      <Building2 size={22} />
+                    </div>
+                  )}
                   <div>
                     <h2 className="font-semibold text-ink">{franchise.name}</h2>
                     <p className="mt-1 text-sm text-slate-500">{franchise.city} / {franchise.state}</p>
@@ -87,12 +105,15 @@ export default function AgentsPage() {
                   Abrir franquia
                 </Link>
                 {franchise.agentId ? (
-                  <Link href="/setup-guiado" className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700">
+                  <Link href={agent ? `/agentes/${agent.id}` : "/setup-guiado"} className="inline-flex items-center gap-2 rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-700">
                     <FileText size={16} />
-                    Setup do agente
+                    Abrir agente
                   </Link>
                 ) : null}
               </div>
+                  </>
+                );
+              })()}
             </article>
           ))}
         </section>

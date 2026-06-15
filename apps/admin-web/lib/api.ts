@@ -63,6 +63,7 @@ export type AgentSummary = {
   franchiseId: string;
   externalId: string;
   name: string;
+  avatar?: string | null;
   status: string;
   toneOfVoice: string;
   franchiseName: string;
@@ -388,6 +389,10 @@ export function getLeads() {
 
 export function getAgents() {
   return apiFetch<AgentSummary[]>("/agents");
+}
+
+export function getAgent(id: string) {
+  return apiFetch<AgentSummary>(`/agents/${id}`);
 }
 
 export function getFranchiseSetup(id: string) {

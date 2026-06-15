@@ -628,16 +628,28 @@ export default function FranchiseDetailPage() {
                       <option value="PERSONAL">Personalizado</option>
                     </select>
                   </label>
-                  <label className="grid gap-1.5">
+                  <div className="grid gap-2 md:col-span-2">
                     <span className="text-sm font-medium text-slate-700">Avatar</span>
-                    <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedAvatar} onChange={(event) => setSelectedAvatar(event.target.value)}>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       {avatarOptions.map((option) => (
-                        <option key={option.label} value={option.value}>
-                          {option.label}
-                        </option>
+                        <button
+                          key={option.label}
+                          type="button"
+                          onClick={() => setSelectedAvatar(option.value)}
+                          className={`rounded-2xl border p-3 text-left transition ${selectedAvatar === option.value ? "border-brand-500 bg-brand-50 ring-4 ring-brand-50" : "border-line bg-white hover:bg-slate-50"}`}
+                        >
+                          {option.value ? (
+                            <img src={option.value} alt={option.label} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" />
+                          ) : (
+                            <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold text-slate-500">
+                              Sem foto
+                            </div>
+                          )}
+                          <span className="mt-3 block text-sm font-semibold text-ink">{option.label}</span>
+                        </button>
                       ))}
-                    </select>
-                  </label>
+                    </div>
+                  </div>
                   <label className="grid gap-1.5">
                     <span className="text-sm font-medium text-slate-700">Site</span>
                     <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={jobSite} onChange={(event) => setJobSite(event.target.value)} />
@@ -688,7 +700,7 @@ export default function FranchiseDetailPage() {
         isOpen={confirmAction !== null}
         isSubmitting={isSavingAgent}
         title="Confirmar alteracao critica"
-        description="Essa acao pode desconectar a franquia do agente GPTMaker. Confirme para continuar."
+        description="Essa acao pode desconectar a franquia do agente GPTMaker e afetar o atendimento. Confirme para continuar."
         confirmLabel="Confirmar"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {

@@ -317,6 +317,7 @@ class FranchiseSecurityIntegrationTest {
               "agentName": "Assistente Vavive - Campo Belo",
               "communicationType": "NORMAL",
               "type": "SALE",
+              "avatar": "https://assets.vavive.com/avatar-neutro-vavive.png",
               "jobName": "Vavive",
               "jobSite": "https://vavive.com.br",
               "jobDescription": "Contexto base da Vavive + descricao da franquia"
@@ -345,7 +346,9 @@ class FranchiseSecurityIntegrationTest {
         assertThat(updated.getAgentId()).isEqualTo("mock-agent-created-ws-real-1");
         assertThat(updated.getAgentName()).isEqualTo("Assistente Vavive - Campo Belo");
 
-        assertThat(agentRepository.findByFranchiseId(franchise.getId())).hasSize(1);
+        var localAgents = agentRepository.findByFranchiseId(franchise.getId());
+        assertThat(localAgents).hasSize(1);
+        assertThat(localAgents.getFirst().getAvatar()).isEqualTo("https://assets.vavive.com/avatar-neutro-vavive.png");
         var trainings = trainingRepository.findAll().stream()
             .filter(training -> training.getAgent().getFranchise().getId().equals(franchise.getId()))
             .toList();
@@ -629,7 +632,37 @@ class FranchiseSecurityIntegrationTest {
 
         mockMvc.perform(get("/default-agent-texts")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.id == '%s')]".formatted(id)).doesNotExist());
+
+        mockMvc.perform(post("/default-agent-texts")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "title": "Nao permitido",
+                      "category": "FAQ",
+                      "content": "ADMIN_FRANQUIA nao gerencia textos globais.",
+                      "active": true
+                    }
+                    """))
             .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void getAgentReturnsAvatarForAccessibleAgent() throws Exception {
+        GptMakerAgent agent = agentRepository.findAll().stream()
+            .filter(item -> "mock-agent-mock-workspace-vavive-01".equals(item.getExternalId()))
+            .findFirst()
+            .orElseThrow();
+        agent.setAvatar("https://assets.vavive.com/avatar-profissional-feminino.png");
+        agentRepository.save(agent);
+
+        mockMvc.perform(get("/agents/{id}", agent.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.id").value(agent.getId().toString()))
+            .andExpect(jsonPath("$.avatar").value("https://assets.vavive.com/avatar-profissional-feminino.png"));
     }
 
     @Test

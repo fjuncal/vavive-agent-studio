@@ -8,6 +8,7 @@ public record AgentResponse(
     UUID franchiseId,
     String externalId,
     String name,
+    String avatar,
     String status,
     String toneOfVoice,
     String franchiseName,

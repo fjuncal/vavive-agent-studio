@@ -4,8 +4,8 @@ import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { getAgents, type AgentSummary } from "@/lib/api";
-import { FileText, GitBranch, ShieldCheck } from "lucide-react";
+import { getAgent, type AgentSummary } from "@/lib/api";
+import { Bot, FileText, GitBranch, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -16,11 +16,12 @@ export default function AgentDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    getAgents()
-      .then((items) => {
-        const current = items.find((item) => item.id === params?.id) ?? null;
-        setAgent(current);
-      })
+    if (!params?.id) {
+      return;
+    }
+
+    getAgent(params.id)
+      .then(setAgent)
       .catch((requestError) => {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o agente.");
       });
@@ -37,10 +38,20 @@ export default function AgentDetailPage() {
       </section>
       <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
-          <div>
+          <div className="flex items-start gap-4">
+            {agent?.avatar ? (
+              <img src={agent.avatar} alt={agent.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" />
+            ) : (
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                <Bot size={26} />
+              </div>
+            )}
+            <div>
             <h2 className="text-lg font-semibold text-ink">Configuracao atual</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-600">ID externo: {agent?.externalId ?? "-"}</p>
-            <p className="mt-1 text-sm leading-6 text-slate-600">Tom de voz: {agent?.toneOfVoice ?? "-"}</p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">Franquia: {agent?.franchiseName ?? "-"}</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">Tom de voz: {agent?.toneOfVoice ?? "-"}</p>
+              <p className="mt-1 text-sm leading-6 text-slate-600">{agent?.connectionStatus ?? "Status em carregamento"}</p>
+            </div>
           </div>
           <StatusBadge status={agent?.status ?? "ATIVO"} />
         </div>

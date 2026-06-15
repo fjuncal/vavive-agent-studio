@@ -1,6 +1,7 @@
 package br.com.vavive.gptmaker.service;
 
 import br.com.vavive.gptmaker.domain.entity.DefaultAgentText;
+import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.CreateDefaultAgentTextRequest;
 import br.com.vavive.gptmaker.dto.DefaultAgentTextResponse;
 import br.com.vavive.gptmaker.dto.UpdateDefaultAgentTextRequest;
@@ -24,8 +25,11 @@ public class DefaultAgentTextService {
 
     @Transactional(readOnly = true)
     public List<DefaultAgentTextResponse> list() {
-        requireSuperAdmin();
-        return repository.findAllByOrderByCategoryAscTitleAsc().stream()
+        var user = currentUserService.requireCurrentUser();
+        List<DefaultAgentText> texts = user.getRole() == UserRole.SUPER_ADMIN
+            ? repository.findAllByOrderByCategoryAscTitleAsc()
+            : repository.findByActiveTrueOrderByCategoryAscTitleAsc();
+        return texts.stream()
             .map(this::toResponse)
             .toList();
     }
