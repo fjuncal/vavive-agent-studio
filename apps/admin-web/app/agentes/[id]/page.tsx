@@ -28,7 +28,7 @@ export default function AgentDetailPage() {
 
   return (
     <AppShell>
-      <PageHeader eyebrow="Agente" title={agent?.name ?? "Carregando agente"} description={agent ? `Agente GPTMaker associado a ${agent.franchiseName}.` : "Buscando dados do agente no backend."} />
+      <PageHeader eyebrow="Agente" title={agent?.name ?? "Carregando"} description={agent ? `Agente da ${agent.franchiseName}.` : "Carregando dados do agente."} />
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">

@@ -4,12 +4,12 @@ import clsx from "clsx";
 import {
   Bot,
   Building2,
-  ClipboardCheck,
   FileText,
   LayoutDashboard,
   MessageSquareText,
   Route,
-  Sparkles
+  Sparkles,
+  UsersRound
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -20,8 +20,8 @@ const nav = [
   { href: "/franquias", label: "Franquias", icon: Building2 },
   { href: "/agentes", label: "Agentes", icon: Bot },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
-  { href: "/leads", label: "Leads", icon: MessageSquareText },
-  { href: "/setup-guiado", label: "Setup guiado", icon: Route }
+  { href: "/leads", label: "Leads", icon: UsersRound },
+  { href: "/setup-guiado", label: "Configuração do agente", icon: Route }
 ];
 
 export function Sidebar() {
@@ -37,10 +37,13 @@ export function Sidebar() {
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/conversas") {
       return { ...item, label: "Atendimentos" };
     }
+    if (user?.role === "ADMIN_FRANQUIA" && item.href === "/setup-guiado") {
+      return { ...item, label: "Meu setup" };
+    }
     return item;
   });
   const visibleNav = user?.role === "SUPER_ADMIN"
-    ? [...baseNav, { href: "/configuracoes/textos-padrao", label: "Textos padrao", icon: FileText }]
+    ? [...baseNav, { href: "/configuracoes/textos-padrao", label: "Textos padrão", icon: FileText }]
     : baseNav;
 
   return (
@@ -51,7 +54,7 @@ export function Sidebar() {
         </div>
         <div>
           <p className="text-sm font-semibold tracking-tight text-ink">Vavive</p>
-          <p className="text-xs text-slate-500">GPTMaker Platform</p>
+          <p className="text-xs text-slate-500">Agent Studio</p>
         </div>
       </Link>
 
@@ -79,12 +82,12 @@ export function Sidebar() {
 
       <div className="rounded-2xl bg-ink p-4 text-white">
         <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/12">
-          <ClipboardCheck size={18} />
+          <Route size={18} />
         </div>
-        <p className="text-sm font-semibold">Setup da franquia</p>
-        <p className="mt-1 text-xs leading-5 text-white/68">Complete o roteiro Vavive antes de enviar treinamentos ao GPTMaker.</p>
+        <p className="text-sm font-semibold">Configuração do agente</p>
+        <p className="mt-1 text-xs leading-5 text-white/68">Complete os dados da franquia para gerar o treinamento do agente.</p>
         <Link href="/setup-guiado" className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink">
-          Continuar setup
+          Continuar
         </Link>
       </div>
     </aside>

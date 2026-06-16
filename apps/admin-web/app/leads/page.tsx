@@ -26,7 +26,7 @@ export default function LeadsPage() {
       <PageHeader
         eyebrow="Comercial"
         title="Leads"
-        description="Leads pertencem ao banco da Vavive. No futuro, chats e contatos podem ser sincronizados do GPTMaker pelo backend."
+        description="Leads registrados pelas franquias. Acompanhe o status comercial de cada contato."
       />
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
       {leads.length ? (

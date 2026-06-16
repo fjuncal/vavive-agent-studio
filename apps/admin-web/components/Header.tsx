@@ -21,8 +21,8 @@ export function Header() {
         </div>
         <div className="flex flex-1 items-center justify-between gap-3 sm:flex-none sm:justify-end">
           <div className="lg:hidden">
-            <p className="text-sm font-semibold text-ink">Vavive GPTMaker</p>
-            <p className="text-xs text-slate-500">Admin Web</p>
+            <p className="text-sm font-semibold text-ink">Vavive Agent Studio</p>
+            <p className="text-xs text-slate-500">Gestão</p>
           </div>
           <button className="hidden h-10 w-10 items-center justify-center rounded-full border border-line bg-white text-slate-600 shadow-sm sm:flex" aria-label="Notificações">
             <Bell size={17} />

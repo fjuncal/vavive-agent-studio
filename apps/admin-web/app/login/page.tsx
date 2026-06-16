@@ -9,8 +9,8 @@ import { useState } from "react";
 export default function LoginPage() {
   const router = useRouter();
   const { clearSession, refreshMe, setSession } = useAuth();
-  const [email, setEmail] = useState("admin@vavive.com");
-  const [password, setPassword] = useState("admin123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -24,12 +24,12 @@ export default function LoginPage() {
       setSession(token);
       const profile = await refreshMe();
       if (!profile) {
-        setError("Nao foi possivel validar a sessao criada. Entre novamente.");
+        setError("Não foi possível validar a sessão.");
         return;
       }
       router.replace("/dashboard");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel entrar.");
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível entrar.");
     } finally {
       setIsSubmitting(false);
     }
@@ -42,54 +42,43 @@ export default function LoginPage() {
 
   return (
     <main className="grid min-h-screen place-items-center px-4 py-10">
-      <section className="grid w-full max-w-5xl overflow-hidden rounded-[28px] border border-line bg-white shadow-soft lg:grid-cols-[1.05fr_0.95fr]">
-        <div className="bg-ink p-8 text-white sm:p-10">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/12">
-            <Sparkles size={22} />
+      <div className="w-full max-w-[440px]">
+        <div className="mb-8 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-ink">
+            <Sparkles size={24} className="text-white" />
           </div>
-          <h1 className="mt-8 max-w-md text-3xl font-semibold tracking-tight sm:text-4xl">Vavive GPTMaker Platform</h1>
-          <p className="mt-4 max-w-md text-sm leading-7 text-white/70">
-            Gerencie franquias, leads, treinamento do agente e regras comerciais em uma camada segura sobre o GPTMaker.
-          </p>
-          <div className="mt-10 grid gap-3 text-sm text-white/78">
-            <div className="rounded-2xl bg-white/8 p-4">Login Vavive com JWT. GPTMaker protegido pelo backend.</div>
-            <div className="rounded-2xl bg-white/8 p-4">Setup guiado para transformar dados da franquia em treinamento.</div>
-            <div className="rounded-2xl bg-white/8 p-4">Visao clara de leads, agentes, intencoes e regras.</div>
-          </div>
+          <h1 className="mt-5 text-2xl font-bold tracking-tight text-ink">Vavive Agent Studio</h1>
+          <p className="mt-2 text-sm text-slate-500">Gestão de franquias, agentes e atendimentos.</p>
         </div>
 
-        <div className="p-8 sm:p-10">
-          <div className="mb-8">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
-              <Bot size={22} />
-            </div>
-            <h2 className="mt-5 text-2xl font-semibold tracking-tight text-ink">Entrar no painel</h2>
-            <p className="mt-2 text-sm text-slate-500">Use o acesso inicial do seed para explorar o MVP.</p>
-          </div>
-
+        <section className="rounded-2xl border border-line bg-white p-8 shadow-soft">
           <form className="grid gap-4" onSubmit={handleSubmit}>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Email</span>
-              <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5">
+              <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5 transition focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-50">
                 <Mail size={17} className="text-slate-400" />
                 <input
-                  className="w-full outline-none"
+                  className="w-full outline-none text-sm text-ink placeholder:text-slate-400"
+                  placeholder="seu@email.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   disabled={isSubmitting}
+                  required
                 />
               </div>
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Senha</span>
-              <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5">
+              <div className="flex items-center gap-2 rounded-xl border border-line px-3 py-2.5 transition focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-50">
                 <LockKeyhole size={17} className="text-slate-400" />
                 <input
                   type="password"
-                  className="w-full outline-none"
+                  className="w-full outline-none text-sm text-ink placeholder:text-slate-400"
+                  placeholder="Sua senha"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
                   disabled={isSubmitting}
+                  required
                 />
               </div>
             </label>
@@ -101,38 +90,45 @@ export default function LoginPage() {
             >
               {isSubmitting ? "Entrando..." : "Entrar"}
             </button>
-            <div className="grid gap-2 rounded-2xl bg-slate-50 p-4">
-              <p className="text-sm font-medium text-slate-700">Acesso rapido para testes do MVP.</p>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setEmail("admin@vavive.com");
-                    setPassword("admin123");
-                    void submitCredentials("admin@vavive.com", "admin123");
-                  }}
-                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  Entrar como SUPER_ADMIN
-                </button>
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => {
-                    setEmail("franquia@vavive.com");
-                    setPassword("admin123");
-                    void submitCredentials("franquia@vavive.com", "admin123");
-                  }}
-                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 disabled:opacity-60"
-                >
-                  Entrar como ADMIN_FRANQUIA
-                </button>
-              </div>
-            </div>
           </form>
-        </div>
-      </section>
+
+          <details className="mt-6">
+            <summary className="cursor-pointer text-xs font-medium text-slate-400 hover:text-slate-600 transition select-none">
+              Acessos de teste
+            </summary>
+            <div className="mt-4 grid gap-2">
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setEmail("admin@vavive.com");
+                  setPassword("admin123");
+                  void submitCredentials("admin@vavive.com", "admin123");
+                }}
+                className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Acessar como Administrador
+              </button>
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => {
+                  setEmail("franquia@vavive.com");
+                  setPassword("admin123");
+                  void submitCredentials("franquia@vavive.com", "admin123");
+                }}
+                className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-60"
+              >
+                Acessar como Franquia
+              </button>
+            </div>
+          </details>
+        </section>
+
+        <p className="mt-6 text-center text-xs text-slate-400">
+          Vavive Agent Studio &mdash; Plataforma de gestão
+        </p>
+      </div>
     </main>
   );
 }

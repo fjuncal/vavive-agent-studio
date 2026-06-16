@@ -3,8 +3,8 @@ import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Vavive GPTMaker Platform",
-  description: "Camada SaaS Vavive para franquias usando GPTMaker"
+  title: "Vavive Agent Studio",
+  description: "Gestão de franquias, agentes e atendimentos"
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

@@ -2,7 +2,6 @@
 
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
@@ -22,7 +21,7 @@ import {
   type FranchiseSummary,
   type GptMakerAgentOption
 } from "@/lib/api";
-import { Bot, FileText, Loader2, PlugZap } from "lucide-react";
+import { Bot, ExternalLink, FileText, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -94,7 +93,7 @@ export default function FranchiseAgentPage() {
         setSelectedAvatar(local?.avatar ?? "");
       })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar a configuracao do agente.");
+        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar a configuração do agente.");
       })
       .finally(() => setIsLoading(false));
   }, [params?.id]);
@@ -128,7 +127,7 @@ export default function FranchiseAgentPage() {
 
   async function handleProvisionAgent(forceReplace: boolean) {
     if (!params?.id || !connection?.workspaceId) {
-      setError("Vincule uma workspace antes de configurar o agente.");
+      setError("Vincule uma integração antes de configurar o agente.");
       setSuccess(null);
       return;
     }
@@ -155,12 +154,12 @@ export default function FranchiseAgentPage() {
         confirmCriticalChange: forceReplace
       });
       setConnection(response);
-      setSuccess(response.agentId ? "Agente GPTMaker configurado com sucesso." : "Configuracao salva.");
+      setSuccess(response.agentId ? "Agente configurado com sucesso." : "Configuração salva.");
       const agents = await getAgents();
       setLocalAgent(agents.find((item) => item.franchiseId === franchise?.id) ?? null);
       setConfirmAction(null);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel configurar o agente.");
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível configurar o agente.");
     } finally {
       setIsSaving(false);
     }
@@ -181,10 +180,10 @@ export default function FranchiseAgentPage() {
         confirmCriticalChange: true
       });
       setConnection(response);
-      setSuccess("Agente existente vinculado em modo avancado.");
+      setSuccess("Agente vinculado.");
       setConfirmAction(null);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel vincular o agente existente.");
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível vincular o agente.");
     } finally {
       setIsSaving(false);
     }
@@ -202,9 +201,9 @@ export default function FranchiseAgentPage() {
       setConnection(response);
       setLocalAgent(null);
       setConfirmAction(null);
-      setSuccess("Agente removido da franquia.");
+      setSuccess("Agente removido.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel remover o agente.");
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível remover o agente.");
     } finally {
       setIsSaving(false);
     }
@@ -215,9 +214,9 @@ export default function FranchiseAgentPage() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Franquia"
-        title={franchise ? `Agente da ${franchise.name}` : "Configuracao do agente"}
-        description={isSuperAdmin ? "Configure o agente dentro da franquia, com avatar, contexto e textos padrao." : "Acompanhe o agente configurado para a sua franquia."}
+        eyebrow="Agente"
+        title={franchise ? `Agente - ${franchise.name}` : "Agente da franquia"}
+        description="Configure o agente, revise o contexto e gerencie treinamentos."
       />
 
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -225,50 +224,43 @@ export default function FranchiseAgentPage() {
 
       {isLoading ? (
         <section className="rounded-2xl border border-line/80 bg-white/86 p-6 shadow-soft">
-          <p className="text-sm text-slate-500">Carregando configuracao do agente...</p>
+          <p className="text-sm text-slate-500">Carregando...</p>
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
           <section className="grid gap-5">
             <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="text-lg font-semibold text-ink">Agente da franquia</h2>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {!connection?.workspaceId
-                      ? "Vincule uma workspace antes de configurar o agente."
-                      : connection?.agentId
-                        ? "O agente ja esta configurado. Voce pode reconfigurar ou abrir os treinamentos."
-                        : "Essa franquia ja possui workspace e esta pronta para configurar o agente."}
-                  </p>
-                </div>
-                <StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} />
-              </div>
-
-              {connection?.agentId && localAgent ? (
-                <div className="mt-5 flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
-                  {localAgent.avatar ? <img src={localAgent.avatar} alt={localAgent.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" /> : <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 text-brand-700"><Bot size={24} /></div>}
-                  <div>
-                    <p className="font-semibold text-ink">{localAgent.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{localAgent.connectionStatus}</p>
-                  </div>
-                </div>
-              ) : null}
-
-              {!isSuperAdmin ? (
-                connection?.agentId && localAgent ? (
-                  <div className="mt-5 flex flex-wrap gap-3">
-                    <Link href={`/agentes/${localAgent.id}/treinamentos`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">Treinamentos</Link>
-                    <Link href={`/franquias/${franchise?.id}`} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">Abrir franquia</Link>
-                  </div>
-                ) : (
-                  <p className="mt-5 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Seu agente ainda nao foi configurado pela matriz.</p>
-                )
+              {!connection?.workspaceId ? (
+                <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                  {isSuperAdmin ? "Vincule uma integração na tela da franquia antes de criar o agente." : "Aguardando configuração pela administração."}
+                </p>
               ) : (
                 <>
-                  {!connection?.workspaceId ? (
-                    <p className="mt-5 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Vincule uma workspace na tela da franquia antes de criar o agente.</p>
-                  ) : (
+                  {connection?.agentId && localAgent ? (
+                    <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
+                      {localAgent.avatar ? (
+                        <img src={localAgent.avatar} alt={localAgent.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" />
+                      ) : (
+                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-50 text-brand-700">
+                          <Bot size={24} />
+                        </div>
+                      )}
+                      <div>
+                        <p className="font-semibold text-ink">{localAgent.name}</p>
+                        <p className="mt-1 text-sm text-slate-500">{localAgent.connectionStatus}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Link href={`/conversas`} className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white">
+                            <MessageSquare size={14} /> Testar agente
+                          </Link>
+                          <Link href={`/franquias/${franchise?.id}/agente/treinamentos`} className="inline-flex items-center gap-1.5 rounded-lg bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-line">
+                            <FileText size={14} /> Treinamentos
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {isSuperAdmin ? (
                     <>
                       <div className="mt-5 grid gap-4 md:grid-cols-2">
                         <label className="grid gap-1.5">
@@ -315,8 +307,8 @@ export default function FranchiseAgentPage() {
                         <div className="rounded-2xl border border-line/80 bg-slate-50 p-4">
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="font-semibold text-ink">Textos padrao aplicados</h3>
-                              <p className="mt-1 text-sm text-slate-500">Selecione o que deve reforcar o contexto final antes de criar o agente.</p>
+                              <h3 className="font-semibold text-ink">Textos padrão aplicados</h3>
+                              <p className="mt-1 text-sm text-slate-500">Selecione os textos que irão compor o contexto final do agente.</p>
                             </div>
                             <button type="button" onClick={applySelectedTexts} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-line">
                               Atualizar preview
@@ -339,7 +331,7 @@ export default function FranchiseAgentPage() {
                         </div>
 
                         <label className="grid gap-1.5">
-                          <span className="text-sm font-medium text-slate-700">Preview final do contexto</span>
+                          <span className="text-sm font-medium text-slate-700">Contexto final</span>
                           <textarea className="min-h-[260px] rounded-2xl border border-line bg-white px-3 py-3 text-sm leading-6 text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={preview} onChange={(event) => setPreview(event.target.value)} />
                         </label>
                       </div>
@@ -351,24 +343,28 @@ export default function FranchiseAgentPage() {
                           disabled={isSaving}
                           className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                         >
-                          {isSaving ? "Salvando..." : connection?.agentId ? "Reconfigurar agente" : "Criar agente GPTMaker"}
+                          {isSaving ? "Salvando..." : connection?.agentId ? "Reconfigurar agente" : "Criar agente"}
                         </button>
-                        {localAgent ? <Link href={`/agentes/${localAgent.id}/treinamentos`} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">Abrir treinamentos</Link> : null}
+                        {localAgent ? (
+                          <Link href={`/agentes/${localAgent.id}/treinamentos`} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
+                            Treinamentos
+                          </Link>
+                        ) : null}
                       </div>
 
                       <details className="mt-5 rounded-2xl border border-line/80 bg-slate-50 p-4">
-                        <summary className="cursor-pointer text-sm font-semibold text-ink">Opcoes avancadas</summary>
+                        <summary className="cursor-pointer text-sm font-semibold text-ink">Opções avançadas</summary>
                         <div className="mt-4 grid gap-4">
-                          <p className="text-sm text-slate-500">Vincular agente existente fica disponivel apenas para cenarios de operacao avancada do SUPER_ADMIN.</p>
+                          <p className="text-sm text-slate-500">Vincular agente existente na integração.</p>
                           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
                             <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedExistingAgentId} onChange={(event) => setSelectedExistingAgentId(event.target.value)}>
-                              <option value="">Selecione um agente existente</option>
+                              <option value="">Selecione um agente</option>
                               {workspaceAgents.map((agent) => (
                                 <option key={agent.id} value={agent.id}>{agent.name}</option>
                               ))}
                             </select>
                             <button type="button" onClick={() => void handleLinkExistingAgent()} disabled={isSaving || !selectedExistingAgentId} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line disabled:opacity-60">
-                              Vincular existente
+                              Vincular
                             </button>
                           </div>
                           {connection?.agentId ? (
@@ -379,7 +375,7 @@ export default function FranchiseAgentPage() {
                         </div>
                       </details>
                     </>
-                  )}
+                  ) : null}
                 </>
               )}
             </section>
@@ -391,21 +387,29 @@ export default function FranchiseAgentPage() {
               <div className="mt-4 grid gap-3 text-sm text-slate-600">
                 <p className="rounded-xl bg-slate-50 p-3">Franquia: <strong className="text-ink">{franchise?.name ?? "-"}</strong></p>
                 <p className="rounded-xl bg-slate-50 p-3">Status: <strong className="text-ink">{franchise?.status?.replaceAll("_", " ") ?? "-"}</strong></p>
-                <p className="rounded-xl bg-slate-50 p-3">{isSuperAdmin ? `Workspace: ${connection?.workspaceName ?? "Nao vinculada"}` : `Agente: ${connection?.agentName ?? "Nao configurado"}`}</p>
+                <p className="rounded-xl bg-slate-50 p-3">Agente: <strong className="text-ink">{connection?.agentName ?? "Não configurado"}</strong></p>
               </div>
             </section>
 
             <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="font-semibold text-ink">Proximos passos</h2>
-              <div className="mt-4 grid gap-3 text-sm text-slate-600">
-                {!connection?.workspaceId ? (
-                  <p className="rounded-xl bg-amber-50 p-3 text-amber-800">Volte para a franquia e vincule uma workspace antes de criar o agente.</p>
-                ) : !connection?.agentId ? (
-                  <p className="rounded-xl bg-slate-50 p-3">Crie o agente e depois siga para os treinamentos.</p>
-                ) : (
-                  <p className="rounded-xl bg-slate-50 p-3">Agente pronto. O proximo passo e revisar contexto e enviar treinamentos.</p>
-                )}
-                <Link href={`/franquias/${franchise?.id}`} className="inline-flex w-fit rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
+              <h2 className="font-semibold text-ink">Ações</h2>
+              <div className="mt-4 grid gap-3">
+                {connection?.agentId ? (
+                  <>
+                    <Link href="/conversas" className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                      <MessageSquare size={16} />
+                      Testar agente
+                    </Link>
+                    {localAgent ? (
+                    <Link href={`/agentes/${localAgent.id}/treinamentos`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                      <FileText size={16} />
+                      Treinamentos
+                    </Link>
+                    ) : null}
+                  </>
+                ) : null}
+                <Link href={`/franquias/${franchise?.id}`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                  <ExternalLink size={16} />
                   Voltar para franquia
                 </Link>
               </div>
@@ -417,8 +421,8 @@ export default function FranchiseAgentPage() {
       <ConfirmDialog
         isOpen={confirmAction !== null}
         isSubmitting={isSaving}
-        title="Confirmar alteracao critica"
-        description="Essa acao pode desconectar a franquia do agente GPTMaker e afetar o atendimento. Confirme para continuar."
+        title="Confirmar alteração"
+        description="Essa ação pode afetar o agente configurado. Confirme para continuar."
         confirmLabel="Confirmar"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {

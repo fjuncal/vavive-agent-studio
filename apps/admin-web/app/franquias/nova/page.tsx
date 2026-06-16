@@ -1,11 +1,9 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
+import { useAuth } from "@/lib/auth";
 import { createFranchise, getAvailableGptMakerWorkspaces, type GptMakerWorkspaceOption } from "@/lib/api";
-import { PlugZap } from "lucide-react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,6 +11,8 @@ const fieldClassName = "w-full rounded-xl border border-line bg-white px-3 py-2.
 
 export default function NewFranchisePage() {
   const router = useRouter();
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [name, setName] = useState("");
   const [document, setDocument] = useState("");
   const [city, setCity] = useState("");
@@ -30,6 +30,10 @@ export default function NewFranchisePage() {
   );
 
   useEffect(() => {
+    if (!isSuperAdmin) {
+      setIsLoadingWorkspaces(false);
+      return;
+    }
     setIsLoadingWorkspaces(true);
     getAvailableGptMakerWorkspaces()
       .then((items) => {
@@ -40,10 +44,10 @@ export default function NewFranchisePage() {
         }
       })
       .catch((requestError) => {
-        setWorkspaceError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar os workspaces GPTMaker.");
+        setWorkspaceError(requestError instanceof Error ? requestError.message : "Não foi possível carregar workspaces.");
       })
       .finally(() => setIsLoadingWorkspaces(false));
-  }, []);
+  }, [isSuperAdmin]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -61,7 +65,7 @@ export default function NewFranchisePage() {
       });
       router.replace(`/franquias/${created.id}`);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar a franquia.");
+      setError(requestError instanceof Error ? requestError.message : "Não foi possível salvar a franquia.");
     } finally {
       setIsSubmitting(false);
     }
@@ -72,84 +76,66 @@ export default function NewFranchisePage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Nova franquia"
-        description="Cadastre a unidade e, se quiser, vincule uma workspace GPTMaker ja disponivel."
+        description="Cadastre a unidade no sistema."
       />
-      <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
-        <form onSubmit={handleSubmit}>
-          <FormSection title="Dados da franquia" description="Informacoes oficiais usadas em permissoes, dashboard e filtros comerciais.">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-slate-700">Nome da franquia</span>
-                <input className={fieldClassName} placeholder="Vavive Moema" value={name} onChange={(event) => setName(event.target.value)} disabled={isSubmitting} required />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-slate-700">CNPJ ou documento</span>
-                <input className={fieldClassName} placeholder="00.000.000/0001-00" value={document} onChange={(event) => setDocument(event.target.value)} disabled={isSubmitting} />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-slate-700">Cidade</span>
-                <input className={fieldClassName} placeholder="Sao Paulo" value={city} onChange={(event) => setCity(event.target.value)} disabled={isSubmitting} required />
-              </label>
-              <label className="grid gap-1.5">
-                <span className="text-sm font-medium text-slate-700">Estado</span>
-                <input className={fieldClassName} placeholder="SP" value={state} onChange={(event) => setState(event.target.value)} disabled={isSubmitting} required />
-              </label>
-            </div>
+      <form onSubmit={handleSubmit} className="max-w-2xl">
+        <section className="rounded-2xl border border-line/80 bg-white/86 p-6 shadow-soft">
+          <h2 className="text-lg font-semibold text-ink">Dados da franquia</h2>
+          <p className="mt-1 text-sm text-slate-500">Informações oficiais da unidade.</p>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="grid gap-1.5 sm:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Nome da franquia</span>
+              <input className={fieldClassName} placeholder="Ex: Vavive Moema" value={name} onChange={(event) => setName(event.target.value)} disabled={isSubmitting} required />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-slate-700">CNPJ / Documento</span>
+              <input className={fieldClassName} placeholder="00.000.000/0001-00" value={document} onChange={(event) => setDocument(event.target.value)} disabled={isSubmitting} />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-slate-700">Cidade</span>
+              <input className={fieldClassName} placeholder="São Paulo" value={city} onChange={(event) => setCity(event.target.value)} disabled={isSubmitting} required />
+            </label>
+            <label className="grid gap-1.5">
+              <span className="text-sm font-medium text-slate-700">Estado</span>
+              <input className={fieldClassName} placeholder="SP" value={state} onChange={(event) => setState(event.target.value)} disabled={isSubmitting} required />
+            </label>
+          </div>
 
-            <section className="rounded-2xl border border-line/80 bg-slate-50 p-4">
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-brand-700 shadow-sm">
-                  <PlugZap size={18} />
-                </div>
-                <div>
-                  <h2 className="font-semibold text-ink">Workspace GPTMaker</h2>
-                  <p className="mt-1 text-sm leading-6 text-slate-500">
-                    A workspace precisa existir previamente no GPTMaker. Apenas workspaces ainda nao vinculadas aparecem aqui.
-                  </p>
-                </div>
-              </div>
+          {isSuperAdmin ? (
+            <div className="mt-6 rounded-2xl border border-line/80 bg-slate-50 p-4">
+              <h3 className="font-semibold text-ink">Conexão</h3>
+              <p className="mt-1 text-sm text-slate-500">Vincular a uma integração existente (opcional).</p>
               <label className="mt-4 grid gap-1.5">
-                <span className="text-sm font-medium text-slate-700">Selecionar workspace existente</span>
+                <span className="text-sm font-medium text-slate-700">Selecionar integração</span>
                 <select
                   className={fieldClassName}
                   value={selectedWorkspaceId}
                   onChange={(event) => setSelectedWorkspaceId(event.target.value)}
                   disabled={isSubmitting || isLoadingWorkspaces}
                 >
-                  <option value="">Criar sem workspace por enquanto</option>
+                  <option value="">Sem integração por enquanto</option>
                   {workspaces.map((workspace) => (
                     <option key={workspace.id} value={workspace.id}>
-                      {workspace.name || "Workspace sem nome"}
+                      {workspace.name || "Sem nome"}
                     </option>
                   ))}
                 </select>
               </label>
               {workspaceError ? <p className="mt-3 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{workspaceError}</p> : null}
               {!selectedWorkspaceId ? (
-                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">Esta franquia ficara pendente de conexao GPTMaker.</p>
+                <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">A integração pode ser feita depois.</p>
               ) : null}
-            </section>
-
-            {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
-            <div className="flex flex-wrap gap-3">
-              <button type="submit" disabled={isSubmitting} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-wait disabled:opacity-70">
-                {isSubmitting ? "Salvando..." : "Criar franquia"}
-              </button>
-              <Link href="/franquias" className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                Cancelar
-              </Link>
             </div>
-          </FormSection>
-        </form>
-        <aside className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <h2 className="font-semibold text-ink">Resumo do fluxo</h2>
-          <div className="mt-4 grid gap-3 text-sm text-slate-600">
-            <p className="rounded-xl bg-slate-50 p-3">1. Criar franquia.</p>
-            <p className="rounded-xl bg-slate-50 p-3">2. Criar administrador.</p>
-            <p className="rounded-xl bg-slate-50 p-3">3. Configurar agente dentro da franquia.</p>
+          ) : null}
+
+          {error ? <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
+          <div className="mt-6 flex flex-wrap gap-3">
+            <button type="submit" disabled={isSubmitting} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-wait disabled:opacity-70">
+              {isSubmitting ? "Salvando..." : "Criar franquia"}
+            </button>
           </div>
-        </aside>
-      </div>
+        </section>
+      </form>
     </AppShell>
   );
 }

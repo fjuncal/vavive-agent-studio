@@ -6,7 +6,7 @@ import { Field, FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { TrainingPreviewCard } from "@/components/TrainingPreviewCard";
-import { createAgentTraining, getAgent, getAgentTrainings, getGptMakerHealth, type AgentSummary, type GptMakerHealth, type TrainingSummary } from "@/lib/api";
+import { createAgentTraining, getAgent, getAgentTrainings, type AgentSummary, type TrainingSummary } from "@/lib/api";
 import { AlertCircle, BookOpenText, CheckCircle2, FileText, Loader2, Sparkles, Wand2 } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
@@ -100,7 +100,6 @@ function formatDate(value: string) {
 export default function AgentTrainingsPage() {
   const params = useParams<{ id: string }>();
   const [agent, setAgent] = useState<AgentSummary | null>(null);
-  const [gptMakerHealth, setGptMakerHealth] = useState<GptMakerHealth | null>(null);
   const [history, setHistory] = useState<TrainingSummary[]>([]);
   const [form, setForm] = useState<TrainingForm>(defaultForm);
   const [preview, setPreview] = useState("");
@@ -115,11 +114,10 @@ export default function AgentTrainingsPage() {
     }
 
     setIsLoading(true);
-    Promise.all([getAgent(params.id), getAgentTrainings(params.id), getGptMakerHealth()])
-      .then(([currentAgent, trainings, health]) => {
+    Promise.all([getAgent(params.id), getAgentTrainings(params.id)])
+      .then(([currentAgent, trainings]) => {
         setAgent(currentAgent);
         setHistory(trainings);
-        setGptMakerHealth(health);
         const nextForm = {
           ...defaultForm,
           title: "Treinamento comercial da franquia",
@@ -195,7 +193,7 @@ export default function AgentTrainingsPage() {
         title="Treinamento do Agente"
         description="Ensine o agente com informacoes da sua franquia e revise o conteudo antes de publicar."
       />
-      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Ambiente de desenvolvimento: sem agente GPTMaker real conectado, este fluxo permanece apenas em modo local.</div> : null}
+      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Agente ainda não conectado. O treinamento será salvo localmente até que a integração seja configurada.</div> : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
@@ -217,26 +215,20 @@ export default function AgentTrainingsPage() {
       <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-ink">Conexao GPTMaker</h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.</p>
+            <h2 className="text-lg font-semibold text-ink">Status do agente</h2>
+            <p className="mt-2 text-sm leading-6 text-slate-500">Para publicar o treinamento, o agente precisa estar configurado.</p>
           </div>
           <StatusBadge status={hasRealExternalId ? "CONNECTED" : "ERROR"} />
         </div>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{hasRealExternalId ? "Conectado" : "Nao conectado"}</p>
-          </div>
-          <div className="rounded-xl bg-mist px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Modo</p>
-            <p className="mt-2 text-sm font-semibold text-ink">{gptMakerHealth?.mockEnabled ? "Ambiente de desenvolvimento" : "Integracao ativa"}</p>
-          </div>
+        <div className="mt-4 rounded-xl bg-mist px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
+          <p className="mt-2 text-sm font-semibold text-ink">{hasRealExternalId ? "Conectado" : "Não conectado"}</p>
         </div>
         {!hasRealExternalId && agent ? (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            <span>Conecte este agente a um agente GPTMaker real antes de publicar.</span>
+            <span>Configure o agente na tela da franquia antes de publicar.</span>
             <Link href={`/franquias/${agent.franchiseId}`} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700">
-              Conectar agente GPTMaker
+              Configurar agente
             </Link>
           </div>
         ) : null}
@@ -298,7 +290,7 @@ export default function AgentTrainingsPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                Enviar para GPTMaker
+                Publicar treinamento
               </button>
             </div>
           </FormSection>
@@ -316,8 +308,7 @@ export default function AgentTrainingsPage() {
                       <StatusBadge status={training.status} />
                     </div>
                     <p className="mt-3 text-sm leading-6 text-slate-600">{training.message || "Treinamento salvo."}</p>
-                    {training.mockEnabled || training.status === "SALVO_LOCALMENTE" ? <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Ambiente de desenvolvimento</p> : null}
-                    {training.externalReference ? <p className="mt-2 text-xs text-slate-400">Referencia: {training.externalReference}</p> : null}
+                    {training.status === "SALVO_LOCALMENTE" ? <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-xs font-semibold text-amber-800">Salvo localmente</p> : null}
                   </article>
                 ))}
               </div>
