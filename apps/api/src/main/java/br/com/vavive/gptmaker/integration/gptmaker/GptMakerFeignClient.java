@@ -5,11 +5,14 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRespo
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerStartHumanResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 
 @FeignClient(
@@ -29,6 +32,18 @@ public interface GptMakerFeignClient {
         @PathVariable String workspaceId,
         @RequestBody GptMakerCreateAgentRequest request
     );
+
+    @PostMapping("/v2/agent/{agentId}/conversation")
+    ResponseEntity<String> sendConversation(
+        @PathVariable String agentId,
+        @RequestBody GptMakerConversationRequest request
+    );
+
+    @GetMapping("/v2/interaction/{interactionId}/messages")
+    ResponseEntity<String> listInteractionMessages(@PathVariable String interactionId);
+
+    @PutMapping("/v2/chat/{chatId}/start-human")
+    GptMakerStartHumanResponse startHuman(@PathVariable String chatId);
 
     @PostMapping("/v2/agent/{agentId}/trainings")
     GptMakerCreateTrainingResponse createTraining(

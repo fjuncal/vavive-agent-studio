@@ -666,6 +666,111 @@ class FranchiseSecurityIntegrationTest {
     }
 
     @Test
+    void superAdminCanTestAgentAndListConversation() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        String created = mockMvc.perform(post("/conversations/test-agent")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "franchiseId": "%s",
+                      "prompt": "Preciso de um cuidador para hoje a noite.",
+                      "contextId": "cliente-001",
+                      "customerName": "Maria Teste",
+                      "phone": "5511999999999"
+                    }
+                    """.formatted(franchise.getId())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.franchiseId").value(franchise.getId().toString()))
+            .andExpect(jsonPath("$.contextId").value("cliente-001"))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String conversationId = objectMapper.readTree(created).get("conversationId").asText();
+
+        mockMvc.perform(get("/conversations")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.id == '%s')]".formatted(conversationId)).exists());
+    }
+
+    @Test
+    void adminFranquiaOnlyTestsOwnFranchiseAgent() throws Exception {
+        Franchise ownFranchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        Franchise otherFranchise = franchiseRepository.save(new Franchise("Vavive Santana", "18.181.181/0001-18", "Sao Paulo", "SP", "ATIVA"));
+        otherFranchise.setWorkspaceId("mock-workspace-sp");
+        otherFranchise.setWorkspaceName("Workspace Sao Paulo");
+        otherFranchise.setAgentId("mock-agent-mock-workspace-sp-01");
+        otherFranchise.setAgentName("Assistente Santana");
+        franchiseRepository.save(otherFranchise);
+
+        mockMvc.perform(post("/conversations/test-agent")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "franchiseId": "%s",
+                      "prompt": "Teste de franquia cruzada",
+                      "contextId": "cliente-admin",
+                      "customerName": "Cliente Admin"
+                    }
+                    """.formatted(otherFranchise.getId())))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.franchiseId").value(ownFranchise.getId().toString()));
+    }
+
+    @Test
+    void conversationMessagesAndStartHumanRespectFranchiseOwnership() throws Exception {
+        Franchise ownFranchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        Franchise otherFranchise = franchiseRepository.save(new Franchise("Vavive Osasco", "19.191.191/0001-19", "Osasco", "SP", "ATIVA"));
+        otherFranchise.setWorkspaceId("mock-workspace-sp");
+        otherFranchise.setWorkspaceName("Workspace Sao Paulo");
+        otherFranchise.setAgentId("mock-agent-mock-workspace-sp-01");
+        otherFranchise.setAgentName("Assistente Osasco");
+        otherFranchise.setStatus("ATIVA");
+        franchiseRepository.save(otherFranchise);
+        userRepository.save(new User(
+            "Gestora Osasco",
+            "osasco@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            otherFranchise
+        ));
+
+        String created = mockMvc.perform(post("/conversations/test-agent")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "prompt": "Quero saber mais sobre atendimento.",
+                      "contextId": "cliente-ownership",
+                      "customerName": "Cliente Ownership"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String conversationId = objectMapper.readTree(created).get("conversationId").asText();
+
+        mockMvc.perform(get("/conversations/{id}/messages", conversationId)
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].text").value("Quero saber mais sobre atendimento."));
+
+        mockMvc.perform(get("/conversations/{id}/messages", conversationId)
+                .header("Authorization", bearerToken("osasco@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/conversations/{id}/start-human", conversationId)
+                .header("Authorization", bearerToken("osasco@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
     void vaviveDefaultContextUsesOnlyActiveDefaultTexts() {
         Franchise franchise = franchiseRepository.save(new Franchise("Vavive Contexto", "14.141.141/0001-14", "Sao Paulo", "SP", "ATIVA"));
         defaultAgentTextRepository.save(new DefaultAgentText(

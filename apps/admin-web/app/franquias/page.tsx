@@ -148,7 +148,15 @@ export default function FranchisesPage() {
             { header: "Cidade", cell: (franchise) => `${franchise.city} / ${franchise.state}` },
             ...(isSuperAdmin ? [{ header: "Workspace", cell: (franchise: FranchiseSummary) => franchise.workspaceName ?? "Sem workspace" }] : []),
             { header: "Agente", cell: (franchise) => franchise.agentName ?? "Sem agente" },
-            { header: "Status", cell: (franchise) => <StatusBadge status={franchise.status} /> }
+            { header: "Status", cell: (franchise) => <StatusBadge status={franchise.status} /> },
+            {
+              header: "Acao",
+              cell: (franchise) => (
+                <Link href={franchise.agentId ? `/franquias/${franchise.id}` : franchise.workspaceId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`} className="inline-flex rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                  {franchise.agentId ? "Abrir" : franchise.workspaceId ? "Configurar agente" : "Configurar"}
+                </Link>
+              )
+            }
           ]}
         />
       ) : (

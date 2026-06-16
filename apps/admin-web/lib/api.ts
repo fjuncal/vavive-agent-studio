@@ -288,6 +288,69 @@ export type DefaultAgentTextPayload = {
   active?: boolean;
 };
 
+export type ConversationSummary = {
+  id: string;
+  franchiseId: string;
+  franchiseName: string;
+  agentName?: string | null;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  contextId?: string | null;
+  firstPrompt?: string | null;
+  lastResponse?: string | null;
+  chatId?: string | null;
+  interactionId?: string | null;
+  humanTakeoverActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationMessage = {
+  id: string;
+  role?: string | null;
+  type?: string | null;
+  text?: string | null;
+  userName?: string | null;
+  userPicture?: string | null;
+  imageUrl?: string | null;
+  audioUrl?: string | null;
+  documentUrl?: string | null;
+  fileName?: string | null;
+  mediaContent?: string | null;
+  time?: number | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+export type StartHumanTakeoverResult = {
+  conversationId: string;
+  success: boolean;
+  message: string;
+};
+
+export type TestAgentConversationPayload = {
+  franchiseId?: string;
+  prompt: string;
+  contextId: string;
+  customerName?: string;
+  phone?: string;
+  chatPicture?: string;
+};
+
+export type TestAgentConversationResult = {
+  conversationId: string;
+  franchiseId: string;
+  franchiseName: string;
+  agentName?: string | null;
+  contextId: string;
+  chatId?: string | null;
+  interactionId?: string | null;
+  message?: string | null;
+  images: string[];
+  audios: string[];
+  documents: string[];
+};
+
 function getStoredToken(): string | null {
   if (typeof window === "undefined") {
     return null;
@@ -526,5 +589,27 @@ export function updateDefaultAgentText(id: string, payload: DefaultAgentTextPayl
 export function toggleDefaultAgentText(id: string) {
   return apiFetch<DefaultAgentText>(`/default-agent-texts/${id}/toggle`, {
     method: "PATCH"
+  });
+}
+
+export function getConversations(franchiseId?: string) {
+  const suffix = franchiseId ? `?franchiseId=${encodeURIComponent(franchiseId)}` : "";
+  return apiFetch<ConversationSummary[]>(`/conversations${suffix}`);
+}
+
+export function getConversationMessages(id: string) {
+  return apiFetch<ConversationMessage[]>(`/conversations/${id}/messages`);
+}
+
+export function startHumanTakeover(id: string) {
+  return apiFetch<StartHumanTakeoverResult>(`/conversations/${id}/start-human`, {
+    method: "PUT"
+  });
+}
+
+export function testAgentConversation(payload: TestAgentConversationPayload) {
+  return apiFetch<TestAgentConversationResult>("/conversations/test-agent", {
+    method: "POST",
+    body: JSON.stringify(payload)
   });
 }

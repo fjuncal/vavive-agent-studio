@@ -5,6 +5,8 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateIntentRespo
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerStartHumanResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -459,6 +461,27 @@ class GptMakerClientTest {
                 throw createAgentException;
             }
             return ResponseEntity.ok(createAgentPayload);
+        }
+
+        @Override
+        public ResponseEntity<String> sendConversation(String agentId, GptMakerConversationRequest request) {
+            return ResponseEntity.ok("""
+                {
+                  "message": "Resposta de teste",
+                  "chatId": "chat-1",
+                  "interactionId": "interaction-1"
+                }
+                """);
+        }
+
+        @Override
+        public ResponseEntity<String> listInteractionMessages(String interactionId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public GptMakerStartHumanResponse startHuman(String chatId) {
+            return new GptMakerStartHumanResponse(true);
         }
 
         @Override

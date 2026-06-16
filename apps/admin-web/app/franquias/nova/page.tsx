@@ -5,6 +5,7 @@ import { FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
 import { createFranchise, getAvailableGptMakerWorkspaces, type GptMakerWorkspaceOption } from "@/lib/api";
 import { PlugZap } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -71,7 +72,7 @@ export default function NewFranchisePage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Nova franquia"
-        description="Crie a unidade, vincule uma workspace disponivel quando houver e siga para a configuracao do administrador e do agente."
+        description="Cadastre a unidade e, se quiser, vincule uma workspace GPTMaker ja disponivel."
       />
       <div className="grid gap-5 lg:grid-cols-[1fr_340px]">
         <form onSubmit={handleSubmit}>
@@ -130,17 +131,22 @@ export default function NewFranchisePage() {
             </section>
 
             {error ? <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">{error}</p> : null}
-            <button type="submit" disabled={isSubmitting} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-wait disabled:opacity-70">
-              {isSubmitting ? "Salvando..." : "Salvar franquia"}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button type="submit" disabled={isSubmitting} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-wait disabled:opacity-70">
+                {isSubmitting ? "Salvando..." : "Criar franquia"}
+              </button>
+              <Link href="/franquias" className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
+                Cancelar
+              </Link>
+            </div>
           </FormSection>
         </form>
         <aside className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <h2 className="font-semibold text-ink">Fluxo</h2>
+          <h2 className="font-semibold text-ink">Resumo do fluxo</h2>
           <div className="mt-4 grid gap-3 text-sm text-slate-600">
             <p className="rounded-xl bg-slate-50 p-3">1. Criar franquia.</p>
             <p className="rounded-xl bg-slate-50 p-3">2. Criar administrador.</p>
-            <p className="rounded-xl bg-slate-50 p-3">3. Configurar agente.</p>
+            <p className="rounded-xl bg-slate-50 p-3">3. Configurar agente dentro da franquia.</p>
           </div>
         </aside>
       </div>

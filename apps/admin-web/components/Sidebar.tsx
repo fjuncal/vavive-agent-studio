@@ -18,17 +18,30 @@ import { useAuth } from "@/lib/auth";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franquias", label: "Franquias", icon: Building2 },
-  { href: "/leads", label: "Leads", icon: MessageSquareText },
   { href: "/agentes", label: "Agentes", icon: Bot },
+  { href: "/conversas", label: "Conversas", icon: MessageSquareText },
+  { href: "/leads", label: "Leads", icon: MessageSquareText },
   { href: "/setup-guiado", label: "Setup guiado", icon: Route }
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
   const { user } = useAuth();
+  const baseNav = nav.map((item) => {
+    if (user?.role === "ADMIN_FRANQUIA" && item.href === "/franquias") {
+      return { ...item, label: "Minha franquia" };
+    }
+    if (user?.role === "ADMIN_FRANQUIA" && item.href === "/agentes") {
+      return { ...item, label: "Meu agente" };
+    }
+    if (user?.role === "ADMIN_FRANQUIA" && item.href === "/conversas") {
+      return { ...item, label: "Atendimentos" };
+    }
+    return item;
+  });
   const visibleNav = user?.role === "SUPER_ADMIN"
-    ? [...nav, { href: "/configuracoes/textos-padrao", label: "Textos padrao", icon: FileText }]
-    : nav;
+    ? [...baseNav, { href: "/configuracoes/textos-padrao", label: "Textos padrao", icon: FileText }]
+    : baseNav;
 
   return (
     <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-line/80 bg-white/78 px-5 py-5 shadow-soft backdrop-blur-xl lg:flex lg:flex-col">

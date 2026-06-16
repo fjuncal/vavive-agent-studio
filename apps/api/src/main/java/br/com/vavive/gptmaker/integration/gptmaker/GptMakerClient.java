@@ -5,10 +5,14 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentReques
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationMessageResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerDiagnosticsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerErrorResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerRawDiagnosticsResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerStartHumanResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -194,6 +198,85 @@ public class GptMakerClient {
                 endpoint,
                 preview(exception.contentUTF8())
             );
+        }
+    }
+
+    public GptMakerConversationResponse sendConversation(String externalAgentId, GptMakerConversationRequest request) {
+        String endpoint = "/v2/agent/%s/conversation".formatted(externalAgentId == null ? "" : externalAgentId);
+        if (externalAgentId == null || externalAgentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agente GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (request == null || request.contextId() == null || request.contextId().isBlank() || request.prompt() == null || request.prompt().isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CONVERSATION", "Contexto e mensagem sao obrigatorios para testar o agente.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerConversationResponse(
+                "mock-chat-" + sanitize(request.contextId()),
+                "mock-interaction-" + sanitize(request.contextId()),
+                "Resposta simulada em ambiente de desenvolvimento para: " + request.prompt(),
+                List.of(),
+                List.of(),
+                List.of()
+            );
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+
+        try {
+            log.info("Calling GPTMaker POST {} agentId={}", endpoint, sanitize(externalAgentId));
+            ResponseEntity<String> response = feignClient.sendConversation(externalAgentId, request);
+            String body = response.getBody();
+            JsonNode payload = parseBody(body, endpoint, response.getStatusCode().value());
+            GptMakerConversationResponse conversation = parseConversation(payload, endpoint);
+            log.info("GPTMaker POST {} status={} bodyPreview={}", endpoint, response.getStatusCode().value(), preview(body));
+            return conversation;
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel testar o agente no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel testar o agente no GPTMaker.", endpoint);
+        }
+    }
+
+    public List<GptMakerConversationMessageResponse> listInteractionMessages(String interactionId) {
+        String endpoint = "/v2/interaction/%s/messages".formatted(interactionId == null ? "" : interactionId);
+        if (interactionId == null || interactionId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_INTERACTION", "Interaction GPTMaker nao informada.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return List.of();
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.listInteractionMessages(interactionId);
+            JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+            return parseConversationMessages(payload, endpoint);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar as mensagens do atendimento agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel listar as mensagens do atendimento.", endpoint);
+        }
+    }
+
+    public GptMakerStartHumanResponse startHuman(String chatId) {
+        String endpoint = "/v2/chat/%s/start-human".formatted(chatId == null ? "" : chatId);
+        if (chatId == null || chatId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerStartHumanResponse(true);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            return feignClient.startHuman(chatId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel assumir o atendimento agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel assumir o atendimento no GPTMaker.", endpoint);
         }
     }
 
@@ -582,6 +665,58 @@ public class GptMakerClient {
         );
     }
 
+    private GptMakerConversationResponse parseConversation(JsonNode payload, String endpoint) {
+        JsonNode itemNode = extractSingleItemNode(payload);
+        if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para conversa.", sanitize(payload == null ? null : payload.toString()), null, endpoint, sanitize(payload == null ? null : payload.toString()));
+        }
+
+        String chatId = firstTextValue(itemNode, "chatId", "chat_id");
+        String interactionId = firstTextValue(itemNode, "interactionId", "interaction_id");
+        return new GptMakerConversationResponse(
+            chatId,
+            interactionId,
+            firstTextValue(itemNode, "message", "text", "response"),
+            textArray(itemNode.get("images")),
+            textArray(itemNode.get("audios")),
+            textArray(itemNode.get("documents"))
+        );
+    }
+
+    private List<GptMakerConversationMessageResponse> parseConversationMessages(JsonNode payload, String endpoint) {
+        JsonNode itemsNode = extractItemsNode(payload);
+        if (itemsNode == null || itemsNode.isNull()) {
+            return List.of();
+        }
+        if (!itemsNode.isArray()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para mensagens do atendimento.", sanitize(itemsNode.toString()), null, endpoint, sanitize(itemsNode.toString()));
+        }
+
+        List<GptMakerConversationMessageResponse> items = new ArrayList<>();
+        for (JsonNode itemNode : itemsNode) {
+            if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+                continue;
+            }
+            items.add(new GptMakerConversationMessageResponse(
+                textValue(itemNode, "id"),
+                textValue(itemNode, "role"),
+                textValue(itemNode, "type"),
+                textValue(itemNode, "text"),
+                textValue(itemNode, "userName"),
+                textValue(itemNode, "userPicture"),
+                textValue(itemNode, "imageUrl"),
+                textValue(itemNode, "audioUrl"),
+                textValue(itemNode, "documentUrl"),
+                textValue(itemNode, "fileName"),
+                textValue(itemNode, "midiaContent"),
+                longValue(itemNode, "time"),
+                integerValue(itemNode, "width"),
+                integerValue(itemNode, "height")
+            ));
+        }
+        return items;
+    }
+
     private JsonNode extractItemsNode(JsonNode payload) {
         if (payload == null || payload.isNull()) {
             return null;
@@ -617,6 +752,45 @@ public class GptMakerClient {
             return null;
         }
         return value.asText();
+    }
+
+    private String firstTextValue(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            String value = textValue(node, fieldName);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private List<String> textArray(JsonNode node) {
+        if (node == null || node.isNull() || !node.isArray()) {
+            return List.of();
+        }
+        List<String> values = new ArrayList<>();
+        for (JsonNode item : node) {
+            if (item != null && !item.isNull()) {
+                values.add(item.asText());
+            }
+        }
+        return values;
+    }
+
+    private Long longValue(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull() || !value.isNumber()) {
+            return null;
+        }
+        return value.asLong();
+    }
+
+    private Integer integerValue(JsonNode node, String fieldName) {
+        JsonNode value = node.get(fieldName);
+        if (value == null || value.isNull() || !value.isNumber()) {
+            return null;
+        }
+        return value.asInt();
     }
 
     public GptMakerSyncResult sendRule(String externalAgentId, String title, String description) {
