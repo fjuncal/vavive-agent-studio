@@ -2,6 +2,8 @@ package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
+import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
+import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
@@ -43,6 +45,11 @@ public class FranchiseController {
     @PostMapping("/franchises")
     public FranchiseResponse create(@Valid @RequestBody CreateFranchiseRequest request) {
         return franchiseService.create(request);
+    }
+
+    @PostMapping("/franchises/full")
+    public CreateFullFranchiseResponse createFull(@Valid @RequestBody CreateFullFranchiseRequest request) {
+        return franchiseService.createFull(request);
     }
 
     @GetMapping("/franchises/{id}")

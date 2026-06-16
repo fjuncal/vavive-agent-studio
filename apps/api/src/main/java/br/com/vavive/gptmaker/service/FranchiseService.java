@@ -7,6 +7,8 @@ import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
+import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
+import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
@@ -107,6 +109,43 @@ public class FranchiseService {
         }
         refreshStatus(franchise);
         return AuthService.toFranchiseResponse(franchiseRepository.save(franchise));
+    }
+
+    @Transactional
+    public CreateFullFranchiseResponse createFull(CreateFullFranchiseRequest request) {
+        requireSuperAdmin();
+        Franchise franchise = new Franchise(
+            request.franchise().name(),
+            request.franchise().document(),
+            request.franchise().city(),
+            request.franchise().state(),
+            "PENDENTE_CONFIGURACAO"
+        );
+        if (request.franchise().workspaceId() != null && !request.franchise().workspaceId().isBlank()) {
+            GptMakerWorkspaceResponse workspace = requireExistingWorkspace(request.franchise().workspaceId());
+            ensureWorkspaceAvailable(workspace.id(), null);
+            franchise.setWorkspaceId(workspace.id());
+            franchise.setWorkspaceName(resolveProvidedWorkspaceName(request.franchise().workspaceName(), workspace));
+        }
+        refreshStatus(franchise);
+        franchiseRepository.save(franchise);
+
+        if (userRepository.existsByEmailIgnoreCase(request.adminUser().email())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ja existe um usuario com este email");
+        }
+        User admin = new User(
+            request.adminUser().name(),
+            request.adminUser().email(),
+            passwordEncoder.encode(request.adminUser().password()),
+            UserRole.ADMIN_FRANQUIA,
+            franchise
+        );
+        userRepository.save(admin);
+
+        return new CreateFullFranchiseResponse(
+            AuthService.toFranchiseResponse(franchise),
+            AuthService.toResponse(admin)
+        );
     }
 
     @Transactional(readOnly = true)

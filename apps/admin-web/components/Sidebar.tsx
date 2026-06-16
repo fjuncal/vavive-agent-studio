@@ -7,6 +7,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquareText,
+  Radio,
   Route,
   Sparkles,
   UsersRound
@@ -19,6 +20,7 @@ const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franquias", label: "Franquias", icon: Building2 },
   { href: "/agentes", label: "Agentes", icon: Bot },
+  { href: "/canais", label: "Canais", icon: Radio },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
   { href: "/leads", label: "Leads", icon: UsersRound },
   { href: "/setup-guiado", label: "Configuração do agente", icon: Route }

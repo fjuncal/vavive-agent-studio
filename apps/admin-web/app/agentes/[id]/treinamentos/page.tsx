@@ -47,7 +47,7 @@ const guidanceCards = [
   },
   {
     title: "Erro de integracao nao perde trabalho",
-    description: "Se o GPTMaker falhar, o treinamento continua salvo localmente para nova tentativa."
+    description: "Se a publicacao falhar, o treinamento continua salvo localmente para nova tentativa."
   }
 ];
 
@@ -136,7 +136,7 @@ export default function AgentTrainingsPage() {
       .finally(() => setIsLoading(false));
   }, [params?.id]);
 
-  const hasRealExternalId = !!agent?.connectedToRealGptMaker;
+  const agentReady = !!agent?.status && agent.status !== "PENDENTE_CONFIGURACAO";
 
   function updateField<K extends keyof TrainingForm>(field: K, value: TrainingForm[K]) {
     setForm((current) => ({ ...current, [field]: value }));
@@ -152,7 +152,7 @@ export default function AgentTrainingsPage() {
     if (!params?.id) {
       return;
     }
-    if (!hasRealExternalId) {
+    if (!agentReady) {
       setError("Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.");
       setSuccess(null);
       return;
@@ -172,12 +172,10 @@ export default function AgentTrainingsPage() {
         content: preview
       });
       setHistory((current) => [created, ...current]);
-      if (created.status === "PUBLICADO_GPTMAKER_MOCK") {
-        setSuccess("Publicacao simulada em ambiente de desenvolvimento.");
-      } else if (created.status === "PUBLICADO_GPTMAKER") {
-        setSuccess("Agente publicado no GPTMaker com sucesso.");
+      if (created.status === "PUBLICADO_GPTMAKER") {
+        setSuccess("Treinamento publicado com sucesso.");
       } else {
-        setError(created.message || "Nao foi possivel publicar no GPTMaker. Verifique a configuracao da integracao ou tente novamente.");
+        setError(created.message || "Nao foi possivel publicar o treinamento. Verifique a configuracao ou tente novamente.");
       }
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel publicar no GPTMaker. Verifique a configuracao da integracao ou tente novamente.");
@@ -193,13 +191,13 @@ export default function AgentTrainingsPage() {
         title="Treinamento do Agente"
         description="Ensine o agente com informacoes da sua franquia e revise o conteudo antes de publicar."
       />
-      {!hasRealExternalId ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Agente ainda não conectado. O treinamento será salvo localmente até que a integração seja configurada.</div> : null}
+      {!agentReady ? <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Agente ainda não configurado. O treinamento será salvo localmente até que a integração seja configurada.</div> : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
           <AlertCircle size={18} className="mt-0.5 shrink-0" />
           <div>
-            <p className="font-semibold">Nao foi possivel concluir a publicacao no GPTMaker.</p>
+            <p className="font-semibold">Nao foi possivel concluir a publicacao.</p>
             <p className="mt-1">{error}</p>
           </div>
         </div>
@@ -218,13 +216,13 @@ export default function AgentTrainingsPage() {
             <h2 className="text-lg font-semibold text-ink">Status do agente</h2>
             <p className="mt-2 text-sm leading-6 text-slate-500">Para publicar o treinamento, o agente precisa estar configurado.</p>
           </div>
-          <StatusBadge status={hasRealExternalId ? "CONNECTED" : "ERROR"} />
+          <StatusBadge status={agentReady ? "CONNECTED" : "ERROR"} />
         </div>
         <div className="mt-4 rounded-xl bg-mist px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Status</p>
-          <p className="mt-2 text-sm font-semibold text-ink">{hasRealExternalId ? "Conectado" : "Não conectado"}</p>
+          <p className="mt-2 text-sm font-semibold text-ink">{agentReady ? "Conectado" : "Não configurado"}</p>
         </div>
-        {!hasRealExternalId && agent ? (
+        {!agentReady && agent ? (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <span>Configure o agente na tela da franquia antes de publicar.</span>
             <Link href={`/franquias/${agent.franchiseId}`} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700">
@@ -286,7 +284,7 @@ export default function AgentTrainingsPage() {
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
-                disabled={isSubmitting || isLoading || !hasRealExternalId}
+                disabled={isSubmitting || isLoading || !agentReady}
                 className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white shadow-soft disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}

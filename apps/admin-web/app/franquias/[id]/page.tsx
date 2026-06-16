@@ -49,6 +49,8 @@ export default function FranchiseDetailPage() {
     [selectedWorkspaceId, workspaces]
   );
 
+  const hasWorkspace = !!franchise?.workspaceId;
+
   useEffect(() => {
     if (!params?.id) {
       return;
@@ -218,12 +220,13 @@ export default function FranchiseDetailPage() {
         </section>
       ) : (
         <div className="grid gap-5">
+          {/* overview cards */}
           <section className="grid gap-4 xl:grid-cols-4">
             <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
               <Building2 size={20} className="text-brand-700" />
               <h2 className="mt-4 font-semibold text-ink">Dados da franquia</h2>
               <p className="mt-1 text-sm text-slate-500">{franchise?.city} / {franchise?.state}</p>
-              <p className="mt-1 text-sm text-slate-500">{franchise?.document ?? ""}</p>
+              {franchise?.document ? <p className="text-sm text-slate-500">{franchise.document}</p> : null}
               <div className="mt-3"><StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} /></div>
             </article>
             <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
@@ -235,7 +238,7 @@ export default function FranchiseDetailPage() {
             {isSuperAdmin ? (
               <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
                 <PlugZap size={20} className="text-brand-700" />
-                <h2 className="mt-4 font-semibold text-ink">Conexão</h2>
+                <h2 className="mt-4 font-semibold text-ink">Integração</h2>
                 <p className="mt-2 text-sm text-slate-500">{connection?.workspaceName ?? "Não vinculada"}</p>
               </article>
             ) : null}
@@ -251,111 +254,107 @@ export default function FranchiseDetailPage() {
             </article>
           </section>
 
-          <section className="grid gap-5 xl:grid-cols-2">
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="text-lg font-semibold text-ink">Administrador</h2>
-              {adminUser ? (
-                <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <p><strong className="text-ink">Nome:</strong> {adminUser.name}</p>
-                  <p className="mt-1"><strong className="text-ink">Email:</strong> {adminUser.email}</p>
+          {/* admin user detail */}
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Administrador</h2>
+            {adminUser ? (
+              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                <p><strong className="text-ink">Nome:</strong> {adminUser.name}</p>
+                <p className="mt-1"><strong className="text-ink">Email:</strong> {adminUser.email}</p>
+              </div>
+            ) : isSuperAdmin ? (
+              <div className="mt-4 grid gap-4">
+                <p className="text-sm text-slate-500">Cadastre o responsável pela franquia.</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="grid gap-1.5">
+                    <span className="text-sm font-medium text-slate-700">Nome</span>
+                    <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminName} onChange={(event) => setAdminName(event.target.value)} />
+                  </label>
+                  <label className="grid gap-1.5">
+                    <span className="text-sm font-medium text-slate-700">Email</span>
+                    <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} />
+                  </label>
+                  <label className="grid gap-1.5 sm:col-span-2">
+                    <span className="text-sm font-medium text-slate-700">Senha inicial</span>
+                    <input type="password" className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} />
+                  </label>
+                  <button type="button" onClick={() => void handleCreateAdminUser()} disabled={isSavingAdmin} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    {isSavingAdmin ? "Salvando..." : "Criar administrador"}
+                  </button>
                 </div>
-              ) : isSuperAdmin ? (
-                <div className="mt-4 grid gap-4">
-                  <p className="text-sm text-slate-500">Cadastre o responsável pela franquia.</p>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <label className="grid gap-1.5">
-                      <span className="text-sm font-medium text-slate-700">Nome</span>
-                      <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminName} onChange={(event) => setAdminName(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1.5">
-                      <span className="text-sm font-medium text-slate-700">Email</span>
-                      <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} />
-                    </label>
-                    <label className="grid gap-1.5 sm:col-span-2">
-                      <span className="text-sm font-medium text-slate-700">Senha inicial</span>
-                      <input type="password" className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} />
-                    </label>
-                    <button type="button" onClick={() => void handleCreateAdminUser()} disabled={isSavingAdmin} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                      {isSavingAdmin ? "Salvando..." : "Criar administrador"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="mt-4 text-sm text-slate-500">Aguardando cadastro pela administração.</p>
-              )}
-            </section>
-
-            {isSuperAdmin ? (
-              <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-                <h2 className="text-lg font-semibold text-ink">Conexão</h2>
-                <p className="mt-1 text-sm text-slate-500">Gerencie a integração da franquia.</p>
-                <div className="mt-4 grid gap-3 text-sm text-slate-600">
-                  <p className="rounded-xl bg-slate-50 p-3">Integração atual: <strong className="text-ink">{connection?.workspaceName ?? "Nenhuma"}</strong></p>
-                </div>
-                <div className="mt-4 grid gap-3">
-                  <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
-                    <option value="">Selecione uma integração</option>
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-                    ))}
-                  </select>
-                  <div className="flex flex-wrap gap-2">
-                    <button type="button" onClick={() => connection?.workspaceId ? setConfirmAction("replace-workspace") : void handleLinkWorkspace(false)} disabled={!selectedWorkspaceId || isSaving} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                      {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
-                      {connection?.workspaceId ? "Trocar" : "Vincular"}
-                    </button>
-                    {connection?.workspaceId ? (
-                      <button type="button" onClick={() => setConfirmAction("unlink-workspace")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                        Desvincular
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            ) : null}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-slate-500">Aguardando cadastro pela administração.</p>
+            )}
           </section>
 
+          {/* agent section - always visible */}
+          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <h2 className="text-lg font-semibold text-ink">Agente da franquia</h2>
+            <p className="mt-1 text-sm text-slate-500">Configuração do agente de atendimento.</p>
+
+            {!hasWorkspace ? (
+              <div className="mt-5 space-y-4">
+                <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                  <p className="font-medium">Nenhuma integração vinculada</p>
+                  <p className="mt-1">Para criar o agente, primeiro vincule uma integração.</p>
+                </div>
+                <button type="button" disabled className="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
+                  Criar agente
+                </button>
+                <p className="text-xs text-slate-400">Disponível após vincular integração.</p>
+              </div>
+            ) : (
+              <div className="mt-5 grid gap-4">
+                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
+                  <p><strong className="text-ink">Agente:</strong> {connection?.agentName ?? "Não configurado"}</p>
+                  {connection?.workspaceName ? (
+                    <p className="mt-1"><strong className="text-ink">Integração:</strong> {connection.workspaceName}</p>
+                  ) : null}
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <Link href={`/franquias/${franchise?.id}/agente`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
+                    {connection?.agentId ? "Abrir agente" : "Configurar agente"}
+                  </Link>
+                  {connection?.agentId ? (
+                    <button type="button" onClick={() => setConfirmAction("clear-agent")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
+                      Remover agente
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            )}
+          </section>
+
+          {/* connection section - SUPER_ADMIN only */}
           {isSuperAdmin ? (
             <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="text-lg font-semibold text-ink">Agente da franquia</h2>
-              {!connection?.workspaceId ? (
-                <p className="mt-3 rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">Vincule uma integração antes de configurar o agente.</p>
-              ) : (
-                <div className="mt-4 grid gap-4">
-                  <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                    <p><strong className="text-ink">Agente:</strong> {connection?.agentName ?? "Não configurado"}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-3">
-                    <Link href={`/franquias/${franchise?.id}/agente`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
-                      {connection?.agentId ? "Abrir agente" : "Configurar agente"}
-                    </Link>
-                    {connection?.agentId ? (
-                      <>
-                        <button type="button" onClick={() => setConfirmAction("clear-agent")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                          Remover agente
-                        </button>
-                        <Link href={`/franquias/${franchise?.id}/agente`} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                          Treinamentos
-                        </Link>
-                      </>
-                    ) : null}
-                  </div>
+              <h2 className="text-lg font-semibold text-ink">Conexão</h2>
+              <p className="mt-1 text-sm text-slate-500">Gerencie a integração da franquia.</p>
+              <div className="mt-4 grid gap-3 text-sm text-slate-600">
+                <p className="rounded-xl bg-slate-50 p-3">Integração atual: <strong className="text-ink">{connection?.workspaceName ?? "Nenhuma"}</strong></p>
+              </div>
+              <div className="mt-4 grid gap-3">
+                <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
+                  <option value="">Selecione uma integração</option>
+                  {workspaces.map((workspace) => (
+                    <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                  ))}
+                </select>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" onClick={() => connection?.workspaceId ? setConfirmAction("replace-workspace") : void handleLinkWorkspace(false)} disabled={!selectedWorkspaceId || isSaving} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
+                    {connection?.workspaceId ? "Trocar" : "Vincular"}
+                  </button>
+                  {connection?.workspaceId ? (
+                    <button type="button" onClick={() => setConfirmAction("unlink-workspace")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
+                      Desvincular
+                    </button>
+                  ) : null}
                 </div>
-              )}
+              </div>
             </section>
-          ) : (
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="text-lg font-semibold text-ink">Meu agente</h2>
-              {connection?.agentId ? (
-                <div className="mt-4 flex flex-wrap gap-3">
-                  <p className="w-full rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Agente: <strong className="text-ink">{connection.agentName}</strong></p>
-                  <Link href={`/franquias/${franchise?.id}/agente`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">Abrir agente</Link>
-                </div>
-              ) : (
-                <p className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">Agente ainda não configurado.</p>
-              )}
-            </section>
-          )}
+          ) : null}
         </div>
       )}
 

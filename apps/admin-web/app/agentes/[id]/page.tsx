@@ -44,7 +44,6 @@ export default function AgentDetailPage() {
             <h2 className="text-lg font-semibold text-ink">Configuracao atual</h2>
               <p className="mt-2 text-sm leading-6 text-slate-600">Franquia: {agent?.franchiseName ?? "-"}</p>
               <p className="mt-1 text-sm leading-6 text-slate-600">Tom de voz: {agent?.toneOfVoice ?? "-"}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">{agent?.connectionStatus ?? "Status em carregamento"}</p>
             </div>
           </div>
           <StatusBadge status={agent?.status ?? "ATIVO"} />

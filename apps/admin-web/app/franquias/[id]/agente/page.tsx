@@ -247,7 +247,6 @@ export default function FranchiseAgentPage() {
                       )}
                       <div>
                         <p className="font-semibold text-ink">{localAgent.name}</p>
-                        <p className="mt-1 text-sm text-slate-500">{localAgent.connectionStatus}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={`/conversas`} className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                             <MessageSquare size={14} /> Testar agente

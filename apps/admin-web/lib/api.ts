@@ -61,14 +61,11 @@ export type LeadSummary = {
 export type AgentSummary = {
   id: string;
   franchiseId: string;
-  externalId: string;
   name: string;
   avatar?: string | null;
   status: string;
   toneOfVoice: string;
   franchiseName: string;
-  connectedToRealGptMaker: boolean;
-  connectionStatus: string;
   createdAt: string;
 };
 
@@ -79,6 +76,27 @@ export type CreateFranchisePayload = {
   state: string;
   workspaceId?: string;
   workspaceName?: string;
+};
+
+export type CreateFullFranchisePayload = {
+  franchise: {
+    name: string;
+    document?: string;
+    city: string;
+    state: string;
+    workspaceId?: string;
+    workspaceName?: string;
+  };
+  adminUser: {
+    name: string;
+    email: string;
+    password: string;
+  };
+};
+
+export type CreateFullFranchiseResult = {
+  franchise: FranchiseSummary;
+  adminUser: FranchiseAdminUser;
 };
 
 export type FranchiseSetup = {
@@ -122,46 +140,18 @@ export type PublishAgentResult = {
   trainingId: string;
   success: boolean;
   status: string;
-  externalReference?: string | null;
   message: string;
   publishedAt?: string | null;
-  mockEnabled: boolean;
-  errorCode?: string | null;
   details?: string | null;
-};
-
-export type GptMakerHealth = {
-  baseUrl: string;
-  mockEnabled: boolean;
-  tokenConfigured: boolean;
-  status: "MOCK" | "READY" | "MISSING_TOKEN";
-  message: string;
 };
 
 export type GptMakerDiagnostics = {
   baseUrl: string;
-  mockEnabled: boolean;
   tokenConfigured: boolean;
   status: "CONNECTED" | "MISSING_TOKEN" | "ERROR" | "MOCK";
   workspaceCount: number;
   message: string;
   details?: string | null;
-  httpStatus?: number | null;
-  errorCode?: string | null;
-  endpoint?: string | null;
-  responsePreview?: string | null;
-};
-
-export type GptMakerAgentDiagnostics = {
-  workspaceId: string;
-  endpoint: string;
-  httpStatus?: number | null;
-  status: "CONNECTED" | "ERROR" | "MISSING_TOKEN" | "MOCK";
-  agentCount: number;
-  agentNames: string[];
-  message: string;
-  errorCode?: string | null;
-  responsePreview?: string | null;
 };
 
 export type TrainingSummary = {
@@ -169,9 +159,7 @@ export type TrainingSummary = {
   title: string;
   content: string;
   status: string;
-  externalReference?: string | null;
   message?: string | null;
-  mockEnabled: boolean;
   createdAt: string;
 };
 
@@ -295,11 +283,8 @@ export type ConversationSummary = {
   agentName?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
-  contextId?: string | null;
   firstPrompt?: string | null;
   lastResponse?: string | null;
-  chatId?: string | null;
-  interactionId?: string | null;
   humanTakeoverActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -342,13 +327,7 @@ export type TestAgentConversationResult = {
   franchiseId: string;
   franchiseName: string;
   agentName?: string | null;
-  contextId: string;
-  chatId?: string | null;
-  interactionId?: string | null;
   message?: string | null;
-  images: string[];
-  audios: string[];
-  documents: string[];
 };
 
 function getStoredToken(): string | null {
@@ -446,6 +425,13 @@ export function createFranchise(payload: CreateFranchisePayload) {
   });
 }
 
+export function createFullFranchise(payload: CreateFullFranchisePayload) {
+  return apiFetch<CreateFullFranchiseResult>("/franchises/full", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getLeads() {
   return apiFetch<LeadSummary[]>("/leads");
 }
@@ -473,14 +459,6 @@ export function publishFranchiseAgent(id: string) {
   return apiFetch<PublishAgentResult>(`/franchises/${id}/publish-agent`, {
     method: "POST"
   });
-}
-
-export function getGptMakerHealth() {
-  return apiFetch<GptMakerHealth>("/gptmaker/health");
-}
-
-export function getGptMakerDiagnostics() {
-  return apiFetch<GptMakerDiagnostics>("/gptmaker/diagnostics");
 }
 
 export function getAgentTrainings(id: string) {
@@ -560,10 +538,6 @@ export function getGptMakerWorkspaceAgents(workspaceId: string) {
   return apiFetch<GptMakerAgentOption[]>(`/franchises/gptmaker/workspaces/${workspaceId}/agents`);
 }
 
-export function getGptMakerWorkspaceAgentDiagnostics(workspaceId: string) {
-  return apiFetch<GptMakerAgentDiagnostics>(`/gptmaker/diagnostics/workspaces/${workspaceId}/agents`);
-}
-
 export function getWorkspaceMapping() {
   return apiFetch<WorkspaceMapping>("/franchises/gptmaker/workspace-mapping");
 }
@@ -607,9 +581,12 @@ export function startHumanTakeover(id: string) {
   });
 }
 
-export function testAgentConversation(payload: TestAgentConversationPayload) {
+export function testAgentConversation(payload: Omit<TestAgentConversationPayload, "contextId"> & { contextId?: string }) {
   return apiFetch<TestAgentConversationResult>("/conversations/test-agent", {
     method: "POST",
-    body: JSON.stringify(payload)
+    body: JSON.stringify({
+      ...payload,
+      contextId: payload.contextId || `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    })
   });
 }

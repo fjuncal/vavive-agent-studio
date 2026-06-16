@@ -21,7 +21,7 @@ import {
   type TrainingSummary
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Bot, Building2, FileText, MessageCircle, TrendingUp, UsersRound } from "lucide-react";
+import { Bot, Building2, FileText, MessageCircle } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 function formatDate(value?: string | null) {
@@ -54,7 +54,7 @@ export default function DashboardPage() {
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const connectedFranchises = franchises.filter((franchise) => franchise.workspaceId && franchise.agentId).length;
   const currentAgent = useMemo(
-    () => agents.find((agent) => agent.connectedToRealGptMaker) ?? agents[0] ?? null,
+    () => agents[0] ?? null,
     [agents]
   );
   const recentLeads = leads.slice(0, 4);
@@ -163,7 +163,7 @@ export default function DashboardPage() {
       ) : (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Minha franquia" value={user?.franchise?.name ?? "Não associada"} hint={user?.franchise ? `${user.franchise.city} / ${user.franchise.state}` : "Verifique o cadastro"} icon={Building2} />
-          <StatCard label="Meu agente" value={currentAgent?.name ?? "Não configurado"} hint={agentsError ?? currentAgent?.connectionStatus ?? "Aguardando"} icon={Bot} />
+          <StatCard label="Meu agente" value={currentAgent?.name ?? "Não configurado"} hint={agentsError ?? currentAgent?.status ?? "Aguardando"} icon={Bot} />
           <StatCard label="Treinamentos" value={String(trainings.length)} hint={trainingsError ?? "Últimos registros"} icon={FileText} />
           <StatCard label="Atendimentos" value={String(summary?.totalLeads ?? leads.length)} hint={summaryError ?? "Leads registrados"} icon={MessageCircle} />
         </section>
@@ -199,7 +199,6 @@ export default function DashboardPage() {
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="font-semibold text-ink">{currentAgent.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{currentAgent.connectionStatus}</p>
                   </div>
                   <StatusBadge status={currentAgent.status} />
                 </div>

@@ -16,7 +16,7 @@ import {
   type FranchiseSummary
 } from "@/lib/api";
 import { Bot, Building2, Loader2, MessageSquareText, Send, UserRound } from "lucide-react";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useState } from "react";
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -30,7 +30,6 @@ function formatDate(value?: string | null) {
 
 export default function ConversationsPage() {
   const { user } = useAuth();
-  const uid = useId();
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
   const [selectedFranchiseId, setSelectedFranchiseId] = useState("");
@@ -119,17 +118,17 @@ export default function ConversationsPage() {
     setError(null);
     setSuccess(null);
     try {
-      const contextId = `${uid}-${Date.now()}`;
       const result = await testAgentConversation({
         franchiseId,
         prompt,
-        contextId,
         customerName: customerName || undefined,
         phone: phone || undefined
       });
       const refreshed = await getConversations(isSuperAdmin ? franchiseId : undefined);
       setConversations(refreshed);
-      setSelectedConversationId(result.conversationId);
+      if (result.conversationId) {
+        setSelectedConversationId(result.conversationId);
+      }
       setSuccess("Mensagem enviada.");
       setPrompt("");
     } catch (requestError) {
@@ -165,7 +164,7 @@ export default function ConversationsPage() {
       <PageHeader
         eyebrow="Atendimento"
         title="Central de Atendimento"
-        description={isSuperAdmin ? "Acompanhe as conversas e teste o agente por franquia." : "Veja os atendimentos da sua franquia."}
+        description={isSuperAdmin ? "Acompanhe as conversas por franquia." : "Veja os atendimentos da sua franquia."}
       />
 
       {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
@@ -180,7 +179,7 @@ export default function ConversationsPage() {
               </div>
               <div>
                 <h2 className="font-semibold text-ink">Testar agente</h2>
-                <p className="mt-1 text-sm text-slate-500">Envie uma mensagem para testar o agente.</p>
+                <p className="mt-1 text-sm text-slate-500">Simule um atendimento.</p>
               </div>
             </div>
             <div className="mt-4 grid gap-3">
