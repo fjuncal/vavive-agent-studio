@@ -1,6 +1,7 @@
 package br.com.vavive.gptmaker.service;
 
 import br.com.vavive.gptmaker.domain.entity.AssistantStandardBlock;
+import br.com.vavive.gptmaker.domain.entity.AssistantStandardBlockHistory;
 import br.com.vavive.gptmaker.domain.entity.AssistantStandardProfile;
 import br.com.vavive.gptmaker.domain.entity.DefaultAgentText;
 import br.com.vavive.gptmaker.domain.entity.Franchise;
@@ -15,6 +16,7 @@ import br.com.vavive.gptmaker.dto.UpdateAssistantBlockRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.repository.AssistantStandardBlockRepository;
+import br.com.vavive.gptmaker.repository.AssistantStandardBlockHistoryRepository;
 import br.com.vavive.gptmaker.repository.AssistantStandardProfileRepository;
 import br.com.vavive.gptmaker.repository.DefaultAgentTextRepository;
 import br.com.vavive.gptmaker.repository.FranchiseAssistantBlockConfigRepository;
@@ -31,6 +33,8 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,8 +42,10 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AssistantStandardProfileService {
+    private static final Logger log = LoggerFactory.getLogger(AssistantStandardProfileService.class);
     private final AssistantStandardProfileRepository profileRepository;
     private final AssistantStandardBlockRepository blockRepository;
+    private final AssistantStandardBlockHistoryRepository historyRepository;
     private final FranchiseAssistantBlockConfigRepository configRepository;
     private final FranchiseRepository franchiseRepository;
     private final FranchiseSetupRepository franchiseSetupRepository;
@@ -51,6 +57,7 @@ public class AssistantStandardProfileService {
     public AssistantStandardProfileService(
         AssistantStandardProfileRepository profileRepository,
         AssistantStandardBlockRepository blockRepository,
+        AssistantStandardBlockHistoryRepository historyRepository,
         FranchiseAssistantBlockConfigRepository configRepository,
         FranchiseRepository franchiseRepository,
         FranchiseSetupRepository franchiseSetupRepository,
@@ -61,6 +68,7 @@ public class AssistantStandardProfileService {
     ) {
         this.profileRepository = profileRepository;
         this.blockRepository = blockRepository;
+        this.historyRepository = historyRepository;
         this.configRepository = configRepository;
         this.franchiseRepository = franchiseRepository;
         this.franchiseSetupRepository = franchiseSetupRepository;
@@ -95,8 +103,55 @@ public class AssistantStandardProfileService {
         AssistantBlockType type = parseBlockType(blockType);
         AssistantStandardBlock block = blockRepository.findByProfileAndBlockType(profile, type)
             .orElseGet(() -> new AssistantStandardBlock(profile, type, "{}", profile.getVersion()));
+
+        // Save history before updating
+        if (block.getPayloadJson() != null && !block.getPayloadJson().equals("{}")) {
+            String changedBy = currentUserService.requireCurrentUser().getName();
+            historyRepository.save(new AssistantStandardBlockHistory(block, block.getVersion(), block.getPayloadJson(), changedBy));
+        }
+
         JsonNode validatedPayload = preparePayload(type, requestPayload(type, request.payload()));
         block.setPayloadJson(writeJson(validatedPayload));
+        profile.setVersion(profile.getVersion() + 1);
+        block.setVersion(profile.getVersion());
+        profileRepository.save(profile);
+        blockRepository.save(block);
+        return getActiveProfile();
+    }
+
+    @Transactional(readOnly = true)
+    public List<AssistantStandardBlockHistory> getBlockHistory(String blockType) {
+        currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode acessar historico de padroes.");
+        AssistantStandardProfile profile = ensureActiveProfile();
+        AssistantBlockType type = parseBlockType(blockType);
+        AssistantStandardBlock block = blockRepository.findByProfileAndBlockType(profile, type)
+            .orElse(null);
+        if (block == null) {
+            return List.of();
+        }
+        return historyRepository.findByBlockIdOrderByVersionDesc(block.getId());
+    }
+
+    public AssistantStandardProfileResponse revertBlock(String blockType, int targetVersion) {
+        currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode reverter padroes do Assistente Vavive.");
+        AssistantStandardProfile profile = ensureActiveProfile();
+        AssistantBlockType type = parseBlockType(blockType);
+        AssistantStandardBlock block = blockRepository.findByProfileAndBlockType(profile, type)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Bloco nao encontrado."));
+
+        // Find the history entry for the target version
+        List<AssistantStandardBlockHistory> history = historyRepository.findByBlockIdOrderByVersionDesc(block.getId());
+        AssistantStandardBlockHistory target = history.stream()
+            .filter(h -> h.getVersion() == targetVersion)
+            .findFirst()
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Versao nao encontrada no historico."));
+
+        // Save current state as history before reverting
+        String changedBy = currentUserService.requireCurrentUser().getName();
+        historyRepository.save(new AssistantStandardBlockHistory(block, block.getVersion(), block.getPayloadJson(), changedBy));
+
+        // Revert
+        block.setPayloadJson(target.getPayloadJson());
         profile.setVersion(profile.getVersion() + 1);
         block.setVersion(profile.getVersion());
         profileRepository.save(profile);
@@ -211,7 +266,7 @@ public class AssistantStandardProfileService {
 
     private JsonNode defaultPayload(AssistantBlockType type) {
         List<DefaultAgentText> texts = defaultAgentTextRepository.findByActiveTrueOrderByCategoryAscTitleAsc();
-        FranchiseSetup exampleSetup = franchiseSetupRepository.findAll().stream().findFirst().orElse(null);
+        FranchiseSetup exampleSetup = franchiseSetupRepository.findFirstBy().orElse(null);
         return switch (type) {
             case BEHAVIOR -> objectMapper.createObjectNode()
                 .put("instruction", joinTexts(texts, "CONTEXTO_VAVIVE", "REGRAS_ATENDIMENTO", "TOM_DE_VOZ"))
@@ -348,8 +403,8 @@ public class AssistantStandardProfileService {
             if (type == AssistantBlockType.AGENT_SETTINGS) {
                 gptMakerClient.updateAgentSettings(franchise.getAgentId(), payload);
             }
-        } catch (GptMakerIntegrationException ignored) {
-            // operacao continua com valor salvo localmente
+        } catch (GptMakerIntegrationException exception) {
+            log.warn("Falha ao sincronizar bloco {} com GPTMaker para franquia {}. Erro: {}", type, franchise.getId(), exception.getMessage());
         }
     }
 
@@ -385,25 +440,25 @@ public class AssistantStandardProfileService {
 
     private boolean editableInFranchiseWorkbench(AssistantBlockType type) {
         return switch (type) {
-            case BEHAVIOR, ROLE, BASE_DESCRIPTION, AGENT_SETTINGS -> true;
-            case TRAININGS, INTENTIONS, IDLE_ACTIONS, TRANSFER_RULES -> false;
+            case BEHAVIOR, ROLE, BASE_DESCRIPTION, TRAININGS, INTENTIONS, AGENT_SETTINGS -> true;
+            case IDLE_ACTIONS, TRANSFER_RULES -> false;
         };
     }
 
     private String syncStatusFor(AssistantBlockType type) {
         return switch (type) {
             case AGENT_SETTINGS -> "REMOTE_SYNC";
-            case BEHAVIOR, ROLE, BASE_DESCRIPTION -> "LOCAL_BLUEPRINT";
-            case TRAININGS, INTENTIONS, IDLE_ACTIONS, TRANSFER_RULES -> "READ_ONLY_REFERENCE";
+            case BEHAVIOR, ROLE, BASE_DESCRIPTION, TRAININGS, INTENTIONS -> "LOCAL_BLUEPRINT";
+            case IDLE_ACTIONS, TRANSFER_RULES -> "READ_ONLY_REFERENCE";
         };
     }
 
     private String syncMessageFor(AssistantBlockType type) {
         return switch (type) {
             case AGENT_SETTINGS -> "Salvar este bloco atualiza o assistente real da unidade.";
-            case BEHAVIOR, ROLE, BASE_DESCRIPTION ->
+            case BEHAVIOR, ROLE, BASE_DESCRIPTION, TRAININGS, INTENTIONS ->
                 "Salvar este bloco ajusta a configuracao local da unidade, sem reprovisionar o assistente automaticamente.";
-            case TRAININGS, INTENTIONS, IDLE_ACTIONS, TRANSFER_RULES ->
+            case IDLE_ACTIONS, TRANSFER_RULES ->
                 "Bloco exibido em modo leitura nesta fase. Edicao remota ainda nao esta disponivel.";
         };
     }

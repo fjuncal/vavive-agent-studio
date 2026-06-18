@@ -56,7 +56,7 @@ export type DashboardSummary = {
 
 export type WorkspaceCredits = {
   franchiseId?: string;
-  status: "AVAILABLE" | "UNAVAILABLE" | "NO_WORKSPACE";
+  status: "AVAILABLE" | "UNAVAILABLE" | "NO_WORKSPACE" | "STALE";
   credits: number;
   used: number;
   remaining: number;
@@ -530,8 +530,15 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   if (response.status === 204) {
     return undefined as T;
   }
-
-  return response.json() as Promise<T>;
+  const contentLength = response.headers.get("content-length");
+  if (contentLength === "0") {
+    return undefined as T;
+  }
+  try {
+    return await response.json() as T;
+  } catch {
+    return undefined as T;
+  }
 }
 
 export function login(email: string, password: string) {
@@ -787,7 +794,7 @@ export function testAgentConversation(payload: Omit<TestAgentConversationPayload
     method: "POST",
     body: JSON.stringify({
       ...payload,
-      contextId: payload.contextId || `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      contextId: payload.contextId || `ctx-${crypto.randomUUID()}`
     })
   });
 }
@@ -885,8 +892,30 @@ export function getIdleActions(franchiseId: string) {
 }
 
 export function createFranchiseChannel(franchiseId: string, name: string, type: string) {
-  return apiFetch<unknown>(`/franchises/${franchiseId}/channels`, {
+  return apiFetch<FranchiseChannel>(`/franchises/${franchiseId}/channels`, {
     method: "POST",
     body: JSON.stringify({ name, type })
+  });
+}
+
+export type ChannelQRCodeResponse = {
+  value?: string;
+  connected?: boolean;
+};
+
+export function getChannelQRCode(franchiseId: string, channelId: string) {
+  return apiFetch<ChannelQRCodeResponse>(`/franchises/${franchiseId}/channels/${channelId}/qr-code`);
+}
+
+export function updateFranchiseChannel(franchiseId: string, channelId: string, payload: { name?: string; agentId?: string }) {
+  return apiFetch<FranchiseChannel>(`/franchises/${franchiseId}/channels/${channelId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteFranchiseChannel(franchiseId: string, channelId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/channels/${channelId}`, {
+    method: "DELETE"
   });
 }

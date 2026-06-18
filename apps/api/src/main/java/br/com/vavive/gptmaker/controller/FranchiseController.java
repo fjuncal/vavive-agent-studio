@@ -1,10 +1,13 @@
 package br.com.vavive.gptmaker.controller;
 
+import br.com.vavive.gptmaker.dto.CreateChannelRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
+import br.com.vavive.gptmaker.dto.EditChannelRequest;
+import br.com.vavive.gptmaker.dto.RevertBlockRequest;
 import br.com.vavive.gptmaker.dto.AssistantStandardProfileResponse;
 import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
 import br.com.vavive.gptmaker.dto.FranchiseAssistantConfigurationResponse;
@@ -29,11 +32,14 @@ import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -159,8 +165,25 @@ public class FranchiseController {
     }
 
     @PostMapping("/franchises/{id}/channels")
-    public Object createChannel(@PathVariable UUID id, @RequestBody java.util.Map<String, String> request) {
-        return channelService.create(id, request.get("name"), request.get("type"));
+    public Object createChannel(@PathVariable UUID id, @Valid @RequestBody CreateChannelRequest request) {
+        return channelService.create(id, request.name(), request.type());
+    }
+
+    @GetMapping("/franchises/{id}/channels/{channelId}/qr-code")
+    public Object getChannelQRCode(@PathVariable UUID id, @PathVariable UUID channelId) {
+        return channelService.getChannelQRCode(id, channelId);
+    }
+
+    @PutMapping("/franchises/{id}/channels/{channelId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void editChannel(@PathVariable UUID id, @PathVariable UUID channelId, @Valid @RequestBody EditChannelRequest request) {
+        channelService.editChannel(id, channelId, request.name(), request.agentId());
+    }
+
+    @DeleteMapping("/franchises/{id}/channels/{channelId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteChannel(@PathVariable UUID id, @PathVariable UUID channelId) {
+        channelService.deleteChannel(id, channelId);
     }
 
     @GetMapping("/franchises/{id}/credits")
@@ -179,6 +202,19 @@ public class FranchiseController {
         @RequestBody UpdateAssistantBlockRequest request
     ) {
         return assistantStandardProfileService.updateStandardBlock(blockType, request);
+    }
+
+    @GetMapping("/assistant-standards/profile/blocks/{blockType}/history")
+    public List<br.com.vavive.gptmaker.domain.entity.AssistantStandardBlockHistory> getBlockHistory(@PathVariable String blockType) {
+        return assistantStandardProfileService.getBlockHistory(blockType);
+    }
+
+    @PostMapping("/assistant-standards/profile/blocks/{blockType}/revert")
+    public AssistantStandardProfileResponse revertBlock(
+        @PathVariable String blockType,
+        @Valid @RequestBody RevertBlockRequest request
+    ) {
+        return assistantStandardProfileService.revertBlock(blockType, request.version());
     }
 
     @GetMapping("/franchises/{id}/assistant-configuration")

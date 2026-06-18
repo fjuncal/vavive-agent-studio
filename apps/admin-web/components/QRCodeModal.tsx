@@ -1,0 +1,200 @@
+"use client";
+
+import { useState, useEffect, useCallback, useRef } from "react";
+import { X, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import clsx from "clsx";
+
+interface QRCodeModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  channelId: string;
+  channelName: string;
+  onConnected?: () => void;
+  fetchQRCode: (channelId: string) => Promise<{ value?: string; connected?: boolean }>;
+}
+
+export function QRCodeModal({
+  isOpen,
+  onClose,
+  channelId,
+  channelName,
+  onConnected,
+  fetchQRCode
+}: QRCodeModalProps) {
+  const [qrData, setQrData] = useState<string | null>(null);
+  const [status, setStatus] = useState<"loading" | "qr" | "connected" | "error" | "timeout">("loading");
+  const [errorMessage, setErrorMessage] = useState("");
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const elapsedRef = useRef(0);
+
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    elapsedRef.current = 0;
+    setStatus("loading");
+
+    const poll = async () => {
+      try {
+        const data = await fetchQRCode(channelId);
+        elapsedRef.current += 3;
+
+        if (data.connected) {
+          setStatus("connected");
+          stopPolling();
+          onConnected?.();
+          return;
+        }
+
+        if (data.value) {
+          setQrData(data.value);
+          setStatus("qr");
+        }
+
+        // Backoff: 3s → 5s after 30s → 10s after 60s → timeout after 120s
+        if (elapsedRef.current > 120) {
+          setStatus("timeout");
+          stopPolling();
+          return;
+        }
+
+        // Adjust interval based on elapsed time
+        if (intervalRef.current) {
+          clearInterval(intervalRef.current);
+        }
+        const nextInterval = elapsedRef.current > 60 ? 10000 : elapsedRef.current > 30 ? 5000 : 3000;
+        intervalRef.current = setInterval(poll, nextInterval);
+      } catch {
+        setStatus("error");
+        setErrorMessage("Erro ao buscar QR code");
+        stopPolling();
+      }
+    };
+
+    poll();
+    intervalRef.current = setInterval(poll, 3000);
+  }, [channelId, fetchQRCode, onConnected, stopPolling]);
+
+  useEffect(() => {
+    if (isOpen) {
+      startPolling();
+    }
+    return () => stopPolling();
+  }, [isOpen, startPolling, stopPolling]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      {/* Modal */}
+      <div className="relative card max-w-md w-full mx-4 p-6">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
+            Conectar {channelName}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          >
+            <X size={20} style={{ color: "var(--color-text-tertiary)" }} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex flex-col items-center gap-4">
+          {status === "loading" && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <Loader2 size={48} className="animate-spin text-brand-500" />
+              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                Gerando QR code...
+              </p>
+            </div>
+          )}
+
+          {status === "qr" && qrData && (
+            <>
+              <div className="rounded-xl border-2 border-gray-200 dark:border-gray-700 p-4 bg-white">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={qrData.startsWith("data:") ? qrData : `data:image/png;base64,${qrData}`}
+                  alt="QR Code para conexão"
+                  width={256}
+                  height={256}
+                  className="block"
+                />
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                  Escaneie o QR code com seu WhatsApp
+                </p>
+                <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>
+                  Aguardando conexão...
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                <Loader2 size={14} className="animate-spin" />
+                Verificando conexão automaticamente
+              </div>
+            </>
+          )}
+
+          {status === "connected" && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <CheckCircle2 size={48} className="text-green-500" />
+              <p className="text-lg font-semibold text-green-600 dark:text-green-400">
+                Conectado!
+              </p>
+              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                Canal conectado com sucesso
+              </p>
+            </div>
+          )}
+
+          {status === "error" && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <AlertCircle size={48} className="text-red-500" />
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {errorMessage}
+              </p>
+              <button
+                type="button"
+                onClick={startPolling}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <RefreshCw size={16} />
+                Tentar novamente
+              </button>
+            </div>
+          )}
+
+          {status === "timeout" && (
+            <div className="flex flex-col items-center gap-3 py-8">
+              <AlertCircle size={48} className="text-amber-500" />
+              <p className="text-sm text-amber-600 dark:text-amber-400">
+                Tempo esgotado. O QR code pode ter expirado.
+              </p>
+              <button
+                type="button"
+                onClick={startPolling}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <RefreshCw size={16} />
+                Gerar novo QR code
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

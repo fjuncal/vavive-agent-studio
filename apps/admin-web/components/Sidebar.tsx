@@ -7,6 +7,7 @@ import {
   FileText,
   LayoutDashboard,
   MessageSquareText,
+  PlusCircle,
   Radio,
   Route,
   Sparkles,
@@ -34,7 +35,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       return { ...item, label: "Minha franquia" };
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/agentes") {
-      return { ...item, label: "Meu assistente" };
+      return { ...item, label: "Meu assistente", icon: PlusCircle };
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/conversas") {
       return { ...item, label: "Atendimentos" };
@@ -73,7 +74,7 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       <nav className="mt-8 flex flex-1 flex-col gap-1">
         {visibleNav.map((item) => {
           const Icon = item.icon;
-          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          const active = pathname === item.href || pathname.startsWith(item.href + "/") && item.href !== "/";
           return (
             <Link
               key={item.href}

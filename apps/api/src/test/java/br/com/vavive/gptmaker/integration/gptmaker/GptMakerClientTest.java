@@ -574,6 +574,21 @@ class GptMakerClientTest {
         }
 
         @Override
+        public ResponseEntity<String> getChannelQRCode(String channelId) {
+            return ResponseEntity.ok("{\"value\":\"mock-qr-base64\",\"connected\":false}");
+        }
+
+        @Override
+        public ResponseEntity<String> editChannel(String channelId, Object editRequest) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteChannel(String channelId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
         public ResponseEntity<String> listTransferRules(String agentId) {
             return ResponseEntity.ok("[]");
         }

@@ -352,6 +352,72 @@ public class GptMakerClient {
         }
     }
 
+    public JsonNode getChannelQRCode(String channelId) {
+        String endpoint = "/v2/channel/%s/qr-code".formatted(channelId == null ? "" : channelId);
+        if (channelId == null || channelId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return objectMapper.createObjectNode()
+                .put("connected", false)
+                .put("value", "mock-qr-code-base64");
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.getChannelQRCode(channelId);
+            return parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel obter QR code do GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel obter QR code do GPTMaker.", endpoint);
+        }
+    }
+
+    public void editChannel(String channelId, String name, String agentId) {
+        String endpoint = "/v2/channel/%s/edit".formatted(channelId == null ? "" : channelId);
+        if (channelId == null || channelId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return;
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            var request = new java.util.HashMap<String, String>();
+            if (name != null) request.put("name", name);
+            if (agentId != null) request.put("assistantId", agentId);
+            feignClient.editChannel(channelId, request);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel editar canal no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel editar canal no GPTMaker.", endpoint);
+        }
+    }
+
+    public void deleteChannel(String channelId) {
+        String endpoint = "/v2/channel/%s".formatted(channelId == null ? "" : channelId);
+        if (channelId == null || channelId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return;
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            feignClient.deleteChannel(channelId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel remover canal no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel remover canal no GPTMaker.", endpoint);
+        }
+    }
+
     public List<GptMakerChatResponse> listChats(String workspaceId) {
         String endpoint = "/v2/workspace/%s/chats".formatted(workspaceId == null ? "" : workspaceId);
         if (workspaceId == null || workspaceId.isBlank()) {

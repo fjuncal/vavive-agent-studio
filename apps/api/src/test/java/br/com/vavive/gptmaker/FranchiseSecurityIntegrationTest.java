@@ -34,6 +34,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -221,7 +222,7 @@ class FranchiseSecurityIntegrationTest {
     }
 
     @Test
-    void adminFranquiaCannotProvisionGptMakerAgent() throws Exception {
+    void adminFranquiaCanProvisionOwnGptMakerAgent() throws Exception {
         Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
 
         mockMvc.perform(post("/franchises/{id}/gptmaker/agent", franchise.getId())
@@ -236,11 +237,13 @@ class FranchiseSecurityIntegrationTest {
                       "type": "SALE",
                       "jobName": "Vavive",
                       "jobSite": "https://vavive.com.br",
-                      "jobDescription": "Contexto Vavive"
+                      "jobDescription": "Contexto Vavive",
+                      "confirmCriticalChange": true
                     }
                     """))
-            .andExpect(status().isForbidden())
-            .andExpect(jsonPath("$.message").value("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker."));
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.agentId").isNotEmpty())
+            .andExpect(jsonPath("$.agentName").value("Assistente Vavive - Teste"));
     }
 
     @Test
@@ -263,7 +266,7 @@ class FranchiseSecurityIntegrationTest {
     void adminFranquiaCannotCustomizeReadOnlyAssistantBlock() throws Exception {
         Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
 
-        mockMvc.perform(post("/franchises/{id}/assistant-configuration/blocks/TRAININGS/customize", franchise.getId())
+        mockMvc.perform(post("/franchises/{id}/assistant-configuration/blocks/IDLE_ACTIONS/customize", franchise.getId())
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Este bloco esta disponivel apenas em leitura nesta fase."));
@@ -277,8 +280,9 @@ class FranchiseSecurityIntegrationTest {
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].syncStatus").value("REMOTE_SYNC"))
-            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].editable").value(false))
-            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].syncStatus").value("READ_ONLY_REFERENCE"));
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].editable").value(true))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].syncStatus").value("LOCAL_BLUEPRINT"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='IDLE_ACTIONS')].editable").value(false));
     }
 
     @Test
@@ -321,6 +325,15 @@ class FranchiseSecurityIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.totalLeads").value(4))
             .andExpect(jsonPath("$.setupStatus").value("VISAO_GERAL"));
+    }
+
+    @Test
+    void superAdminListIncludesWorkspaceCredits() throws Exception {
+        mockMvc.perform(get("/franchises")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].workspaceCredits.status").value("AVAILABLE"))
+            .andExpect(jsonPath("$[0].workspaceCredits.remaining").value(750));
     }
 
     @Test
@@ -841,6 +854,22 @@ class FranchiseSecurityIntegrationTest {
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isForbidden())
             .andExpect(jsonPath("$.message").value("ADMIN_FRANQUIA so pode acessar dados da propria franquia."));
+    }
+
+    @Test
+    void deleteChannelReturnsNoContent() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        var snapshot = new br.com.vavive.gptmaker.domain.entity.FranchiseChannelSnapshot(
+            franchise,
+            "channel-delete",
+            "WhatsApp Remover",
+            "WHATSAPP"
+        );
+        channelSnapshotRepository.save(snapshot);
+
+        mockMvc.perform(delete("/franchises/{id}/channels/{channelId}", franchise.getId(), snapshot.getId())
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123")))
+            .andExpect(status().isNoContent());
     }
 
     @Test

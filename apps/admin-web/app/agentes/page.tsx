@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
+import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth";
 import { getAgents, getFranchises, type AgentSummary, type FranchiseSummary } from "@/lib/api";
 import { Bot, Building2, ExternalLink, ArrowRight, Search } from "lucide-react";
@@ -56,10 +57,10 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
           {agentCount} {agentCount === 1 ? "agente" : "agentes"}
         </span>
         <Link
-          href={franchise.agentId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`}
+          href={franchise.agentId ? `/franquias/${franchise.id}/agente/configuracao` : `/franquias/${franchise.id}/agente/novo`}
           className="inline-flex items-center gap-1 text-sm font-medium text-brand-600 dark:text-brand-400 opacity-0 group-hover:opacity-100 transition-opacity"
         >
-          {franchise.agentId ? "Abrir agente" : "Configurar"}
+          {franchise.agentId ? "Abrir agente" : "Criar agente"}
           <ArrowRight size={14} />
         </Link>
       </div>
@@ -72,10 +73,10 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
 
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
-          href={franchise.agentId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`}
+          href={franchise.agentId ? `/franquias/${franchise.id}/agente/configuracao` : `/franquias/${franchise.id}/agente/novo`}
           className="btn-primary py-2 px-4 text-xs"
         >
-          {franchise.agentId ? "Abrir agente" : "Configurar agente"}
+          {franchise.agentId ? "Abrir agente" : "Criar agente"}
         </Link>
         {franchise.agentId && (
           <Link
@@ -93,9 +94,9 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
 
 export default function AgentsPage() {
   const { user } = useAuth();
+  const { error: showError } = useToast();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
@@ -105,16 +106,15 @@ export default function AgentsPage() {
         if (franchiseResult.status === "fulfilled") {
           setFranchises(franchiseResult.value);
         } else {
-          throw franchiseResult.reason;
+          showError(franchiseResult.reason instanceof Error ? franchiseResult.reason.message : "Erro ao carregar franquias.");
         }
         if (agentResult.status === "fulfilled") {
           setAgents(agentResult.value);
+        } else {
+          showError(agentResult.reason instanceof Error ? agentResult.reason.message : "Erro ao carregar agentes.");
         }
-      })
-      .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar.");
       });
-  }, []);
+  }, [showError]);
 
   const filteredFranchises = useMemo(() => {
     const list = isSuperAdmin
@@ -137,15 +137,6 @@ export default function AgentsPage() {
         title={isSuperAdmin ? "Franquias e agentes" : "Meu agente"}
         description={isSuperAdmin ? "Visualize e gerencie os agentes de cada franquia." : "Acompanhe o agente da sua franquia."}
       />
-
-      {error && (
-        <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 px-5 py-4 text-sm text-rose-700 dark:text-rose-400 animate-in flex items-center gap-2">
-          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900/30">
-            <span className="text-xs font-bold text-rose-600 dark:text-rose-400">!</span>
-          </div>
-          {error}
-        </div>
-      )}
 
       {isSuperAdmin && franchises.length > 0 && (
         <div className="flex items-center gap-3 rounded-xl border px-3.5 py-2.5 shadow-sm" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-primary)" }}>

@@ -94,6 +94,18 @@ public interface GptMakerFeignClient {
         @RequestBody GptMakerCreateChannelRequest request
     );
 
+    @GetMapping("/v2/channel/{channelId}/qr-code")
+    ResponseEntity<String> getChannelQRCode(@PathVariable String channelId);
+
+    @PutMapping("/v2/channel/{channelId}/edit")
+    ResponseEntity<String> editChannel(
+        @PathVariable String channelId,
+        @RequestBody Object editRequest
+    );
+
+    @DeleteMapping("/v2/channel/{channelId}")
+    ResponseEntity<String> deleteChannel(@PathVariable String channelId);
+
     @GetMapping("/v2/workspace/{workspaceId}/chats")
     ResponseEntity<String> listChats(@PathVariable String workspaceId);
 

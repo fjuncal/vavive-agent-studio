@@ -7,4 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface FranchiseSetupRepository extends JpaRepository<FranchiseSetup, UUID> {
     Optional<FranchiseSetup> findByFranchiseId(UUID franchiseId);
+    Optional<FranchiseSetup> findFirstBy();
 }

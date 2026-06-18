@@ -428,7 +428,6 @@ public class FranchiseService {
 
     @Transactional
     public FranchiseGptMakerConnectionResponse provisionGptMakerAgent(UUID id, ProvisionFranchiseGptMakerAgentRequest request) {
-        requireSuperAdmin();
         Franchise franchise = requireAccessibleFranchise(id);
         if (request.workspaceId() == null || request.workspaceId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Workspace GPTMaker nao informado");
