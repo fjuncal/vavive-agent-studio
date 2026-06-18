@@ -14,6 +14,7 @@ public record FranchiseResponse(
     String workspaceName,
     String agentId,
     String agentName,
+    WorkspaceCreditsResponse workspaceCredits,
     LocalDateTime gptMakerLastSyncAt,
     LocalDateTime createdAt
 ) {

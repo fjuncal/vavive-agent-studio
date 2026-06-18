@@ -5,7 +5,9 @@ import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
+import br.com.vavive.gptmaker.dto.AssistantStandardProfileResponse;
 import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
+import br.com.vavive.gptmaker.dto.FranchiseAssistantConfigurationResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
@@ -14,11 +16,14 @@ import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
+import br.com.vavive.gptmaker.dto.UpdateAssistantBlockRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
+import br.com.vavive.gptmaker.dto.WorkspaceCreditsResponse;
+import br.com.vavive.gptmaker.service.AssistantStandardProfileService;
 import br.com.vavive.gptmaker.service.ChannelService;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
@@ -35,10 +40,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class FranchiseController {
     private final FranchiseService franchiseService;
     private final ChannelService channelService;
+    private final AssistantStandardProfileService assistantStandardProfileService;
 
-    public FranchiseController(FranchiseService franchiseService, ChannelService channelService) {
+    public FranchiseController(FranchiseService franchiseService, ChannelService channelService, AssistantStandardProfileService assistantStandardProfileService) {
         this.franchiseService = franchiseService;
         this.channelService = channelService;
+        this.assistantStandardProfileService = assistantStandardProfileService;
     }
 
     @GetMapping("/franchises")
@@ -157,8 +164,40 @@ public class FranchiseController {
     }
 
     @GetMapping("/franchises/{id}/credits")
-    public Object getWorkspaceCredits(@PathVariable UUID id) {
+    public WorkspaceCreditsResponse getWorkspaceCredits(@PathVariable UUID id) {
         return franchiseService.getWorkspaceCredits(id);
+    }
+
+    @GetMapping("/assistant-standards/profile")
+    public AssistantStandardProfileResponse getAssistantStandardProfile() {
+        return assistantStandardProfileService.getActiveProfile();
+    }
+
+    @PostMapping("/assistant-standards/profile/blocks/{blockType}")
+    public AssistantStandardProfileResponse updateAssistantStandardBlock(
+        @PathVariable String blockType,
+        @RequestBody UpdateAssistantBlockRequest request
+    ) {
+        return assistantStandardProfileService.updateStandardBlock(blockType, request);
+    }
+
+    @GetMapping("/franchises/{id}/assistant-configuration")
+    public FranchiseAssistantConfigurationResponse getAssistantConfiguration(@PathVariable UUID id) {
+        return assistantStandardProfileService.getFranchiseConfiguration(id);
+    }
+
+    @PostMapping("/franchises/{id}/assistant-configuration/blocks/{blockType}/customize")
+    public FranchiseAssistantConfigurationResponse customizeAssistantBlock(@PathVariable UUID id, @PathVariable String blockType) {
+        return assistantStandardProfileService.customizeFranchiseBlock(id, blockType);
+    }
+
+    @PostMapping("/franchises/{id}/assistant-configuration/blocks/{blockType}")
+    public FranchiseAssistantConfigurationResponse updateAssistantBlock(
+        @PathVariable UUID id,
+        @PathVariable String blockType,
+        @RequestBody UpdateAssistantBlockRequest request
+    ) {
+        return assistantStandardProfileService.updateFranchiseBlock(id, blockType, request);
     }
 
     @GetMapping("/franchises/{id}/gptmaker/agent-settings")

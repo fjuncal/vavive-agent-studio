@@ -244,6 +244,44 @@ class FranchiseSecurityIntegrationTest {
     }
 
     @Test
+    void superAdminCannotSaveInvalidAssistantStandardBlockPayload() throws Exception {
+        mockMvc.perform(post("/assistant-standards/profile/blocks/ROLE")
+                .header("Authorization", bearerToken("admin@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "jobName": "Assistente Vavive"
+                      }
+                    }
+                    """))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Campo 'communicationType' e obrigatorio."));
+    }
+
+    @Test
+    void adminFranquiaCannotCustomizeReadOnlyAssistantBlock() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        mockMvc.perform(post("/franchises/{id}/assistant-configuration/blocks/TRAININGS/customize", franchise.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value("Este bloco esta disponivel apenas em leitura nesta fase."));
+    }
+
+    @Test
+    void assistantConfigurationExposesSyncPolicyPerBlock() throws Exception {
+        Franchise franchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+
+        mockMvc.perform(get("/franchises/{id}/assistant-configuration", franchise.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].syncStatus").value("REMOTE_SYNC"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].editable").value(false))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].syncStatus").value("READ_ONLY_REFERENCE"));
+    }
+
+    @Test
     void adminFranquiaWithoutFranchiseCannotLogin() throws Exception {
         userRepository.save(new User(
             "Admin sem franquia",

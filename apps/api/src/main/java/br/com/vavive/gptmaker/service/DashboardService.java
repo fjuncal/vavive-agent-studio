@@ -28,6 +28,7 @@ public class DashboardService {
     private final FranchiseChannelSnapshotRepository channelRepository;
     private final SetupProgressService setupProgressService;
     private final CurrentUserService currentUserService;
+    private final WorkspaceCreditsService workspaceCreditsService;
 
     public DashboardService(
         LeadRepository leadRepository,
@@ -37,7 +38,8 @@ public class DashboardService {
         ConversationSessionRepository conversationSessionRepository,
         FranchiseChannelSnapshotRepository channelRepository,
         SetupProgressService setupProgressService,
-        CurrentUserService currentUserService
+        CurrentUserService currentUserService,
+        WorkspaceCreditsService workspaceCreditsService
     ) {
         this.leadRepository = leadRepository;
         this.franchiseRepository = franchiseRepository;
@@ -47,6 +49,7 @@ public class DashboardService {
         this.channelRepository = channelRepository;
         this.setupProgressService = setupProgressService;
         this.currentUserService = currentUserService;
+        this.workspaceCreditsService = workspaceCreditsService;
     }
 
     @Transactional(readOnly = true)
@@ -109,7 +112,8 @@ public class DashboardService {
             franchisesReadyToPublish,
             waitingHumanConversations,
             syncedChannels,
-            lastNetworkActionAt
+            lastNetworkActionAt,
+            franchise == null ? null : workspaceCreditsService.forFranchise(franchise)
         );
     }
 

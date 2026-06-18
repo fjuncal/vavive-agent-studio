@@ -17,6 +17,7 @@ public record DashboardSummaryResponse(
     long franchisesReadyToPublish,
     long waitingHumanConversations,
     long syncedChannels,
-    LocalDateTime lastNetworkActionAt
+    LocalDateTime lastNetworkActionAt,
+    WorkspaceCreditsResponse workspaceCredits
 ) {
 }

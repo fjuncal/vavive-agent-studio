@@ -19,11 +19,11 @@ import { useAuth } from "@/lib/auth";
 const nav = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franquias", label: "Franquias", icon: Building2 },
-  { href: "/agentes", label: "Agentes", icon: Bot },
+  { href: "/agentes", label: "Assistentes", icon: Bot },
   { href: "/canais", label: "Canais", icon: Radio },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
   { href: "/leads", label: "Leads", icon: UsersRound },
-  { href: "/setup-guiado", label: "Configuração do agente", icon: Route }
+  { href: "/setup-guiado", label: "Workbench do assistente", icon: Route }
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -34,40 +34,39 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
       return { ...item, label: "Minha franquia" };
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/agentes") {
-      return { ...item, label: "Meu agente" };
+      return { ...item, label: "Meu assistente" };
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/conversas") {
       return { ...item, label: "Atendimentos" };
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/setup-guiado") {
-      return { ...item, label: "Meu setup" };
+      return { ...item, label: "Meu assistente" };
     }
     return item;
   });
   const visibleNav = user?.role === "SUPER_ADMIN"
-    ? [...baseNav, { href: "/configuracoes/textos-padrao", label: "Textos padrão", icon: FileText }]
+    ? [...baseNav, { href: "/configuracoes/textos-padrao", label: "Padroes do assistente", icon: FileText }]
     : baseNav;
 
   return (
-    <aside className={clsx(
-      "flex flex-col px-5 py-5",
-      "lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-72 lg:border-r",
-      "lg:backdrop-blur-2xl"
-    )} style={{
-      borderColor: "var(--color-border)",
-      background: "var(--color-bg-primary)"
-    }}>
-      <Link
-        href="/dashboard"
-        className="flex items-center gap-3 rounded-2xl px-2 py-2 group"
-        onClick={onClose}
-      >
+    <aside
+      className={clsx(
+        "flex flex-col px-5 py-5",
+        "lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-72 lg:border-r",
+        "lg:backdrop-blur-2xl"
+      )}
+      style={{
+        borderColor: "var(--color-border)",
+        background: "var(--color-bg-primary)"
+      }}
+    >
+      <Link href="/dashboard" className="flex items-center gap-3 rounded-2xl px-2 py-2 group" onClick={onClose}>
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white transition-transform duration-200 group-hover:scale-105 dark:bg-brand-600">
           <Sparkles size={20} />
         </div>
         <div>
           <p className="text-sm font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>Vavive</p>
-          <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Agent Studio</p>
+          <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Assistente Vavive</p>
         </div>
       </Link>
 
@@ -101,8 +100,8 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/12">
             <Route size={18} />
           </div>
-          <p className="text-sm font-semibold">Configuração do agente</p>
-          <p className="mt-1 text-xs leading-5 text-white/60">Complete os dados da franquia para gerar o treinamento do agente.</p>
+          <p className="text-sm font-semibold">Assistente Vavive</p>
+          <p className="mt-1 text-xs leading-5 text-white/60">Organize blocos, treino e operacao da unidade.</p>
           <Link
             href="/setup-guiado"
             onClick={onClose}

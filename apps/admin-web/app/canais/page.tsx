@@ -90,7 +90,7 @@ export default function CanaisPage() {
       <PageHeader
         eyebrow="Canais"
         title="Canais reais por franquia"
-        description={isSuperAdmin ? "Sincronizacao de canais por workspace GPTMaker." : "Status dos canais conectados da sua franquia."}
+        description={isSuperAdmin ? "Sincronizacao de canais por workspace da unidade." : "Status dos canais conectados da sua franquia."}
       />
 
       {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}

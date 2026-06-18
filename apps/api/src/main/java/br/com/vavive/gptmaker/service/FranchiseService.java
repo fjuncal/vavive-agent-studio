@@ -24,6 +24,7 @@ import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
+import br.com.vavive.gptmaker.dto.WorkspaceCreditsResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentRequest;
@@ -61,6 +62,7 @@ public class FranchiseService {
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final VaviveDefaultContextService vaviveDefaultContextService;
+    private final WorkspaceCreditsService workspaceCreditsService;
 
     public FranchiseService(
         FranchiseRepository franchiseRepository,
@@ -74,7 +76,8 @@ public class FranchiseService {
         CurrentUserService currentUserService,
         UserRepository userRepository,
         PasswordEncoder passwordEncoder,
-        VaviveDefaultContextService vaviveDefaultContextService
+        VaviveDefaultContextService vaviveDefaultContextService,
+        WorkspaceCreditsService workspaceCreditsService
     ) {
         this.franchiseRepository = franchiseRepository;
         this.franchiseSetupRepository = franchiseSetupRepository;
@@ -88,15 +91,21 @@ public class FranchiseService {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.vaviveDefaultContextService = vaviveDefaultContextService;
+        this.workspaceCreditsService = workspaceCreditsService;
     }
 
     @Transactional(readOnly = true)
     public List<FranchiseResponse> list() {
         User user = currentUserService.requireCurrentUser();
         if (user.getRole() == UserRole.SUPER_ADMIN) {
-            return franchiseRepository.findAll().stream().map(AuthService::toFranchiseResponse).toList();
+            List<Franchise> franchises = franchiseRepository.findAll();
+            var creditsByFranchise = workspaceCreditsService.forFranchises(franchises);
+            return franchises.stream()
+                .map(franchise -> AuthService.toFranchiseResponse(franchise, creditsByFranchise.get(franchise.getId().toString())))
+                .toList();
         }
-        return List.of(AuthService.toFranchiseResponse(currentUserService.requireFranchise(user)));
+        Franchise franchise = currentUserService.requireFranchise(user);
+        return List.of(AuthService.toFranchiseResponse(franchise, workspaceCreditsService.forFranchise(franchise)));
     }
 
     @Transactional
@@ -155,7 +164,8 @@ public class FranchiseService {
 
     @Transactional(readOnly = true)
     public FranchiseResponse get(UUID id) {
-        return AuthService.toFranchiseResponse(requireAccessibleFranchise(id));
+        Franchise franchise = requireAccessibleFranchise(id);
+        return AuthService.toFranchiseResponse(franchise, workspaceCreditsService.forFranchise(franchise));
     }
 
     @Transactional(readOnly = true)
@@ -821,16 +831,8 @@ public class FranchiseService {
         return HttpStatus.BAD_GATEWAY;
     }
 
-    public Object getWorkspaceCredits(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
-        if (franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem workspace vinculada.");
-        }
-        try {
-            return gptMakerClient.getWorkspaceCredits(franchise.getWorkspaceId());
-        } catch (GptMakerIntegrationException exception) {
-            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
-        }
+    public WorkspaceCreditsResponse getWorkspaceCredits(UUID franchiseId) {
+        return workspaceCreditsService.forFranchise(requireAccessibleFranchise(franchiseId));
     }
 
     public Object getAgentSettings(UUID franchiseId) {

@@ -99,7 +99,7 @@ export default function AgentIntentionsPage() {
       <PageHeader
         eyebrow="Agente"
         title={franchise ? `Intencoes - ${franchise.name}` : "Intencoes do agente"}
-        description="Gerencie as intencoes (intents) do agente no GPTMaker."
+        description="Gerencie as intencoes operacionais do assistente."
         backHref={`/franquias/${params?.id}/agente`}
       />
 

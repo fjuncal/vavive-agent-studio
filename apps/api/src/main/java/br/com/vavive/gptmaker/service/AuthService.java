@@ -58,6 +58,10 @@ public class AuthService {
     }
 
     public static FranchiseResponse toFranchiseResponse(Franchise franchise) {
+        return toFranchiseResponse(franchise, null);
+    }
+
+    public static FranchiseResponse toFranchiseResponse(Franchise franchise, br.com.vavive.gptmaker.dto.WorkspaceCreditsResponse workspaceCredits) {
         if (franchise == null) {
             return null;
         }
@@ -72,6 +76,7 @@ public class AuthService {
             franchise.getWorkspaceName(),
             franchise.getAgentId(),
             franchise.getAgentName(),
+            workspaceCredits,
             franchise.getGptMakerLastSyncAt(),
             franchise.getCreatedAt()
         );

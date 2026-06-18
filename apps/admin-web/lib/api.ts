@@ -17,6 +17,7 @@ export type FranchiseSummary = {
   workspaceName?: string | null;
   agentId?: string | null;
   agentName?: string | null;
+  workspaceCredits?: WorkspaceCredits | null;
   gptMakerLastSyncAt?: string | null;
   createdAt?: string;
 };
@@ -50,6 +51,17 @@ export type DashboardSummary = {
   waitingHumanConversations: number;
   syncedChannels: number;
   lastNetworkActionAt?: string | null;
+  workspaceCredits?: WorkspaceCredits | null;
+};
+
+export type WorkspaceCredits = {
+  franchiseId?: string;
+  status: "AVAILABLE" | "UNAVAILABLE" | "NO_WORKSPACE";
+  credits: number;
+  used: number;
+  remaining: number;
+  message?: string | null;
+  checkedAt?: string | null;
 };
 
 export type LeadSummary = {
@@ -290,6 +302,47 @@ export type DefaultAgentTextPayload = {
   category: DefaultAgentTextCategory;
   content: string;
   active?: boolean;
+};
+
+export type AssistantBlockType =
+  | "BEHAVIOR"
+  | "ROLE"
+  | "BASE_DESCRIPTION"
+  | "TRAININGS"
+  | "INTENTIONS"
+  | "AGENT_SETTINGS"
+  | "IDLE_ACTIONS"
+  | "TRANSFER_RULES";
+
+export type AssistantBlock = {
+  blockType: AssistantBlockType;
+  title: string;
+  description: string;
+  mode: "STANDARD" | "CUSTOM";
+  locked: boolean;
+  inherited: boolean;
+  standardVersion: number;
+  payload: Record<string, unknown>;
+  editable: boolean;
+  syncStatus: "REMOTE_SYNC" | "LOCAL_BLUEPRINT" | "READ_ONLY_REFERENCE";
+  syncMessage: string;
+};
+
+export type AssistantStandardProfile = {
+  id: string;
+  name: string;
+  active: boolean;
+  version: number;
+  updatedAt?: string | null;
+  blocks: AssistantBlock[];
+};
+
+export type FranchiseAssistantConfiguration = {
+  franchiseId: string;
+  franchiseName: string;
+  assistantName: string;
+  assistantConfigured: boolean;
+  blocks: AssistantBlock[];
 };
 
 export type ConversationSummary = {
@@ -652,6 +705,39 @@ export function toggleDefaultAgentText(id: string) {
   });
 }
 
+export function getAssistantStandardProfile() {
+  return apiFetch<AssistantStandardProfile>("/assistant-standards/profile");
+}
+
+export function updateAssistantStandardBlock(blockType: AssistantBlockType, payload: Record<string, unknown>) {
+  return apiFetch<AssistantStandardProfile>(`/assistant-standards/profile/blocks/${blockType}`, {
+    method: "POST",
+    body: JSON.stringify({ payload })
+  });
+}
+
+export function getFranchiseAssistantConfiguration(id: string) {
+  return apiFetch<FranchiseAssistantConfiguration>(`/franchises/${id}/assistant-configuration`);
+}
+
+export function customizeFranchiseAssistantBlock(id: string, blockType: AssistantBlockType) {
+  return apiFetch<FranchiseAssistantConfiguration>(`/franchises/${id}/assistant-configuration/blocks/${blockType}/customize`, {
+    method: "POST"
+  });
+}
+
+export function updateFranchiseAssistantBlock(
+  id: string,
+  blockType: AssistantBlockType,
+  mode: "STANDARD" | "CUSTOM",
+  payload?: Record<string, unknown>
+) {
+  return apiFetch<FranchiseAssistantConfiguration>(`/franchises/${id}/assistant-configuration/blocks/${blockType}`, {
+    method: "POST",
+    body: JSON.stringify({ mode, payload })
+  });
+}
+
 export function getConversations(filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string } = {}) {
   const params = new URLSearchParams();
   if (filters.franchiseId) params.set("franchiseId", filters.franchiseId);
@@ -735,7 +821,7 @@ export function updateConversationExample(agentId: string, exampleId: string, pa
 }
 
 export function getWorkspaceCredits(franchiseId: string) {
-  return apiFetch<{ credits: number; used: number; remaining: number }>(`/franchises/${franchiseId}/credits`);
+  return apiFetch<WorkspaceCredits>(`/franchises/${franchiseId}/credits`);
 }
 
 export function getAgentSettings(franchiseId: string) {

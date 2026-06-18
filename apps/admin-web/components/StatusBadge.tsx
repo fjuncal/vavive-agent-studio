@@ -27,7 +27,28 @@ const variants: Record<string, { bg: string; text: string; ring: string }> = {
   MISSING_TOKEN: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" }
 };
 
+const labels: Record<string, string> = {
+  PUBLICADO_GPTMAKER: "Publicado",
+  PUBLICADO_GPTMAKER_MOCK: "Publicado (simulado)",
+  ENVIADO_GPTMAKER: "Sincronizado",
+  ENVIADO_GPTMAKER_MOCK: "Sincronizado (simulado)",
+  PUBLICACAO_FALHOU: "Falha de publicacao",
+  ENVIO_FALHOU: "Falha de sincronizacao",
+  PENDENTE_CONFIGURACAO: "Configuracao pendente",
+  SEM_AGENTE: "Sem assistente",
+  SEM_WORKSPACE: "Sem workspace",
+  CONECTADO: "Conectado",
+  NAO_CONECTADO: "Nao conectado",
+  CONNECTED: "Conectado",
+  READY: "Pronto",
+  MOCK: "Simulado",
+  MISSING_TOKEN: "Token ausente"
+};
+
 function formatStatus(status: string): string {
+  if (labels[status]) {
+    return labels[status];
+  }
   return status
     .replaceAll("_", " ")
     .toLowerCase()
