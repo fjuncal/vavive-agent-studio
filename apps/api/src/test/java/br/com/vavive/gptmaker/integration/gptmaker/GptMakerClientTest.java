@@ -6,6 +6,8 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentReques
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerSendChatMessageRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerSimpleSuccessResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerStartHumanResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
@@ -480,8 +482,33 @@ class GptMakerClientTest {
         }
 
         @Override
+        public ResponseEntity<String> listWorkspaceChannels(String workspaceId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> listChats(String workspaceId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> listChatMessages(String chatId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
         public GptMakerStartHumanResponse startHuman(String chatId) {
             return new GptMakerStartHumanResponse(true);
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse stopHuman(String chatId) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse sendChatMessage(String chatId, GptMakerSendChatMessageRequest request) {
+            return new GptMakerSimpleSuccessResponse(true);
         }
 
         @Override
@@ -494,6 +521,76 @@ class GptMakerClientTest {
         public GptMakerCreateIntentResponse createIntent(String agentId, GptMakerCreateIntentRequest request) {
             intentCalled = true;
             return new GptMakerCreateIntentResponse(true, "intent-1");
+        }
+
+        @Override
+        public ResponseEntity<String> getWorkspaceCredits(String workspaceId) {
+            return ResponseEntity.ok("{\"credits\":1000,\"used\":250,\"remaining\":750}");
+        }
+
+        @Override
+        public ResponseEntity<String> getAgent(String agentId) {
+            return ResponseEntity.ok("{\"id\":\"" + agentId + "\",\"name\":\"Mock Agent\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> getAgentSettings(String agentId) {
+            return ResponseEntity.ok("{\"prefferModel\":\"GPT_4_O\",\"timezone\":\"America/Sao_Paulo\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateAgentSettings(String agentId, Object settings) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> getAgentWebhooks(String agentId) {
+            return ResponseEntity.ok("{}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateAgentWebhooks(String agentId, Object webhooks) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> listIntentions(String agentId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> listTrainings(String agentId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteTraining(String trainingId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> createChannel(String workspaceId, br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateChannelRequest request) {
+            return ResponseEntity.ok("{\"id\":\"channel-1\",\"name\":\"" + request.name() + "\",\"type\":\"" + request.type() + "\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> listTransferRules(String agentId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> createTransferRule(String agentId, Object rule) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> listIdleActions(String agentId) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> createIdleAction(String agentId, Object action) {
+            return ResponseEntity.ok("{\"success\":true}");
         }
     }
 

@@ -3,11 +3,14 @@ package br.com.vavive.gptmaker.service;
 import br.com.vavive.gptmaker.domain.entity.AgentIntent;
 import br.com.vavive.gptmaker.domain.entity.AgentRule;
 import br.com.vavive.gptmaker.domain.entity.AgentTraining;
+import br.com.vavive.gptmaker.domain.entity.AgentConversationExample;
 import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.AgentResponse;
+import br.com.vavive.gptmaker.dto.ConversationExampleRequest;
+import br.com.vavive.gptmaker.dto.ConversationExampleResponse;
 import br.com.vavive.gptmaker.dto.CreateIntentRequest;
 import br.com.vavive.gptmaker.dto.CreateRuleRequest;
 import br.com.vavive.gptmaker.dto.CreateTrainingRequest;
@@ -18,6 +21,7 @@ import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.repository.AgentIntentRepository;
 import br.com.vavive.gptmaker.repository.AgentRuleRepository;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
+import br.com.vavive.gptmaker.repository.AgentConversationExampleRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
 import java.util.List;
 import java.util.UUID;
@@ -32,6 +36,7 @@ public class AgentService {
     private final AgentTrainingRepository trainingRepository;
     private final AgentIntentRepository intentRepository;
     private final AgentRuleRepository ruleRepository;
+    private final AgentConversationExampleRepository exampleRepository;
     private final GptMakerClient gptMakerClient;
     private final CurrentUserService currentUserService;
 
@@ -40,6 +45,7 @@ public class AgentService {
         AgentTrainingRepository trainingRepository,
         AgentIntentRepository intentRepository,
         AgentRuleRepository ruleRepository,
+        AgentConversationExampleRepository exampleRepository,
         GptMakerClient gptMakerClient,
         CurrentUserService currentUserService
     ) {
@@ -47,6 +53,7 @@ public class AgentService {
         this.trainingRepository = trainingRepository;
         this.intentRepository = intentRepository;
         this.ruleRepository = ruleRepository;
+        this.exampleRepository = exampleRepository;
         this.gptMakerClient = gptMakerClient;
         this.currentUserService = currentUserService;
     }
@@ -91,6 +98,10 @@ public class AgentService {
             result.success() ? result.message() : result.message() + " O treinamento foi salvo localmente para nova tentativa.",
             agent
         ));
+        if (result.success()) {
+            training.setPublishedAt(training.getCreatedAt());
+            trainingRepository.save(training);
+        }
         return new TrainingResponse(
             training.getId(),
             training.getTitle(),
@@ -98,9 +109,46 @@ public class AgentService {
             training.getStatus(),
             training.getExternalReference(),
             training.getResultMessage(),
+            training.getContentSummary(),
             result.mockEnabled(),
+            training.getPublishedAt(),
             training.getCreatedAt()
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConversationExampleResponse> listExamples(UUID agentId) {
+        GptMakerAgent agent = requireAccessibleAgent(agentId);
+        return exampleRepository.findByAgentIdOrderByCreatedAtDesc(agent.getId()).stream()
+            .map(this::toExampleResponse)
+            .toList();
+    }
+
+    @Transactional
+    public ConversationExampleResponse addExample(UUID agentId, ConversationExampleRequest request) {
+        GptMakerAgent agent = requireAccessibleAgent(agentId);
+        AgentConversationExample saved = exampleRepository.save(new AgentConversationExample(
+            agent,
+            request.title(),
+            request.objective(),
+            request.messages(),
+            request.status() == null || request.status().isBlank() ? "RASCUNHO" : request.status(),
+            Boolean.TRUE.equals(request.includeInTraining())
+        ));
+        return toExampleResponse(saved);
+    }
+
+    @Transactional
+    public ConversationExampleResponse updateExample(UUID agentId, UUID exampleId, ConversationExampleRequest request) {
+        GptMakerAgent agent = requireAccessibleAgent(agentId);
+        AgentConversationExample example = exampleRepository.findByIdAndAgentId(exampleId, agent.getId())
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Exemplo de conversa nao encontrado"));
+        example.setTitle(request.title());
+        example.setObjective(request.objective());
+        example.setMessages(request.messages());
+        example.setStatus(request.status() == null || request.status().isBlank() ? example.getStatus() : request.status());
+        example.setIncludeInTraining(Boolean.TRUE.equals(request.includeInTraining()));
+        return toExampleResponse(exampleRepository.save(example));
     }
 
     @Transactional
@@ -174,8 +222,23 @@ public class AgentService {
             training.getStatus(),
             training.getExternalReference(),
             training.getResultMessage(),
+            training.getContentSummary(),
             "PUBLICADO_GPTMAKER_MOCK".equals(training.getStatus()),
+            training.getPublishedAt(),
             training.getCreatedAt()
+        );
+    }
+
+    private ConversationExampleResponse toExampleResponse(AgentConversationExample example) {
+        return new ConversationExampleResponse(
+            example.getId(),
+            example.getTitle(),
+            example.getObjective(),
+            example.getMessages(),
+            example.getStatus(),
+            example.isIncludeInTraining(),
+            example.getCreatedAt(),
+            example.getUpdatedAt()
         );
     }
 }

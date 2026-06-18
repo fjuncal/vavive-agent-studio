@@ -1,36 +1,53 @@
 import clsx from "clsx";
 
-const variants: Record<string, string> = {
-  ATIVA: "bg-brand-50 text-brand-700 ring-brand-100",
-  INATIVA: "bg-slate-100 text-slate-700 ring-slate-200",
-  ATIVO: "bg-brand-50 text-brand-700 ring-brand-100",
-  SEM_AGENTE: "bg-amber-50 text-amber-700 ring-amber-100",
-  PENDENTE_CONFIGURACAO: "bg-amber-50 text-amber-700 ring-amber-100",
-  SEM_WORKSPACE: "bg-amber-50 text-amber-700 ring-amber-100",
-  NOVO: "bg-blue-50 text-blue-700 ring-blue-100",
-  EM_ATENDIMENTO: "bg-amber-50 text-amber-700 ring-amber-100",
-  CONVERTIDO: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  FINALIZADO: "bg-slate-100 text-slate-700 ring-slate-200",
-  SALVO_LOCALMENTE: "bg-slate-100 text-slate-700 ring-slate-200",
-  PUBLICADO_GPTMAKER: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  PUBLICADO_GPTMAKER_MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
-  PUBLICACAO_FALHOU: "bg-rose-50 text-rose-700 ring-rose-100",
-  ENVIADO_GPTMAKER: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  ENVIADO_GPTMAKER_MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
-  ENVIO_FALHOU: "bg-rose-50 text-rose-700 ring-rose-100",
-  CONECTADO: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  NAO_CONECTADO: "bg-amber-50 text-amber-700 ring-amber-100",
-  CONNECTED: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  ERROR: "bg-rose-50 text-rose-700 ring-rose-100",
-  READY: "bg-emerald-50 text-emerald-700 ring-emerald-100",
-  MOCK: "bg-violet-50 text-violet-700 ring-violet-100",
-  MISSING_TOKEN: "bg-amber-50 text-amber-700 ring-amber-100"
+const variants: Record<string, { bg: string; text: string; ring: string }> = {
+  ATIVA: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  INATIVA: { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" },
+  ATIVO: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  SEM_AGENTE: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" },
+  PENDENTE_CONFIGURACAO: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" },
+  SEM_WORKSPACE: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" },
+  NOVO: { bg: "bg-blue-50 dark:bg-blue-900/30", text: "text-blue-700 dark:text-blue-400", ring: "ring-blue-200 dark:ring-blue-800" },
+  EM_ATENDIMENTO: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" },
+  CONVERTIDO: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  FINALIZADO: { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" },
+  SALVO_LOCALMENTE: { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" },
+  PUBLICADO_GPTMAKER: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  PUBLICADO_GPTMAKER_MOCK: { bg: "bg-violet-50 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-400", ring: "ring-violet-200 dark:ring-violet-800" },
+  PUBLICACAO_FALHOU: { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-400", ring: "ring-rose-200 dark:ring-rose-800" },
+  ENVIADO_GPTMAKER: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  ENVIADO_GPTMAKER_MOCK: { bg: "bg-violet-50 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-400", ring: "ring-violet-200 dark:ring-violet-800" },
+  ENVIO_FALHOU: { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-400", ring: "ring-rose-200 dark:ring-rose-800" },
+  CONECTADO: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  NAO_CONECTADO: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" },
+  CONNECTED: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  ERROR: { bg: "bg-rose-50 dark:bg-rose-900/30", text: "text-rose-700 dark:text-rose-400", ring: "ring-rose-200 dark:ring-rose-800" },
+  READY: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  MOCK: { bg: "bg-violet-50 dark:bg-violet-900/30", text: "text-violet-700 dark:text-violet-400", ring: "ring-violet-200 dark:ring-violet-800" },
+  MISSING_TOKEN: { bg: "bg-amber-50 dark:bg-amber-900/30", text: "text-amber-700 dark:text-amber-400", ring: "ring-amber-200 dark:ring-amber-800" }
 };
 
-export function StatusBadge({ status }: { status: string }) {
+function formatStatus(status: string): string {
+  return status
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(/(^|\s)\S/g, (letter) => letter.toUpperCase());
+}
+
+export function StatusBadge({ status, size = "sm" }: { status: string; size?: "sm" | "md" }) {
+  const variant = variants[status] ?? { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" };
+
   return (
-    <span className={clsx("inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1", variants[status] ?? "bg-slate-100 text-slate-700 ring-slate-200")}>
-      {status.replaceAll("_", " ").toLowerCase().replace(/(^|\s)\S/g, (letter) => letter.toUpperCase())}
+    <span
+      className={clsx(
+        "inline-flex items-center rounded-full font-semibold ring-1 ring-inset",
+        variant.bg,
+        variant.text,
+        variant.ring,
+        size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm"
+      )}
+    >
+      {formatStatus(status)}
     </span>
   );
 }

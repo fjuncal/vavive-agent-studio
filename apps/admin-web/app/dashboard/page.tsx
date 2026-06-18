@@ -1,32 +1,35 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import {
-  getAgentTrainings,
-  getAgents,
   getDashboardSummary,
   getFranchises,
-  getFranchiseSetup,
-  getLeads,
-  type AgentSummary,
   type DashboardSummary,
-  type FranchiseSetup,
-  type FranchiseSummary,
-  type LeadSummary,
-  type TrainingSummary
+  type FranchiseSummary
 } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Bot, Building2, FileText, MessageCircle } from "lucide-react";
+import {
+  Activity,
+  Bot,
+  Building2,
+  MessageCircle,
+  Radio,
+  ShieldAlert,
+  Sparkles,
+  TrendingUp,
+  Users,
+  Zap
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
 function formatDate(value?: string | null) {
   if (!value) {
-    return "Ainda não publicado";
+    return "Sem sincronização";
   }
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
@@ -34,240 +37,274 @@ function formatDate(value?: string | null) {
   }).format(new Date(value));
 }
 
-export default function DashboardPage() {
-  const { isLoading: isAuthLoading, user } = useAuth();
-  const [summary, setSummary] = useState<DashboardSummary | null>(null);
-  const [summaryError, setSummaryError] = useState<string | null>(null);
-  const [leads, setLeads] = useState<LeadSummary[]>([]);
-  const [leadsError, setLeadsError] = useState<string | null>(null);
-
-  const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
-  const [franchiseError, setFranchiseError] = useState<string | null>(null);
-  const [agents, setAgents] = useState<AgentSummary[]>([]);
-  const [agentsError, setAgentsError] = useState<string | null>(null);
-
-  const [franchiseSetup, setFranchiseSetup] = useState<FranchiseSetup | null>(null);
-  const [franchiseSetupError, setFranchiseSetupError] = useState<string | null>(null);
-  const [trainings, setTrainings] = useState<TrainingSummary[]>([]);
-  const [trainingsError, setTrainingsError] = useState<string | null>(null);
-
-  const isSuperAdmin = user?.role === "SUPER_ADMIN";
-  const connectedFranchises = franchises.filter((franchise) => franchise.workspaceId && franchise.agentId).length;
-  const currentAgent = useMemo(
-    () => agents[0] ?? null,
-    [agents]
+function QuickAction({ icon: Icon, label, href, description }: {
+  icon: typeof Building2;
+  label: string;
+  href: string;
+  description: string;
+}) {
+  return (
+    <Link href={href} className="card-interactive flex items-start gap-4">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 transition-transform duration-200 group-hover:scale-110">
+        <Icon size={22} />
+      </div>
+      <div>
+        <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{label}</h3>
+        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{description}</p>
+      </div>
+    </Link>
   );
-  const recentLeads = leads.slice(0, 4);
+}
+
+export default function DashboardPage() {
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === "SUPER_ADMIN";
+  const [summary, setSummary] = useState<DashboardSummary | null>(null);
+  const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isAuthLoading || !user) {
+    if (!user) {
       return;
     }
 
-    setSummaryError(null);
+    setError(null);
     getDashboardSummary()
       .then(setSummary)
-      .catch((requestError) => {
-        setSummaryError(requestError instanceof Error ? requestError.message : "Não foi possível carregar o resumo.");
-      });
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar o dashboard."));
 
-    setLeadsError(null);
-    getLeads()
-      .then(setLeads)
-      .catch((requestError) => {
-        setLeadsError(requestError instanceof Error ? requestError.message : "Não foi possível carregar os leads.");
-      });
-  }, [isAuthLoading, user]);
-
-  useEffect(() => {
-    if (isAuthLoading || !user || !isSuperAdmin) {
-      setFranchises([]);
-      setAgents([]);
-      return;
+    if (isSuperAdmin) {
+      getFranchises().then(setFranchises).catch(() => setFranchises([]));
+    } else {
+      setFranchises(user.franchise ? [user.franchise] : []);
     }
+  }, [isSuperAdmin, user]);
 
-    setFranchiseError(null);
-    getFranchises()
-      .then(setFranchises)
-      .catch((requestError) => {
-        setFranchiseError(requestError instanceof Error ? requestError.message : "Não foi possível carregar as franquias.");
-      });
-
-    setAgentsError(null);
-    getAgents()
-      .then(setAgents)
-      .catch((requestError) => {
-        setAgentsError(requestError instanceof Error ? requestError.message : "Não foi possível carregar os agentes.");
-      });
-  }, [isAuthLoading, isSuperAdmin, user]);
-
-  useEffect(() => {
-    if (isAuthLoading || !user || user.role !== "ADMIN_FRANQUIA") {
-      setFranchiseSetup(null);
-      setTrainings([]);
-      setAgents([]);
-      return;
-    }
-
-    const franchiseId = user.franchise?.id;
-    if (!franchiseId) {
-      setFranchiseSetupError("Usuário não possui franquia associada.");
-      setAgentsError("Usuário não possui franquia associada.");
-      return;
-    }
-
-    setFranchiseSetupError(null);
-    getFranchiseSetup(franchiseId)
-      .then(setFranchiseSetup)
-      .catch((requestError) => {
-        setFranchiseSetupError(requestError instanceof Error ? requestError.message : "Não foi possível carregar a configuração da franquia.");
-      });
-
-    setAgentsError(null);
-    getAgents()
-      .then((items) => {
-        setAgents(items);
-        const firstAgent = items[0];
-        if (!firstAgent) {
-          setTrainings([]);
-          return;
-        }
-
-        setTrainingsError(null);
-        getAgentTrainings(firstAgent.id)
-          .then((items) => setTrainings(items.slice(0, 3)))
-          .catch((requestError) => {
-            setTrainingsError(requestError instanceof Error ? requestError.message : "Não foi possível carregar os treinamentos.");
-          });
-      })
-      .catch((requestError) => {
-        setAgentsError(requestError instanceof Error ? requestError.message : "Não foi possível carregar os agentes.");
-      });
-  }, [isAuthLoading, user]);
+  const blockedFranchises = useMemo(
+    () => franchises.filter((item) => item.status === "PENDENTE_CONFIGURACAO").slice(0, 4),
+    [franchises]
+  );
+  const readyFranchises = useMemo(
+    () => franchises.filter((item) => item.status === "ATIVA").slice(0, 4),
+    [franchises]
+  );
 
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Visão Geral"
-        title="Dashboard"
-        description={isSuperAdmin ? "Acompanhe o desempenho da rede." : "Acompanhe o desempenho da sua franquia."}
+        eyebrow="Operação"
+        title="Dashboard operacional"
+        description={isSuperAdmin ? "Visão completa da rede, bloqueios e prontidão." : "Status da sua franquia, canais e atendimento."}
       />
 
-      {isSuperAdmin ? (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Franquias ativas" value={String(connectedFranchises)} hint={franchiseError ?? "Com agente configurado"} icon={Building2} />
-          <StatCard label="Franquias pendentes" value={String(franchises.length - connectedFranchises)} hint="Aguardando configuração" icon={Building2} />
-          <StatCard label="Agentes configurados" value={String(agents.length)} hint={agentsError ?? "Total de agentes"} icon={Bot} />
-          <StatCard label="Atendimentos" value={String(summary?.totalLeads ?? leads.length)} hint={summaryError ?? "Leads registrados"} icon={MessageCircle} />
-        </section>
-      ) : (
-        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Minha franquia" value={user?.franchise?.name ?? "Não associada"} hint={user?.franchise ? `${user.franchise.city} / ${user.franchise.state}` : "Verifique o cadastro"} icon={Building2} />
-          <StatCard label="Meu agente" value={currentAgent?.name ?? "Não configurado"} hint={agentsError ?? currentAgent?.status ?? "Aguardando"} icon={Bot} />
-          <StatCard label="Treinamentos" value={String(trainings.length)} hint={trainingsError ?? "Últimos registros"} icon={FileText} />
-          <StatCard label="Atendimentos" value={String(summary?.totalLeads ?? leads.length)} hint={summaryError ?? "Leads registrados"} icon={MessageCircle} />
+      {error && (
+        <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800 px-5 py-4 text-sm text-rose-700 dark:text-rose-400 animate-in flex items-center gap-2">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-800">
+            <span className="text-xs font-bold text-rose-600 dark:text-rose-400">!</span>
+          </div>
+          {error}
+        </div>
+      )}
+
+      {/* Stats Grid */}
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4 stagger-children">
+        <StatCard
+          label={isSuperAdmin ? "Franquias bloqueadas" : "Progresso do setup"}
+          value={String(isSuperAdmin ? summary?.blockedFranchises ?? 0 : `${summary?.completionPercentage ?? 0}%`)}
+          hint={isSuperAdmin ? "Sem workspace ou sem setup" : summary?.setupStatus?.replaceAll("_", " ") ?? "Não iniciado"}
+          icon={ShieldAlert}
+          variant={isSuperAdmin && (summary?.blockedFranchises ?? 0) > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          label={isSuperAdmin ? "Sem agente" : "Conversas humanas"}
+          value={String(isSuperAdmin ? summary?.franchisesWithoutAgent ?? 0 : summary?.waitingHumanConversations ?? 0)}
+          hint={isSuperAdmin ? "Franquias pendentes de agente" : "Fila manual em aberto"}
+          icon={Bot}
+          variant={!isSuperAdmin && (summary?.waitingHumanConversations ?? 0) > 0 ? "warning" : "default"}
+        />
+        <StatCard
+          label={isSuperAdmin ? "Prontas para publicar" : "Canais sincronizados"}
+          value={String(isSuperAdmin ? summary?.franchisesReadyToPublish ?? 0 : summary?.syncedChannels ?? 0)}
+          hint={isSuperAdmin ? "Setup completo aguardando publicação" : "Canais com último sync válido"}
+          icon={Sparkles}
+          variant="success"
+        />
+        <StatCard
+          label="Última sincronização"
+          value={formatDate(summary?.lastNetworkActionAt)}
+          hint={`${summary?.waitingHumanConversations ?? 0} conversas aguardando`}
+          icon={Activity}
+        />
+      </section>
+
+      {/* Quick Actions */}
+      {isSuperAdmin && (
+        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
+          <QuickAction
+            icon={Building2}
+            label="Nova franquia"
+            href="/franquias/nova"
+            description="Cadastrar uma nova unidade na rede."
+          />
+          <QuickAction
+            icon={Bot}
+            label="Configurar agente"
+            href="/setup-guiado"
+            description="Treinar e publicar agente de atendimento."
+          />
+          <QuickAction
+            icon={MessageCircle}
+            label="Ver conversas"
+            href="/conversas"
+            description="Acompanhar atendimentos em tempo real."
+          />
         </section>
       )}
 
-      <section className="grid gap-4 lg:grid-cols-2">
-        {isSuperAdmin ? (
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Franquias recentes</h2>
-            {franchiseError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{franchiseError}</p> : null}
-            {franchises.length ? (
-              <div className="mt-4 grid gap-3">
-                {franchises.slice(0, 5).map((franchise) => (
-                  <div key={franchise.id} className="flex items-start justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+      {/* Main Content */}
+      <section className="grid gap-6 lg:grid-cols-2 stagger-children">
+        {/* Blocked / My Franchise */}
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{isSuperAdmin ? "Bloqueios da rede" : "Minha franquia"}</h2>
+              <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{isSuperAdmin ? "Franquias que ainda não podem operar." : "Resumo operacional atual."}</p>
+            </div>
+            <StatusBadge status={summary?.setupStatus ?? "NAO_INICIADO"} />
+          </div>
+
+          {isSuperAdmin ? (
+            blockedFranchises.length ? (
+              <div className="grid gap-3">
+                {blockedFranchises.map((franchise) => (
+                  <Link
+                    key={franchise.id}
+                    href={`/franquias/${franchise.id}`}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                    style={{ background: "var(--color-bg-secondary)" }}
+                  >
                     <div>
-                      <p className="font-semibold text-ink">{franchise.name}</p>
-                      <p className="mt-1 text-sm text-slate-500">{franchise.city} / {franchise.state}</p>
+                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{franchise.name}</p>
+                      <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{franchise.city} / {franchise.state}</p>
                     </div>
-                    <StatusBadge status={franchise.workspaceId && franchise.agentId ? "CONECTADO" : "PENDENTE"} />
-                  </div>
+                    <StatusBadge status={franchise.status} />
+                  </Link>
                 ))}
               </div>
-            ) : !franchiseError ? (
-              <EmptyState icon={Building2} title="Nenhuma franquia cadastrada" description="Ainda não há dados para exibir." />
-            ) : null}
-          </section>
-        ) : (
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Meu agente</h2>
-            {agentsError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{agentsError}</p> : null}
-            {currentAgent ? (
-              <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
-                <div className="flex items-start justify-between gap-3">
+            ) : (
+              <EmptyState
+                icon={Building2}
+                title="Sem bloqueios"
+                description="Nenhuma franquia bloqueada neste momento."
+              />
+            )
+          ) : (
+            <div className="grid gap-3">
+              <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Franquia</p>
+                <p className="mt-2 font-semibold" style={{ color: "var(--color-text-primary)" }}>{user?.franchise?.name ?? "Não associada"}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{user?.franchise ? `${user.franchise.city} / ${user.franchise.state}` : "Verifique o cadastro"}</p>
+              </div>
+              <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Última publicação</p>
+                <p className="mt-2 font-semibold" style={{ color: "var(--color-text-primary)" }}>{formatDate(summary?.lastPublicationAt)}</p>
+                <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{summary?.lastTrainingTitle ?? "Nenhum treinamento publicado"}</p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Ready / Queue */}
+        <div className="card">
+          <div className="flex items-center justify-between gap-3 mb-5">
+            <div>
+              <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{isSuperAdmin ? "Franquias prontas" : "Fila de atendimento"}</h2>
+              <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{isSuperAdmin ? "Unidades operando com agente ativo." : "Conversas esperando suporte humano."}</p>
+            </div>
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+              <Radio size={18} />
+            </div>
+          </div>
+
+          {isSuperAdmin ? (
+            readyFranchises.length ? (
+              <div className="grid gap-3">
+                {readyFranchises.map((franchise) => (
+                  <Link
+                    key={franchise.id}
+                    href={`/franquias/${franchise.id}`}
+                    className="flex items-center justify-between gap-3 rounded-xl px-4 py-3 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800"
+                    style={{ background: "var(--color-bg-secondary)" }}
+                  >
+                    <div>
+                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{franchise.name}</p>
+                      <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{franchise.agentName ?? "Agente não informado"}</p>
+                    </div>
+                    <StatusBadge status={franchise.status} />
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                icon={Sparkles}
+                title="Sem franquias prontas"
+                description="Nenhuma unidade pronta para operar ainda."
+              />
+            )
+          ) : (
+            <div className="grid gap-3">
+              <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                <div className="flex items-center justify-between gap-3">
                   <div>
-                    <p className="font-semibold text-ink">{currentAgent.name}</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Aguardando humano</p>
+                    <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{summary?.waitingHumanConversations ?? 0}</p>
                   </div>
-                  <StatusBadge status={currentAgent.status} />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400">
+                    <Users size={22} />
+                  </div>
                 </div>
               </div>
-            ) : !agentsError ? (
-              <EmptyState icon={Bot} title="Nenhum agente configurado" description="A configuração pode ser feita pelo administrador." />
-            ) : null}
-          </section>
-        )}
-
-        {isSuperAdmin ? (
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Agentes configurados</h2>
-            {agentsError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{agentsError}</p> : null}
-            {agents.length ? (
-              <div className="mt-4 grid gap-3">
-                {agents.slice(0, 5).map((agent) => (
-                  <div key={agent.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                    <p className="font-semibold text-ink">{agent.name}</p>
-                    <p className="mt-1 text-sm text-slate-500">{agent.franchiseName}</p>
+              <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Canais sincronizados</p>
+                    <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{summary?.syncedChannels ?? 0}</p>
                   </div>
-                ))}
-              </div>
-            ) : !agentsError ? (
-              <EmptyState icon={Bot} title="Nenhum agente configurado" description="Ainda não há dados para exibir." />
-            ) : null}
-          </section>
-        ) : (
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Últimos treinamentos</h2>
-            {trainingsError ? <p className="mt-3 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{trainingsError}</p> : null}
-            {trainings.length ? (
-              <div className="mt-4 grid gap-3">
-                {trainings.map((training) => (
-                  <div key={training.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-ink">{training.title}</p>
-                        <p className="mt-1 text-sm text-slate-500">{formatDate(training.createdAt)}</p>
-                      </div>
-                      <StatusBadge status={training.status} />
-                    </div>
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                    <Radio size={22} />
                   </div>
-                ))}
+                </div>
               </div>
-            ) : !trainingsError ? (
-              <EmptyState icon={FileText} title="Nenhum treinamento salvo" description="Ainda não há dados para exibir." />
-            ) : null}
-          </section>
-        )}
+            </div>
+          )}
+        </div>
       </section>
 
-      <section className="grid gap-3">
-        <h2 className="text-lg font-semibold text-ink">Atendimentos recentes</h2>
-        {leadsError ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{leadsError}</p> : null}
-        {recentLeads.length ? (
-          <DataTable
-            rows={recentLeads}
-            columns={[
-              { header: "Nome", cell: (lead) => <span className="font-semibold text-ink">{lead.name}</span> },
-              { header: "Serviço", cell: (lead) => lead.service },
-              { header: "Origem", cell: (lead) => lead.source },
-              ...(isSuperAdmin ? [{ header: "Franquia", cell: (lead: LeadSummary) => lead.franchiseName }] : []),
-              { header: "Status", cell: (lead) => <StatusBadge status={lead.status} /> }
-            ]}
-          />
-        ) : !leadsError ? (
-          <EmptyState icon={MessageCircle} title="Nenhum atendimento recente" description="Ainda não há dados para exibir." />
-        ) : null}
+      {/* Health Section */}
+      <section className="card stagger-children">
+        <div className="flex items-start justify-between gap-4 mb-5">
+          <div>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Saúde operacional</h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Visão consolidada do que precisa de ação agora.</p>
+          </div>
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+            <TrendingUp size={18} />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-xl px-4 py-4" style={{ background: "var(--color-bg-secondary)" }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Atendimentos totais</p>
+            <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{summary?.totalLeads ?? 0}</p>
+          </div>
+          <div className="rounded-xl px-4 py-4" style={{ background: "var(--color-bg-secondary)" }}>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Em atendimento</p>
+            <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{summary?.activeLeads ?? 0}</p>
+          </div>
+          <div className="rounded-xl bg-emerald-50 dark:bg-emerald-900/20 px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-600 dark:text-emerald-400">Taxa de conversão</p>
+            <p className="mt-2 text-2xl font-bold text-emerald-700 dark:text-emerald-400">{summary?.conversionRate ?? 0}%</p>
+          </div>
+        </div>
       </section>
     </AppShell>
   );

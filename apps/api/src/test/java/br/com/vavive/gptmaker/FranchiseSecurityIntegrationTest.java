@@ -9,6 +9,7 @@ import br.com.vavive.gptmaker.domain.enums.DefaultAgentTextCategory;
 import br.com.vavive.gptmaker.domain.enums.LeadStatus;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
+import br.com.vavive.gptmaker.repository.FranchiseChannelSnapshotRepository;
 import br.com.vavive.gptmaker.repository.DefaultAgentTextRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
@@ -61,6 +62,9 @@ class FranchiseSecurityIntegrationTest {
 
     @Autowired
     private LeadRepository leadRepository;
+
+    @Autowired
+    private FranchiseChannelSnapshotRepository channelSnapshotRepository;
 
     @Autowired
     private DefaultAgentTextRepository defaultAgentTextRepository;
@@ -767,6 +771,174 @@ class FranchiseSecurityIntegrationTest {
 
         mockMvc.perform(put("/conversations/{id}/start-human", conversationId)
                 .header("Authorization", bearerToken("osasco@vavive.com", "admin123")))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void channelsRespectFranchiseOwnershipForAdminFranquia() throws Exception {
+        Franchise ownFranchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        var ownSnapshot = new br.com.vavive.gptmaker.domain.entity.FranchiseChannelSnapshot(
+            ownFranchise,
+            "channel-own",
+            "WhatsApp Vila Mariana",
+            "WHATSAPP"
+        );
+        ownSnapshot.setConnected(true);
+        ownSnapshot.setExternalUsername("5511999990001");
+        channelSnapshotRepository.save(ownSnapshot);
+
+        Franchise otherFranchise = franchiseRepository.save(new Franchise("Vavive Santos", "18.181.181/0001-18", "Santos", "SP", "ATIVA"));
+        otherFranchise.setWorkspaceId("mock-workspace-santos");
+        otherFranchise.setWorkspaceName("Workspace Santos");
+        otherFranchise.setAgentId("mock-agent-mock-workspace-santos-01");
+        otherFranchise.setAgentName("Assistente Santos");
+        franchiseRepository.save(otherFranchise);
+
+        mockMvc.perform(get("/franchises/{id}/channels", ownFranchise.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[?(@.externalChannelId=='channel-own')].name").value("WhatsApp Vila Mariana"));
+
+        mockMvc.perform(get("/franchises/{id}/channels", otherFranchise.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("ADMIN_FRANQUIA so pode acessar dados da propria franquia."));
+    }
+
+    @Test
+    void trainingsAndConversationExamplesRespectFranchiseOwnership() throws Exception {
+        Franchise ownFranchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        GptMakerAgent ownAgent = agentRepository.findByFranchiseId(ownFranchise.getId()).getFirst();
+
+        Franchise otherFranchise = franchiseRepository.save(new Franchise("Vavive Osasco 2", "17.171.171/0001-17", "Osasco", "SP", "ATIVA"));
+        otherFranchise.setWorkspaceId("mock-workspace-osasco-2");
+        otherFranchise.setWorkspaceName("Workspace Osasco 2");
+        otherFranchise.setAgentId("mock-agent-mock-workspace-osasco-2-01");
+        otherFranchise.setAgentName("Assistente Osasco 2");
+        franchiseRepository.save(otherFranchise);
+        userRepository.save(new User(
+            "Gestora Osasco 2",
+            "osasco2@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            otherFranchise
+        ));
+
+        mockMvc.perform(get("/agents/{id}/trainings", ownAgent.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/agents/{id}/conversation-examples", ownAgent.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "title": "Venda de limpeza residencial",
+                      "objective": "Classificar lead e fechar visita.",
+                      "messages": "cliente: quero orcamento\\nagente: posso ajudar",
+                      "status": "PUBLICADO",
+                      "includeInTraining": true
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.title").value("Venda de limpeza residencial"));
+
+        mockMvc.perform(get("/agents/{id}/conversation-examples", ownAgent.getId())
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].status").value("PUBLICADO"));
+
+        mockMvc.perform(get("/agents/{id}/trainings", ownAgent.getId())
+                .header("Authorization", bearerToken("osasco2@vavive.com", "admin123")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("ADMIN_FRANQUIA so pode acessar dados da propria franquia."));
+
+        mockMvc.perform(get("/agents/{id}/conversation-examples", ownAgent.getId())
+                .header("Authorization", bearerToken("osasco2@vavive.com", "admin123")))
+            .andExpect(status().isForbidden())
+            .andExpect(jsonPath("$.message").value("ADMIN_FRANQUIA so pode acessar dados da propria franquia."));
+    }
+
+    @Test
+    void conversationCompleteAndHandoffsRespectFranchiseOwnership() throws Exception {
+        Franchise ownFranchise = franchiseRepository.findAll().stream().findFirst().orElseThrow();
+        Franchise otherFranchise = franchiseRepository.save(new Franchise("Vavive Guarulhos", "16.161.161/0001-16", "Guarulhos", "SP", "ATIVA"));
+        otherFranchise.setWorkspaceId("mock-workspace-gru");
+        otherFranchise.setWorkspaceName("Workspace Guarulhos");
+        otherFranchise.setAgentId("mock-agent-mock-workspace-gru-01");
+        otherFranchise.setAgentName("Assistente Guarulhos");
+        franchiseRepository.save(otherFranchise);
+        userRepository.save(new User(
+            "Gestora Guarulhos",
+            "gru@vavive.com",
+            passwordEncoder.encode("admin123"),
+            UserRole.ADMIN_FRANQUIA,
+            otherFranchise
+        ));
+
+        String created = mockMvc.perform(post("/conversations/test-agent")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "prompt": "Quero fechar pacote mensal.",
+                      "contextId": "cliente-handoff",
+                      "customerName": "Cliente Handoff",
+                      "franchiseId": "%s"
+                    }
+                    """.formatted(ownFranchise.getId())))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+
+        String conversationId = objectMapper.readTree(created).get("conversationId").asText();
+
+        mockMvc.perform(post("/conversations/{id}/complete", conversationId)
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "outcome": "VENDA_CONCLUIDA",
+                      "closedReason": "cliente_pronto_para_fechamento",
+                      "saleSummary": "Lead quer visita tecnica na sexta."
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.status").value("venda_concluida"));
+
+        mockMvc.perform(get("/conversations/{id}/handoffs", conversationId)
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$[0].summary").value("Lead quer visita tecnica na sexta."));
+
+        mockMvc.perform(post("/conversations/{id}/complete", conversationId)
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "outcome": "VENDA_CONCLUIDA",
+                      "closedReason": "duplicado",
+                      "saleSummary": "Novo envio nao deve acontecer"
+                    }
+                    """))
+            .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.message").value("Esta conversa ja foi concluida."));
+
+        mockMvc.perform(post("/conversations/{id}/complete", conversationId)
+                .header("Authorization", bearerToken("gru@vavive.com", "admin123"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "outcome": "CONCLUIDO",
+                      "closedReason": "sem_acesso",
+                      "saleSummary": "Nao usar"
+                    }
+                    """))
+            .andExpect(status().isForbidden());
+
+        mockMvc.perform(get("/conversations/{id}/handoffs", conversationId)
+                .header("Authorization", bearerToken("gru@vavive.com", "admin123")))
             .andExpect(status().isForbidden());
     }
 

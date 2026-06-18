@@ -11,6 +11,12 @@ public record DashboardSummaryResponse(
     String setupStatus,
     int completionPercentage,
     LocalDateTime lastPublicationAt,
-    String lastTrainingTitle
+    String lastTrainingTitle,
+    long blockedFranchises,
+    long franchisesWithoutAgent,
+    long franchisesReadyToPublish,
+    long waitingHumanConversations,
+    long syncedChannels,
+    LocalDateTime lastNetworkActionAt
 ) {
 }

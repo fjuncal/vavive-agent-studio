@@ -1,6 +1,7 @@
 package br.com.vavive.gptmaker.dto;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 public record FranchiseSetupResponse(
@@ -17,9 +18,16 @@ public record FranchiseSetupResponse(
     String faq,
     String rules,
     String toneOfVoice,
+    String franchiseWhatsapp,
+    String defaultContext,
+    String conversationExamplesSummary,
+    UUID agentId,
+    String agentName,
     int completionPercentage,
     String setupStatus,
     LocalDateTime lastPublishedAt,
-    String lastGeneratedTraining
+    String lastGeneratedTraining,
+    List<ConversationExampleResponse> examples,
+    List<TrainingResponse> recentTrainings
 ) {
 }

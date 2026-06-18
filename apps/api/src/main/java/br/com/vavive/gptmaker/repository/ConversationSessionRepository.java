@@ -10,4 +10,6 @@ public interface ConversationSessionRepository extends JpaRepository<Conversatio
     List<ConversationSession> findByFranchiseIdOrderByUpdatedAtDesc(UUID franchiseId);
 
     Optional<ConversationSession> findByIdAndFranchiseId(UUID id, UUID franchiseId);
+
+    Optional<ConversationSession> findFirstByFranchiseIdAndChatId(UUID franchiseId, String chatId);
 }

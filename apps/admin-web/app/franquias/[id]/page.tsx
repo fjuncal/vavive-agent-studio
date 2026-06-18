@@ -10,20 +10,104 @@ import {
   clearFranchiseAgent,
   createFranchiseAdminUser,
   getAvailableGptMakerWorkspaces,
+  getConversationMessages,
+  getConversations,
+  getWorkspaceCredits,
   getFranchiseAdminUser,
   getFranchiseById,
+  getFranchiseChannels,
   getFranchiseGptMakerConnection,
+  getFranchiseSetup,
   linkFranchiseWorkspace,
   unlinkFranchiseWorkspace,
+  type ConversationSummary,
   type FranchiseAdminUser,
+  type FranchiseChannel,
   type FranchiseGptMakerConnection,
+  type FranchiseSetup,
   type FranchiseSummary,
   type GptMakerWorkspaceOption
 } from "@/lib/api";
-import { Bot, Building2, Loader2, PlugZap, UserRound } from "lucide-react";
+import {
+  Bot,
+  Building2,
+  Loader2,
+  MessageCircle,
+  PlugZap,
+  Radio,
+  UserRound,
+  ArrowRight,
+  Settings,
+  Zap,
+  Link2,
+  Unlink,
+  Trash2,
+  Save,
+  CheckCircle2
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+
+function InfoCard({
+  icon: Icon,
+  title,
+  value,
+  subtitle,
+  action,
+  variant = "default"
+}: {
+  icon: typeof Building2;
+  title: string;
+  value: string;
+  subtitle?: string;
+  action?: { label: string; href: string };
+  variant?: "default" | "success" | "warning";
+}) {
+  const variantStyles = {
+    default: "border-line/60",
+    success: "border-emerald-200 bg-emerald-50/30 dark:border-emerald-800 dark:bg-emerald-950/30",
+    warning: "border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/30"
+  };
+
+  return (
+    <article className={`card group ${variantStyles[variant]}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-transform duration-200 group-hover:scale-110">
+          <Icon size={20} />
+        </div>
+        {action && (
+          <Link
+            href={action.href}
+            className="flex items-center gap-1 text-xs font-medium text-brand-600 opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            {action.label}
+            <ArrowRight size={12} />
+          </Link>
+        )}
+      </div>
+      <h3 className="mt-4 font-semibold" style={{ color: "var(--color-text-primary)" }}>{title}</h3>
+      <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{value}</p>
+      {subtitle && <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{subtitle}</p>}
+    </article>
+  );
+}
+
+function SectionHeader({ title, description, icon }: { title: string; description?: string; icon?: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 mb-5">
+      {icon && (
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+          {icon}
+        </div>
+      )}
+      <div>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{title}</h2>
+        {description && <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{description}</p>}
+      </div>
+    </div>
+  );
+}
 
 export default function FranchiseDetailPage() {
   const params = useParams<{ id: string }>();
@@ -31,7 +115,10 @@ export default function FranchiseDetailPage() {
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
   const [franchise, setFranchise] = useState<FranchiseSummary | null>(null);
   const [connection, setConnection] = useState<FranchiseGptMakerConnection | null>(null);
+  const [setup, setSetup] = useState<FranchiseSetup | null>(null);
   const [adminUser, setAdminUser] = useState<FranchiseAdminUser | null>(null);
+  const [channels, setChannels] = useState<FranchiseChannel[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [workspaces, setWorkspaces] = useState<GptMakerWorkspaceOption[]>([]);
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState("");
   const [adminName, setAdminName] = useState("");
@@ -42,14 +129,13 @@ export default function FranchiseDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+  const [credits, setCredits] = useState<{ credits: number; used: number; remaining: number } | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | "replace-workspace" | "unlink-workspace" | "clear-agent">(null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((item) => item.id === selectedWorkspaceId) ?? null,
     [selectedWorkspaceId, workspaces]
   );
-
-  const hasWorkspace = !!franchise?.workspaceId;
 
   useEffect(() => {
     if (!params?.id) {
@@ -60,15 +146,21 @@ export default function FranchiseDetailPage() {
     Promise.all([
       getFranchiseById(params.id),
       getFranchiseGptMakerConnection(params.id),
-      getFranchiseAdminUser(params.id).catch(() => null)
+      getFranchiseSetup(params.id),
+      getFranchiseAdminUser(params.id).catch(() => null),
+      getFranchiseChannels(params.id).catch(() => []),
+      getConversations({ franchiseId: params.id }).catch(() => [])
     ])
-      .then(([franchiseData, connectionData, adminData]) => {
+      .then(([franchiseData, connectionData, setupData, adminData, channelData, conversationData]) => {
         setFranchise(franchiseData);
         setConnection(connectionData);
+        setSetup(setupData);
         setAdminUser(adminData);
+        setChannels(channelData);
+        setConversations(conversationData);
       })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar a franquia.");
+        setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar a franquia.");
       })
       .finally(() => setIsLoading(false));
   }, [params?.id]);
@@ -77,37 +169,50 @@ export default function FranchiseDetailPage() {
     if (!isSuperAdmin) {
       return;
     }
-    getAvailableGptMakerWorkspaces()
-      .then(setWorkspaces)
-      .catch(() => setWorkspaces([]));
+    getAvailableGptMakerWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]));
   }, [isSuperAdmin]);
+
+  useEffect(() => {
+    if (!connection?.workspaceId || !params?.id) {
+      setCredits(null);
+      return;
+    }
+    getWorkspaceCredits(params.id).then(setCredits).catch(() => setCredits(null));
+  }, [connection?.workspaceId, params?.id]);
+
+  async function refreshOperationalData() {
+    if (!params?.id) {
+      return;
+    }
+    const [franchiseData, connectionData, setupData, channelData, conversationData] = await Promise.all([
+      getFranchiseById(params.id),
+      getFranchiseGptMakerConnection(params.id),
+      getFranchiseSetup(params.id),
+      getFranchiseChannels(params.id).catch(() => []),
+      getConversations({ franchiseId: params.id }).catch(() => [])
+    ]);
+    setFranchise(franchiseData);
+    setConnection(connectionData);
+    setSetup(setupData);
+    setChannels(channelData);
+    setConversations(conversationData);
+  }
 
   async function handleCreateAdminUser() {
     if (!params?.id) {
       return;
     }
-    if (!adminName.trim() || !adminEmail.trim() || !adminPassword.trim()) {
-      setError("Preencha nome, email e senha.");
-      setSuccess(null);
-      return;
-    }
-
     setIsSavingAdmin(true);
     setError(null);
     setSuccess(null);
     try {
-      const created = await createFranchiseAdminUser(params.id, {
-        name: adminName,
-        email: adminEmail,
-        password: adminPassword
-      });
-      setAdminUser(created);
+      setAdminUser(await createFranchiseAdminUser(params.id, { name: adminName, email: adminEmail, password: adminPassword }));
       setAdminName("");
       setAdminEmail("");
       setAdminPassword("");
-      setSuccess("Administrador criado.");
+      setSuccess("Administrador criado com sucesso.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível criar o administrador.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel criar administrador.");
     } finally {
       setIsSavingAdmin(false);
     }
@@ -115,35 +220,23 @@ export default function FranchiseDetailPage() {
 
   async function handleLinkWorkspace(forceReplace: boolean) {
     if (!params?.id || !selectedWorkspaceId) {
-      setError("Selecione uma integração disponível.");
-      setSuccess(null);
       return;
     }
-
     setIsSaving(true);
     setError(null);
     setSuccess(null);
     try {
-      const response = await linkFranchiseWorkspace(params.id, {
+      await linkFranchiseWorkspace(params.id, {
         workspaceId: selectedWorkspaceId,
         workspaceName: selectedWorkspace?.name,
         confirmCriticalChange: forceReplace
       });
-      setConnection(response);
-      setFranchise((current) => current ? {
-        ...current,
-        status: response.status,
-        workspaceId: response.workspaceId,
-        workspaceName: response.workspaceName,
-        agentId: response.agentId,
-        agentName: response.agentName,
-        gptMakerLastSyncAt: response.lastSyncAt
-      } : current);
       setSelectedWorkspaceId("");
       setConfirmAction(null);
-      setSuccess("Integração vinculada.");
+      await refreshOperationalData();
+      setSuccess("Conexão atualizada com sucesso.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível vincular.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar conexao.");
     } finally {
       setIsSaving(false);
     }
@@ -154,24 +247,13 @@ export default function FranchiseDetailPage() {
       return;
     }
     setIsSaving(true);
-    setError(null);
-    setSuccess(null);
     try {
-      const response = await unlinkFranchiseWorkspace(params.id, { confirmCriticalChange: true });
-      setConnection(response);
-      setFranchise((current) => current ? {
-        ...current,
-        status: response.status,
-        workspaceId: null,
-        workspaceName: null,
-        agentId: null,
-        agentName: null,
-        gptMakerLastSyncAt: null
-      } : current);
+      await unlinkFranchiseWorkspace(params.id, { confirmCriticalChange: true });
       setConfirmAction(null);
-      setSuccess("Integração desvinculada.");
+      await refreshOperationalData();
+      setSuccess("Workspace desvinculada com sucesso.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível desvincular.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel desvincular workspace.");
     } finally {
       setIsSaving(false);
     }
@@ -182,179 +264,336 @@ export default function FranchiseDetailPage() {
       return;
     }
     setIsSaving(true);
-    setError(null);
-    setSuccess(null);
     try {
-      const response = await clearFranchiseAgent(params.id, { confirmCriticalChange: true });
-      setConnection(response);
-      setFranchise((current) => current ? {
-        ...current,
-        status: response.status,
-        agentId: null,
-        agentName: null,
-        gptMakerLastSyncAt: null
-      } : current);
+      await clearFranchiseAgent(params.id, { confirmCriticalChange: true });
       setConfirmAction(null);
-      setSuccess("Agente removido.");
+      await refreshOperationalData();
+      setSuccess("Agente removido com sucesso.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível remover o agente.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel remover agente.");
     } finally {
       setIsSaving(false);
     }
   }
 
+  const humanConversations = conversations.filter((item) => item.operationalStatus === "em_atendimento_humano").length;
+
   return (
     <AppShell>
       <PageHeader
         eyebrow="Franquia"
-        title={franchise?.name ?? "Carregando"}
-        description={isSuperAdmin ? "Gerencie a unidade, acesso e agente." : "Acompanhe sua franquia."}
+        title={franchise?.name ?? "Franquia"}
+        description={isSuperAdmin ? "Gerencie todos os aspectos desta unidade." : "Status operacional da sua unidade."}
+        backHref="/franquias"
       />
 
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error && (
+        <div className="rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-800 px-5 py-4 text-sm text-rose-700 dark:text-rose-300 animate-in flex items-center gap-2">
+          <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900">
+            <span className="text-xs font-bold text-rose-600 dark:text-rose-400">!</span>
+          </div>
+          {error}
+        </div>
+      )}
+      {success && (
+        <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-100 dark:border-emerald-800 px-5 py-4 text-sm text-emerald-700 dark:text-emerald-300 animate-in flex items-center gap-2">
+          <CheckCircle2 size={18} className="text-emerald-600 dark:text-emerald-400" />
+          {success}
+        </div>
+      )}
 
       {isLoading ? (
-        <section className="rounded-2xl border border-line/80 bg-white/86 p-6 shadow-soft">
-          <p className="text-sm text-slate-500">Carregando...</p>
-        </section>
+        <div className="card flex items-center justify-center py-12">
+          <Loader2 size={24} className="animate-spin text-brand-600" />
+          <p className="ml-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando franquia...</p>
+        </div>
       ) : (
-        <div className="grid gap-5">
-          {/* overview cards */}
-          <section className="grid gap-4 xl:grid-cols-4">
-            <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <Building2 size={20} className="text-brand-700" />
-              <h2 className="mt-4 font-semibold text-ink">Dados da franquia</h2>
-              <p className="mt-1 text-sm text-slate-500">{franchise?.city} / {franchise?.state}</p>
-              {franchise?.document ? <p className="text-sm text-slate-500">{franchise.document}</p> : null}
-              <div className="mt-3"><StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} /></div>
-            </article>
-            <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <UserRound size={20} className="text-brand-700" />
-              <h2 className="mt-4 font-semibold text-ink">Administrador</h2>
-              <p className="mt-2 text-sm text-slate-500">{adminUser?.name ?? "Não cadastrado"}</p>
-              {adminUser ? <p className="text-sm text-slate-500">{adminUser.email}</p> : null}
-            </article>
-            {isSuperAdmin ? (
-              <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-                <PlugZap size={20} className="text-brand-700" />
-                <h2 className="mt-4 font-semibold text-ink">Integração</h2>
-                <p className="mt-2 text-sm text-slate-500">{connection?.workspaceName ?? "Não vinculada"}</p>
+        <div className="grid gap-6 stagger-children">
+          {/* Summary Cards */}
+          <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <InfoCard
+              icon={Building2}
+              title="Dados"
+              value={`${franchise?.city} / ${franchise?.state}`}
+              subtitle={franchise?.document ?? undefined}
+              action={{ label: "Editar", href: `/franquias/${franchise?.id}` }}
+            />
+            <InfoCard
+              icon={UserRound}
+              title="Administrador"
+              value={adminUser?.name ?? "Não cadastrado"}
+              subtitle={adminUser?.email ?? undefined}
+              variant={adminUser ? "success" : "warning"}
+            />
+            <InfoCard
+              icon={PlugZap}
+              title="Conexão GPTMaker"
+              value={connection?.workspaceName ?? "Não vinculada"}
+              variant={connection?.workspaceId ? "success" : "warning"}
+            />
+            <InfoCard
+              icon={Bot}
+              title="Agente"
+              value={connection?.agentName ?? "Não configurado"}
+              action={connection?.agentId ? { label: "Abrir", href: `/franquias/${franchise?.id}/agente` } : undefined}
+              variant={connection?.agentId ? "success" : "warning"}
+            />
+            {connection?.workspaceId && credits && (
+              <article className="card group border-line/60">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50 text-brand-600 transition-transform duration-200 group-hover:scale-110">
+                    <Zap size={20} />
+                  </div>
+                  <span className="text-xs font-medium" style={{ color: "var(--color-text-tertiary)" }}>
+                    {credits.credits > 0 ? Math.round((credits.remaining / credits.credits) * 100) : 0}%
+                  </span>
+                </div>
+                <h3 className="mt-4 font-semibold" style={{ color: "var(--color-text-primary)" }}>Créditos workspace</h3>
+                <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                  {credits.remaining.toLocaleString()} / {credits.credits.toLocaleString()}
+                </p>
+                <div className="mt-3 h-2 w-full rounded-full overflow-hidden" style={{ background: "var(--color-bg-tertiary, #e2e8f0)" }}>
+                  <div
+                    className="h-full rounded-full transition-all duration-500"
+                    style={{
+                      width: `${credits.credits > 0 ? Math.round((credits.remaining / credits.credits) * 100) : 0}%`,
+                      background: credits.remaining / credits.credits > 0.2
+                        ? "var(--color-brand-500, #6366f1)"
+                        : credits.remaining / credits.credits > 0.05
+                          ? "#f59e0b"
+                          : "#ef4444"
+                    }}
+                  />
+                </div>
+                <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                  {credits.used.toLocaleString()} utilizados
+                </p>
               </article>
-            ) : null}
-            <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <Bot size={20} className="text-brand-700" />
-              <h2 className="mt-4 font-semibold text-ink">Agente da franquia</h2>
-              <p className="mt-2 text-sm text-slate-500">{connection?.agentName ?? "Não configurado"}</p>
-              {connection?.agentId ? (
-                <Link href={`/franquias/${franchise?.id}/agente`} className="mt-3 inline-flex rounded-xl bg-ink px-3 py-1.5 text-xs font-semibold text-white">
-                  Abrir agente
+            )}
+          </section>
+
+          {/* Status Badge */}
+          <div className="flex items-center gap-3">
+            <StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} size="md" />
+          </div>
+
+          {/* Main Content Grid */}
+          <section className="grid gap-6 xl:grid-cols-2">
+            {/* Training & Setup */}
+            <div className="card">
+              <SectionHeader
+                title="Treinamento e setup"
+                description="Progresso da configuração do agente."
+                icon={<Settings size={20} />}
+              />
+              <div className="grid gap-3">
+                <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Status</p>
+                  <div className="mt-2 flex items-center justify-between gap-3">
+                    <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{setup?.setupStatus.replaceAll("_", " ")}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-24 rounded-full bg-slate-200 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-brand-500 transition-all duration-500"
+                          style={{ width: `${setup?.completionPercentage ?? 0}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium text-brand-600">{setup?.completionPercentage ?? 0}%</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Última publicação</p>
+                  <p className="mt-2 font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                    {setup?.lastPublishedAt
+                      ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(setup.lastPublishedAt))
+                      : "Nunca publicada"}
+                  </p>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Exemplos ativos</p>
+                  <p className="mt-2 font-semibold" style={{ color: "var(--color-text-primary)" }}>{setup?.examples?.filter((item) => item.includeInTraining).length ?? 0}</p>
+                </div>
+              </div>
+              <div className="mt-5">
+                <Link href="/setup-guiado" className="btn-primary">
+                  <Zap size={16} />
+                  Abrir workbench
                 </Link>
-              ) : null}
-            </article>
+              </div>
+            </div>
+
+            {/* Channels & Conversations */}
+            <div className="card">
+              <SectionHeader
+                title="Canais e conversas"
+                description="Status dos canais e atendimentos."
+                icon={<Radio size={20} />}
+              />
+              <div className="grid gap-3">
+                <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Canais sincronizados</p>
+                      <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{channels.length}</p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                      <Radio size={22} />
+                    </div>
+                  </div>
+                </div>
+                <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Conversas humanas</p>
+                      <p className="mt-2 text-2xl font-bold" style={{ color: "var(--color-text-primary)" }}>{humanConversations}</p>
+                    </div>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400">
+                      <MessageCircle size={22} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Link href="/canais" className="btn-secondary">
+                  <Radio size={16} />
+                  Abrir canais
+                </Link>
+                <Link href="/conversas" className="btn-primary">
+                  <MessageCircle size={16} />
+                  Abrir inbox
+                </Link>
+              </div>
+            </div>
           </section>
 
-          {/* admin user detail */}
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Administrador</h2>
-            {adminUser ? (
-              <div className="mt-4 rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                <p><strong className="text-ink">Nome:</strong> {adminUser.name}</p>
-                <p className="mt-1"><strong className="text-ink">Email:</strong> {adminUser.email}</p>
-              </div>
-            ) : isSuperAdmin ? (
-              <div className="mt-4 grid gap-4">
-                <p className="text-sm text-slate-500">Cadastre o responsável pela franquia.</p>
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <label className="grid gap-1.5">
-                    <span className="text-sm font-medium text-slate-700">Nome</span>
-                    <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminName} onChange={(event) => setAdminName(event.target.value)} />
-                  </label>
-                  <label className="grid gap-1.5">
-                    <span className="text-sm font-medium text-slate-700">Email</span>
-                    <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} />
-                  </label>
-                  <label className="grid gap-1.5 sm:col-span-2">
-                    <span className="text-sm font-medium text-slate-700">Senha inicial</span>
-                    <input type="password" className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} />
-                  </label>
-                  <button type="button" onClick={() => void handleCreateAdminUser()} disabled={isSavingAdmin} className="w-fit rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                    {isSavingAdmin ? "Salvando..." : "Criar administrador"}
+          {/* Admin & Connection */}
+          <section className="grid gap-6 xl:grid-cols-2">
+            {/* Administrator */}
+            <div className="card">
+              <SectionHeader
+                title="Administrador"
+                description="Usuário que gerencia esta franquia."
+                icon={<UserRound size={20} />}
+              />
+              {adminUser ? (
+                <div className="rounded-xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
+                  <div className="grid gap-2">
+                    <div className="flex justify-between">
+                      <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Nome</span>
+                      <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminUser.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Email</span>
+                      <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminUser.email}</span>
+                    </div>
+                  </div>
+                </div>
+              ) : isSuperAdmin ? (
+                <div className="grid gap-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <input
+                      className="input-field"
+                      placeholder="Nome do administrador"
+                      value={adminName}
+                      onChange={(event) => setAdminName(event.target.value)}
+                    />
+                    <input
+                      className="input-field"
+                      placeholder="Email"
+                      value={adminEmail}
+                      onChange={(event) => setAdminEmail(event.target.value)}
+                    />
+                    <input
+                      type="password"
+                      className="input-field sm:col-span-2"
+                      placeholder="Senha inicial"
+                      value={adminPassword}
+                      onChange={(event) => setAdminPassword(event.target.value)}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleCreateAdminUser()}
+                    disabled={isSavingAdmin}
+                    className="btn-primary w-fit"
+                  >
+                    {isSavingAdmin ? (
+                      <>
+                        <Loader2 size={16} className="animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Save size={16} />
+                        Criar administrador
+                      </>
+                    )}
                   </button>
                 </div>
+              ) : (
+                <EmptyState
+                  icon={UserRound}
+                  title="Administrador pendente"
+                  description="A matriz ainda não criou o acesso administrativo desta franquia."
+                />
+              )}
+            </div>
+
+            {/* GPTMaker Connection */}
+            {isSuperAdmin && (
+              <div className="card">
+                <SectionHeader
+                  title="Conexão GPTMaker"
+                  description="Workspace e agente vinculados."
+                  icon={<PlugZap size={20} />}
+                />
+                <div className="grid gap-4">
+                  <select
+                    className="input-field"
+                    value={selectedWorkspaceId}
+                    onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                  >
+                    <option value="">Selecione uma workspace</option>
+                    {workspaces.map((workspace) => (
+                      <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                    ))}
+                  </select>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => connection?.workspaceId ? setConfirmAction("replace-workspace") : void handleLinkWorkspace(false)}
+                      disabled={!selectedWorkspaceId || isSaving}
+                      className="btn-primary"
+                    >
+                      {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />}
+                      {connection?.workspaceId ? "Trocar workspace" : "Vincular workspace"}
+                    </button>
+                    {connection?.workspaceId && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction("unlink-workspace")}
+                        className="btn-secondary"
+                      >
+                        <Unlink size={16} />
+                        Desvincular
+                      </button>
+                    )}
+                    {connection?.agentId && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmAction("clear-agent")}
+                        className="btn-secondary text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30"
+                      >
+                        <Trash2 size={16} />
+                        Remover agente
+                      </button>
+                    )}
+                  </div>
+                </div>
               </div>
-            ) : (
-              <p className="mt-4 text-sm text-slate-500">Aguardando cadastro pela administração.</p>
             )}
           </section>
-
-          {/* agent section - always visible */}
-          <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-            <h2 className="text-lg font-semibold text-ink">Agente da franquia</h2>
-            <p className="mt-1 text-sm text-slate-500">Configuração do agente de atendimento.</p>
-
-            {!hasWorkspace ? (
-              <div className="mt-5 space-y-4">
-                <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
-                  <p className="font-medium">Nenhuma integração vinculada</p>
-                  <p className="mt-1">Para criar o agente, primeiro vincule uma integração.</p>
-                </div>
-                <button type="button" disabled className="rounded-xl bg-slate-200 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed">
-                  Criar agente
-                </button>
-                <p className="text-xs text-slate-400">Disponível após vincular integração.</p>
-              </div>
-            ) : (
-              <div className="mt-5 grid gap-4">
-                <div className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600">
-                  <p><strong className="text-ink">Agente:</strong> {connection?.agentName ?? "Não configurado"}</p>
-                  {connection?.workspaceName ? (
-                    <p className="mt-1"><strong className="text-ink">Integração:</strong> {connection.workspaceName}</p>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <Link href={`/franquias/${franchise?.id}/agente`} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white">
-                    {connection?.agentId ? "Abrir agente" : "Configurar agente"}
-                  </Link>
-                  {connection?.agentId ? (
-                    <button type="button" onClick={() => setConfirmAction("clear-agent")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                      Remover agente
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* connection section - SUPER_ADMIN only */}
-          {isSuperAdmin ? (
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="text-lg font-semibold text-ink">Conexão</h2>
-              <p className="mt-1 text-sm text-slate-500">Gerencie a integração da franquia.</p>
-              <div className="mt-4 grid gap-3 text-sm text-slate-600">
-                <p className="rounded-xl bg-slate-50 p-3">Integração atual: <strong className="text-ink">{connection?.workspaceName ?? "Nenhuma"}</strong></p>
-              </div>
-              <div className="mt-4 grid gap-3">
-                <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
-                  <option value="">Selecione uma integração</option>
-                  {workspaces.map((workspace) => (
-                    <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-                  ))}
-                </select>
-                <div className="flex flex-wrap gap-2">
-                  <button type="button" onClick={() => connection?.workspaceId ? setConfirmAction("replace-workspace") : void handleLinkWorkspace(false)} disabled={!selectedWorkspaceId || isSaving} className="rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : null}
-                    {connection?.workspaceId ? "Trocar" : "Vincular"}
-                  </button>
-                  {connection?.workspaceId ? (
-                    <button type="button" onClick={() => setConfirmAction("unlink-workspace")} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 ring-1 ring-line">
-                      Desvincular
-                    </button>
-                  ) : null}
-                </div>
-              </div>
-            </section>
-          ) : null}
         </div>
       )}
 
@@ -362,8 +601,9 @@ export default function FranchiseDetailPage() {
         isOpen={confirmAction !== null}
         isSubmitting={isSaving}
         title="Confirmar alteração"
-        description="Essa ação pode afetar o agente configurado. Confirme para continuar."
+        description="Esta ação altera a operação da franquia. Confirme para continuar."
         confirmLabel="Confirmar"
+        variant={confirmAction === "clear-agent" ? "danger" : "default"}
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => {
           if (confirmAction === "replace-workspace") {

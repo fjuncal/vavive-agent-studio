@@ -5,6 +5,7 @@ import br.com.vavive.gptmaker.domain.entity.FranchiseSetup;
 import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
+import br.com.vavive.gptmaker.dto.ConversationExampleResponse;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
@@ -29,6 +30,7 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentReques
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
+import br.com.vavive.gptmaker.repository.AgentConversationExampleRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
@@ -51,6 +53,7 @@ public class FranchiseService {
     private final FranchiseSetupRepository franchiseSetupRepository;
     private final GptMakerAgentRepository agentRepository;
     private final AgentTrainingRepository trainingRepository;
+    private final AgentConversationExampleRepository exampleRepository;
     private final TrainingGeneratorService trainingGeneratorService;
     private final SetupProgressService setupProgressService;
     private final GptMakerClient gptMakerClient;
@@ -64,6 +67,7 @@ public class FranchiseService {
         FranchiseSetupRepository franchiseSetupRepository,
         GptMakerAgentRepository agentRepository,
         AgentTrainingRepository trainingRepository,
+        AgentConversationExampleRepository exampleRepository,
         TrainingGeneratorService trainingGeneratorService,
         SetupProgressService setupProgressService,
         GptMakerClient gptMakerClient,
@@ -76,6 +80,7 @@ public class FranchiseService {
         this.franchiseSetupRepository = franchiseSetupRepository;
         this.agentRepository = agentRepository;
         this.trainingRepository = trainingRepository;
+        this.exampleRepository = exampleRepository;
         this.trainingGeneratorService = trainingGeneratorService;
         this.setupProgressService = setupProgressService;
         this.gptMakerClient = gptMakerClient;
@@ -485,6 +490,7 @@ public class FranchiseService {
         setup.setFaq(request.faq());
         setup.setRules(request.rules());
         setup.setToneOfVoice(request.toneOfVoice());
+        setup.setFranchiseWhatsapp(request.franchiseWhatsapp());
 
         franchiseRepository.save(franchise);
         franchiseSetupRepository.save(setup);
@@ -517,6 +523,8 @@ public class FranchiseService {
 
         if (syncResult.success()) {
             setup.setLastPublishedAt(training.getCreatedAt());
+            training.setPublishedAt(training.getCreatedAt());
+            trainingRepository.save(training);
         }
         franchiseSetupRepository.save(setup);
 
@@ -641,6 +649,46 @@ public class FranchiseService {
     }
 
     private FranchiseSetupResponse toSetupResponse(Franchise franchise, FranchiseSetup setup) {
+        var localAgent = agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchise.getId()).orElse(null);
+        List<ConversationExampleResponse> examples = localAgent == null
+            ? List.of()
+            : exampleRepository.findByAgentIdOrderByCreatedAtDesc(localAgent.getId()).stream()
+                .map(example -> new ConversationExampleResponse(
+                    example.getId(),
+                    example.getTitle(),
+                    example.getObjective(),
+                    example.getMessages(),
+                    example.getStatus(),
+                    example.isIncludeInTraining(),
+                    example.getCreatedAt(),
+                    example.getUpdatedAt()
+                ))
+                .toList();
+        List<br.com.vavive.gptmaker.dto.TrainingResponse> recentTrainings = localAgent == null
+            ? List.of()
+            : trainingRepository.findByAgentIdOrderByCreatedAtDesc(localAgent.getId()).stream()
+                .limit(5)
+                .map(training -> new br.com.vavive.gptmaker.dto.TrainingResponse(
+                    training.getId(),
+                    training.getTitle(),
+                    training.getContent(),
+                    training.getStatus(),
+                    training.getExternalReference(),
+                    training.getResultMessage(),
+                    training.getContentSummary(),
+                    "PUBLICADO_GPTMAKER_MOCK".equals(training.getStatus()),
+                    training.getPublishedAt(),
+                    training.getCreatedAt()
+                ))
+                .toList();
+        String examplesSummary = examples.isEmpty()
+            ? setup.getConversationExamplesSummary()
+            : examples.stream()
+                .filter(ConversationExampleResponse::includeInTraining)
+                .map(item -> "%s: %s".formatted(item.title(), item.objective()))
+                .reduce((left, right) -> left + "\n" + right)
+                .orElse(null);
+        setup.setConversationExamplesSummary(examplesSummary);
         return new FranchiseSetupResponse(
             franchise.getId(),
             franchise.getName(),
@@ -655,10 +703,17 @@ public class FranchiseService {
             setup.getFaq(),
             setup.getRules(),
             setup.getToneOfVoice(),
+            setup.getFranchiseWhatsapp(),
+            vaviveDefaultContextService.buildForFranchise(franchise),
+            examplesSummary,
+            localAgent == null ? null : localAgent.getId(),
+            localAgent == null ? franchise.getAgentName() : localAgent.getName(),
             setupProgressService.completionPercentage(franchise, setup),
             setupProgressService.setupStatus(franchise, setup),
             setup.getLastPublishedAt(),
-            setup.getLastGeneratedTraining()
+            setup.getLastGeneratedTraining(),
+            examples,
+            recentTrainings
         );
     }
 
@@ -764,5 +819,131 @@ public class FranchiseService {
             return HttpStatus.BAD_REQUEST;
         }
         return HttpStatus.BAD_GATEWAY;
+    }
+
+    public Object getWorkspaceCredits(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem workspace vinculada.");
+        }
+        try {
+            return gptMakerClient.getWorkspaceCredits(franchise.getWorkspaceId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object getAgentSettings(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.getAgentSettings(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateAgentSettings(UUID franchiseId, Object settings) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateAgentSettings(franchise.getAgentId(), settings);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object getAgentWebhooks(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.getAgentWebhooks(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateAgentWebhooks(UUID franchiseId, Object webhooks) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateAgentWebhooks(franchise.getAgentId(), webhooks);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object listIntentions(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.listIntentions(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object listTrainings(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.listTrainings(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object deleteTraining(UUID franchiseId, String trainingId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            gptMakerClient.deleteTraining(trainingId);
+            return java.util.Map.of("success", true);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object listTransferRules(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.listTransferRules(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object listIdleActions(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.listIdleActions(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    private Franchise requireFranchise(UUID id) {
+        return franchiseRepository.findById(id)
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Franquia nao encontrada."));
     }
 }

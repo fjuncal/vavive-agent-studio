@@ -5,6 +5,7 @@ import br.com.vavive.gptmaker.dto.CreateFranchiseAdminUserRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
+import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
 import br.com.vavive.gptmaker.dto.FranchiseResponse;
 import br.com.vavive.gptmaker.dto.FranchiseSetupResponse;
@@ -18,6 +19,7 @@ import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
+import br.com.vavive.gptmaker.service.ChannelService;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -32,9 +34,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RestController
 public class FranchiseController {
     private final FranchiseService franchiseService;
+    private final ChannelService channelService;
 
-    public FranchiseController(FranchiseService franchiseService) {
+    public FranchiseController(FranchiseService franchiseService, ChannelService channelService) {
         this.franchiseService = franchiseService;
+        this.channelService = channelService;
     }
 
     @GetMapping("/franchises")
@@ -135,5 +139,70 @@ public class FranchiseController {
     @PostMapping("/franchises/{id}/publish-agent")
     public PublishAgentResponse publishAgent(@PathVariable UUID id) {
         return franchiseService.publishAgent(id);
+    }
+
+    @GetMapping("/franchises/{id}/channels")
+    public List<FranchiseChannelResponse> listChannels(@PathVariable UUID id) {
+        return channelService.list(id);
+    }
+
+    @PostMapping("/franchises/{id}/channels/sync")
+    public List<FranchiseChannelResponse> syncChannels(@PathVariable UUID id) {
+        return channelService.sync(id);
+    }
+
+    @PostMapping("/franchises/{id}/channels")
+    public Object createChannel(@PathVariable UUID id, @RequestBody java.util.Map<String, String> request) {
+        return channelService.create(id, request.get("name"), request.get("type"));
+    }
+
+    @GetMapping("/franchises/{id}/credits")
+    public Object getWorkspaceCredits(@PathVariable UUID id) {
+        return franchiseService.getWorkspaceCredits(id);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/agent-settings")
+    public Object getAgentSettings(@PathVariable UUID id) {
+        return franchiseService.getAgentSettings(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/agent-settings")
+    public Object updateAgentSettings(@PathVariable UUID id, @RequestBody Object settings) {
+        return franchiseService.updateAgentSettings(id, settings);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/agent-webhooks")
+    public Object getAgentWebhooks(@PathVariable UUID id) {
+        return franchiseService.getAgentWebhooks(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/agent-webhooks")
+    public Object updateAgentWebhooks(@PathVariable UUID id, @RequestBody Object webhooks) {
+        return franchiseService.updateAgentWebhooks(id, webhooks);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/intentions")
+    public Object listIntentions(@PathVariable UUID id) {
+        return franchiseService.listIntentions(id);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/trainings")
+    public Object listTrainings(@PathVariable UUID id) {
+        return franchiseService.listTrainings(id);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/trainings/{trainingId}")
+    public Object deleteTraining(@PathVariable UUID id, @PathVariable String trainingId) {
+        return franchiseService.deleteTraining(id, trainingId);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/transfer-rules")
+    public Object listTransferRules(@PathVariable UUID id) {
+        return franchiseService.listTransferRules(id);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/idle-actions")
+    public Object listIdleActions(@PathVariable UUID id) {
+        return franchiseService.listIdleActions(id);
     }
 }

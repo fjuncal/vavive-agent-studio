@@ -44,6 +44,12 @@ export type DashboardSummary = {
   completionPercentage: number;
   lastPublicationAt?: string | null;
   lastTrainingTitle?: string | null;
+  blockedFranchises: number;
+  franchisesWithoutAgent: number;
+  franchisesReadyToPublish: number;
+  waitingHumanConversations: number;
+  syncedChannels: number;
+  lastNetworkActionAt?: string | null;
 };
 
 export type LeadSummary = {
@@ -113,10 +119,17 @@ export type FranchiseSetup = {
   faq?: string | null;
   rules?: string | null;
   toneOfVoice?: string | null;
+  franchiseWhatsapp?: string | null;
+  defaultContext?: string | null;
+  conversationExamplesSummary?: string | null;
+  agentId?: string | null;
+  agentName?: string | null;
   completionPercentage: number;
   setupStatus: string;
   lastPublishedAt?: string | null;
   lastGeneratedTraining?: string | null;
+  examples: ConversationExample[];
+  recentTrainings: TrainingSummary[];
 };
 
 export type UpdateFranchiseSetupPayload = {
@@ -132,6 +145,7 @@ export type UpdateFranchiseSetupPayload = {
   faq?: string;
   rules?: string;
   toneOfVoice?: string;
+  franchiseWhatsapp?: string;
 };
 
 export type PublishAgentResult = {
@@ -160,6 +174,8 @@ export type TrainingSummary = {
   content: string;
   status: string;
   message?: string | null;
+  contentSummary?: string | null;
+  publishedAt?: string | null;
   createdAt: string;
 };
 
@@ -285,7 +301,16 @@ export type ConversationSummary = {
   customerPhone?: string | null;
   firstPrompt?: string | null;
   lastResponse?: string | null;
+  channelType?: string | null;
+  operationalStatus: string;
+  responsibleUserName?: string | null;
+  syncStatus?: string | null;
+  closedReason?: string | null;
+  saleOutcome?: string | null;
+  handoffStatus?: string | null;
   humanTakeoverActive: boolean;
+  lastMessageAt?: string | null;
+  lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -311,6 +336,67 @@ export type StartHumanTakeoverResult = {
   conversationId: string;
   success: boolean;
   message: string;
+};
+
+export type ConversationActionResult = {
+  conversationId: string;
+  success: boolean;
+  status: string;
+  message: string;
+  processedAt: string;
+};
+
+export type ConversationCompletePayload = {
+  outcome: string;
+  closedReason: string;
+  saleSummary?: string;
+};
+
+export type ConversationManualMessagePayload = {
+  message: string;
+  replyMessageId?: string;
+};
+
+export type ConversationHandoffEvent = {
+  id: string;
+  outcome: string;
+  deliveryStatus: string;
+  responsibleUserName?: string | null;
+  recipientPhone?: string | null;
+  summary?: string | null;
+  deliveryError?: string | null;
+  sentAt?: string | null;
+};
+
+export type FranchiseChannel = {
+  id: string;
+  externalChannelId?: string | null;
+  name: string;
+  channelType: string;
+  connected: boolean;
+  agentName?: string | null;
+  externalUsername?: string | null;
+  lastSyncedAt?: string | null;
+  lastSyncError?: string | null;
+};
+
+export type ConversationExample = {
+  id: string;
+  title: string;
+  objective?: string | null;
+  messages: string;
+  status: string;
+  includeInTraining: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type ConversationExamplePayload = {
+  title: string;
+  objective?: string;
+  messages: string;
+  status?: string;
+  includeInTraining?: boolean;
 };
 
 export type TestAgentConversationPayload = {
@@ -566,8 +652,13 @@ export function toggleDefaultAgentText(id: string) {
   });
 }
 
-export function getConversations(franchiseId?: string) {
-  const suffix = franchiseId ? `?franchiseId=${encodeURIComponent(franchiseId)}` : "";
+export function getConversations(filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string } = {}) {
+  const params = new URLSearchParams();
+  if (filters.franchiseId) params.set("franchiseId", filters.franchiseId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.channel) params.set("channel", filters.channel);
+  if (filters.responsible) params.set("responsible", filters.responsible);
+  const suffix = params.toString() ? `?${params.toString()}` : "";
   return apiFetch<ConversationSummary[]>(`/conversations${suffix}`);
 }
 
@@ -581,6 +672,30 @@ export function startHumanTakeover(id: string) {
   });
 }
 
+export function stopHumanTakeover(id: string) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/stop-human`, {
+    method: "PUT"
+  });
+}
+
+export function sendConversationManualMessage(id: string, payload: ConversationManualMessagePayload) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/messages`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function completeConversation(id: string, payload: ConversationCompletePayload) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/complete`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getConversationHandoffs(id: string) {
+  return apiFetch<ConversationHandoffEvent[]>(`/conversations/${id}/handoffs`);
+}
+
 export function testAgentConversation(payload: Omit<TestAgentConversationPayload, "contextId"> & { contextId?: string }) {
   return apiFetch<TestAgentConversationResult>("/conversations/test-agent", {
     method: "POST",
@@ -588,5 +703,104 @@ export function testAgentConversation(payload: Omit<TestAgentConversationPayload
       ...payload,
       contextId: payload.contextId || `ctx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     })
+  });
+}
+
+export function getFranchiseChannels(id: string) {
+  return apiFetch<FranchiseChannel[]>(`/franchises/${id}/channels`);
+}
+
+export function syncFranchiseChannels(id: string) {
+  return apiFetch<FranchiseChannel[]>(`/franchises/${id}/channels/sync`, {
+    method: "POST"
+  });
+}
+
+export function getConversationExamples(agentId: string) {
+  return apiFetch<ConversationExample[]>(`/agents/${agentId}/conversation-examples`);
+}
+
+export function createConversationExample(agentId: string, payload: ConversationExamplePayload) {
+  return apiFetch<ConversationExample>(`/agents/${agentId}/conversation-examples`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateConversationExample(agentId: string, exampleId: string, payload: ConversationExamplePayload) {
+  return apiFetch<ConversationExample>(`/agents/${agentId}/conversation-examples/${exampleId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getWorkspaceCredits(franchiseId: string) {
+  return apiFetch<{ credits: number; used: number; remaining: number }>(`/franchises/${franchiseId}/credits`);
+}
+
+export function getAgentSettings(franchiseId: string) {
+  return apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-settings`);
+}
+
+export function updateAgentSettings(franchiseId: string, settings: Record<string, unknown>) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent-settings`, {
+    method: "POST",
+    body: JSON.stringify(settings)
+  });
+}
+
+export function getAgentWebhooks(franchiseId: string) {
+  return apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-webhooks`);
+}
+
+export function updateAgentWebhooks(franchiseId: string, webhooks: Record<string, unknown>) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent-webhooks`, {
+    method: "POST",
+    body: JSON.stringify(webhooks)
+  });
+}
+
+export type GptMakerIntention = {
+  id: string;
+  description: string;
+  type: string;
+  instructions: string;
+  details?: string;
+  active: boolean;
+};
+
+export function getGptMakerIntentions(franchiseId: string) {
+  return apiFetch<GptMakerIntention[]>(`/franchises/${franchiseId}/gptmaker/intentions`);
+}
+
+export function createGptMakerIntention(franchiseId: string, payload: { name: string; description: string; instructions: string }) {
+  return apiFetch<GptMakerIntention>(`/franchises/${franchiseId}/gptmaker/intentions`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function getGptMakerTrainings(franchiseId: string) {
+  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/trainings`);
+}
+
+export function deleteGptMakerTraining(franchiseId: string, trainingId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/trainings/${trainingId}`, {
+    method: "DELETE"
+  });
+}
+
+export function getTransferRules(franchiseId: string) {
+  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/transfer-rules`);
+}
+
+export function getIdleActions(franchiseId: string) {
+  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/idle-actions`);
+}
+
+export function createFranchiseChannel(franchiseId: string, name: string, type: string) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/channels`, {
+    method: "POST",
+    body: JSON.stringify({ name, type })
   });
 }

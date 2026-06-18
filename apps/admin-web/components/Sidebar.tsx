@@ -26,7 +26,7 @@ const nav = [
   { href: "/setup-guiado", label: "Configuração do agente", icon: Route }
 ];
 
-export function Sidebar() {
+export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
   const baseNav = nav.map((item) => {
@@ -49,14 +49,25 @@ export function Sidebar() {
     : baseNav;
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-line/80 bg-white/78 px-5 py-5 shadow-soft backdrop-blur-xl lg:flex lg:flex-col">
-      <Link href="/dashboard" className="flex items-center gap-3 rounded-2xl px-2 py-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white">
+    <aside className={clsx(
+      "flex flex-col px-5 py-5",
+      "lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:w-72 lg:border-r",
+      "lg:backdrop-blur-2xl"
+    )} style={{
+      borderColor: "var(--color-border)",
+      background: "var(--color-bg-primary)"
+    }}>
+      <Link
+        href="/dashboard"
+        className="flex items-center gap-3 rounded-2xl px-2 py-2 group"
+        onClick={onClose}
+      >
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white transition-transform duration-200 group-hover:scale-105 dark:bg-brand-600">
           <Sparkles size={20} />
         </div>
         <div>
-          <p className="text-sm font-semibold tracking-tight text-ink">Vavive</p>
-          <p className="text-xs text-slate-500">Agent Studio</p>
+          <p className="text-sm font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>Vavive</p>
+          <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Agent Studio</p>
         </div>
       </Link>
 
@@ -68,29 +79,38 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={onClose}
               className={clsx(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
                 active
-                  ? "bg-brand-50 text-brand-700 shadow-[inset_0_0_0_1px_rgba(34,165,135,0.18)]"
-                  : "text-slate-600 hover:bg-slate-100 hover:text-ink"
+                  ? "bg-brand-50 text-brand-700 shadow-sm border border-brand-100 dark:bg-brand-900/20 dark:text-brand-400 dark:border-brand-800"
+                  : "hover:bg-gray-100 dark:hover:bg-gray-800"
               )}
+              style={!active ? { color: "var(--color-text-secondary)" } : undefined}
             >
-              <Icon size={18} />
+              <Icon size={18} className={active ? "text-brand-600 dark:text-brand-400" : ""} />
               {item.label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="rounded-2xl bg-ink p-4 text-white">
-        <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/12">
-          <Route size={18} />
+      <div className="rounded-2xl bg-ink p-4 text-white relative overflow-hidden dark:bg-brand-900/30 dark:border dark:border-brand-800">
+        <div className="absolute top-0 right-0 w-24 h-24 bg-brand-500/10 rounded-full -translate-y-8 translate-x-8" />
+        <div className="relative">
+          <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/12">
+            <Route size={18} />
+          </div>
+          <p className="text-sm font-semibold">Configuração do agente</p>
+          <p className="mt-1 text-xs leading-5 text-white/60">Complete os dados da franquia para gerar o treinamento do agente.</p>
+          <Link
+            href="/setup-guiado"
+            onClick={onClose}
+            className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-white/90 transition-colors dark:bg-brand-600 dark:text-white"
+          >
+            Continuar
+          </Link>
         </div>
-        <p className="text-sm font-semibold">Configuração do agente</p>
-        <p className="mt-1 text-xs leading-5 text-white/68">Complete os dados da franquia para gerar o treinamento do agente.</p>
-        <Link href="/setup-guiado" className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink">
-          Continuar
-        </Link>
       </div>
     </aside>
   );

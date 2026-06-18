@@ -46,6 +46,12 @@ public class FranchiseSetup {
     @Column(length = 2000)
     private String toneOfVoice;
 
+    @Column(length = 1000)
+    private String franchiseWhatsapp;
+
+    @Column(length = 6000)
+    private String conversationExamplesSummary;
+
     @Column(length = 12000)
     private String lastGeneratedTraining;
 
@@ -141,6 +147,22 @@ public class FranchiseSetup {
 
     public void setToneOfVoice(String toneOfVoice) {
         this.toneOfVoice = toneOfVoice;
+    }
+
+    public String getFranchiseWhatsapp() {
+        return franchiseWhatsapp;
+    }
+
+    public void setFranchiseWhatsapp(String franchiseWhatsapp) {
+        this.franchiseWhatsapp = franchiseWhatsapp;
+    }
+
+    public String getConversationExamplesSummary() {
+        return conversationExamplesSummary;
+    }
+
+    public void setConversationExamplesSummary(String conversationExamplesSummary) {
+        this.conversationExamplesSummary = conversationExamplesSummary;
     }
 
     public String getLastGeneratedTraining() {

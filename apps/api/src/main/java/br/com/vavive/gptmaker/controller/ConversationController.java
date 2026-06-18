@@ -1,5 +1,9 @@
 package br.com.vavive.gptmaker.controller;
 
+import br.com.vavive.gptmaker.dto.ConversationActionResponse;
+import br.com.vavive.gptmaker.dto.ConversationCompleteRequest;
+import br.com.vavive.gptmaker.dto.ConversationHandoffEventResponse;
+import br.com.vavive.gptmaker.dto.ConversationManualMessageRequest;
 import br.com.vavive.gptmaker.dto.ConversationMessageResponse;
 import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
@@ -26,8 +30,13 @@ public class ConversationController {
     }
 
     @GetMapping("/conversations")
-    public List<ConversationSummaryResponse> list(@RequestParam(required = false) UUID franchiseId) {
-        return conversationService.list(franchiseId);
+    public List<ConversationSummaryResponse> list(
+        @RequestParam(required = false) UUID franchiseId,
+        @RequestParam(required = false) String status,
+        @RequestParam(required = false) String channel,
+        @RequestParam(required = false) String responsible
+    ) {
+        return conversationService.list(franchiseId, status, channel, responsible);
     }
 
     @GetMapping("/conversations/{id}/messages")
@@ -38,6 +47,26 @@ public class ConversationController {
     @PutMapping("/conversations/{id}/start-human")
     public StartHumanTakeoverResponse startHuman(@PathVariable UUID id) {
         return conversationService.startHuman(id);
+    }
+
+    @PutMapping("/conversations/{id}/stop-human")
+    public ConversationActionResponse stopHuman(@PathVariable UUID id) {
+        return conversationService.stopHuman(id);
+    }
+
+    @PostMapping("/conversations/{id}/messages")
+    public ConversationActionResponse sendManualMessage(@PathVariable UUID id, @RequestBody ConversationManualMessageRequest request) {
+        return conversationService.sendManualMessage(id, request);
+    }
+
+    @PostMapping("/conversations/{id}/complete")
+    public ConversationActionResponse completeConversation(@PathVariable UUID id, @RequestBody ConversationCompleteRequest request) {
+        return conversationService.completeConversation(id, request);
+    }
+
+    @GetMapping("/conversations/{id}/handoffs")
+    public List<ConversationHandoffEventResponse> listHandoffs(@PathVariable UUID id) {
+        return conversationService.listHandoffs(id);
     }
 
     @PostMapping("/conversations/test-agent")

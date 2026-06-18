@@ -43,6 +43,9 @@ public class TrainingGeneratorService {
 
             Tom de voz:
             %s
+
+            Exemplos de conversa:
+            %s
             """.formatted(
             safe(vaviveDefaultContextService.buildForFranchise(franchise)),
             franchise.getName(),
@@ -56,7 +59,8 @@ public class TrainingGeneratorService {
             safe(setup.getSchedules()),
             safe(setup.getFaq()),
             safe(setup.getRules()),
-            safe(setup.getToneOfVoice())
+            safe(setup.getToneOfVoice()),
+            safe(setup.getConversationExamplesSummary())
         ).trim();
 
         return new GeneratedTraining(title, content);

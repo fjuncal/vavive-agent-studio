@@ -3,6 +3,8 @@ package br.com.vavive.gptmaker.service;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.FranchiseSetup;
+import br.com.vavive.gptmaker.repository.ConversationSessionRepository;
+import br.com.vavive.gptmaker.repository.FranchiseChannelSnapshotRepository;
 import br.com.vavive.gptmaker.dto.DashboardSummaryResponse;
 import br.com.vavive.gptmaker.domain.enums.LeadStatus;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
@@ -22,6 +24,8 @@ public class DashboardService {
     private final FranchiseRepository franchiseRepository;
     private final FranchiseSetupRepository franchiseSetupRepository;
     private final AgentTrainingRepository trainingRepository;
+    private final ConversationSessionRepository conversationSessionRepository;
+    private final FranchiseChannelSnapshotRepository channelRepository;
     private final SetupProgressService setupProgressService;
     private final CurrentUserService currentUserService;
 
@@ -30,6 +34,8 @@ public class DashboardService {
         FranchiseRepository franchiseRepository,
         FranchiseSetupRepository franchiseSetupRepository,
         AgentTrainingRepository trainingRepository,
+        ConversationSessionRepository conversationSessionRepository,
+        FranchiseChannelSnapshotRepository channelRepository,
         SetupProgressService setupProgressService,
         CurrentUserService currentUserService
     ) {
@@ -37,6 +43,8 @@ public class DashboardService {
         this.franchiseRepository = franchiseRepository;
         this.franchiseSetupRepository = franchiseSetupRepository;
         this.trainingRepository = trainingRepository;
+        this.conversationSessionRepository = conversationSessionRepository;
+        this.channelRepository = channelRepository;
         this.setupProgressService = setupProgressService;
         this.currentUserService = currentUserService;
     }
@@ -59,6 +67,32 @@ public class DashboardService {
         DashboardSetupSnapshot setupSnapshot = user.getRole() == UserRole.SUPER_ADMIN
             ? buildSuperAdminSetupSnapshot()
             : buildFranchiseSetupSnapshot(franchise);
+        long blockedFranchises = user.getRole() == UserRole.SUPER_ADMIN
+            ? franchiseRepository.findAll().stream().filter(item -> "PENDENTE_CONFIGURACAO".equals(item.resolvedStatus())).count()
+            : ("PENDENTE_CONFIGURACAO".equals(franchise.resolvedStatus()) ? 1 : 0);
+        long franchisesWithoutAgent = user.getRole() == UserRole.SUPER_ADMIN
+            ? franchiseRepository.findAll().stream().filter(item -> "SEM_AGENTE".equals(item.resolvedStatus())).count()
+            : ("SEM_AGENTE".equals(franchise.resolvedStatus()) ? 1 : 0);
+        long franchisesReadyToPublish = user.getRole() == UserRole.SUPER_ADMIN
+            ? franchiseRepository.findAll().stream()
+                .filter(item -> franchiseSetupRepository.findByFranchiseId(item.getId())
+                    .map(setup -> "PRONTO_PARA_PUBLICAR".equals(setupProgressService.setupStatus(item, setup)))
+                    .orElse(false))
+                .count()
+            : ("PRONTO_PARA_PUBLICAR".equals(setupSnapshot.setupStatus()) ? 1 : 0);
+        long waitingHumanConversations = user.getRole() == UserRole.SUPER_ADMIN
+            ? conversationSessionRepository.findAll().stream().filter(item -> "em_atendimento_humano".equals(item.getOperationalStatus())).count()
+            : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()).stream().filter(item -> "em_atendimento_humano".equals(item.getOperationalStatus())).count();
+        long syncedChannels = user.getRole() == UserRole.SUPER_ADMIN
+            ? channelRepository.findAll().stream().filter(item -> item.getLastSyncError() == null).count()
+            : channelRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).stream().filter(item -> item.getLastSyncError() == null).count();
+        LocalDateTime lastNetworkActionAt = user.getRole() == UserRole.SUPER_ADMIN
+            ? franchiseRepository.findAll().stream()
+                .map(Franchise::getGptMakerLastSyncAt)
+                .filter(java.util.Objects::nonNull)
+                .max(Comparator.naturalOrder())
+                .orElse(null)
+            : franchise.getGptMakerLastSyncAt();
 
         return new DashboardSummaryResponse(
             total,
@@ -69,7 +103,13 @@ public class DashboardService {
             setupSnapshot.setupStatus(),
             setupSnapshot.completionPercentage(),
             setupSnapshot.lastPublicationAt(),
-            setupSnapshot.lastTrainingTitle()
+            setupSnapshot.lastTrainingTitle(),
+            blockedFranchises,
+            franchisesWithoutAgent,
+            franchisesReadyToPublish,
+            waitingHumanConversations,
+            syncedChannels,
+            lastNetworkActionAt
         );
     }
 

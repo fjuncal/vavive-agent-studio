@@ -29,6 +29,11 @@ public class AgentTraining {
     @Column(length = 2000)
     private String resultMessage;
 
+    @Column(length = 2000)
+    private String contentSummary;
+
+    private LocalDateTime publishedAt;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agent_id")
     private GptMakerAgent agent;
@@ -44,6 +49,7 @@ public class AgentTraining {
         this.status = status;
         this.externalReference = externalReference;
         this.resultMessage = resultMessage;
+        this.contentSummary = content == null ? null : (content.length() > 240 ? content.substring(0, 240) : content);
         this.agent = agent;
     }
 
@@ -74,6 +80,18 @@ public class AgentTraining {
 
     public String getResultMessage() {
         return resultMessage;
+    }
+
+    public String getContentSummary() {
+        return contentSummary;
+    }
+
+    public LocalDateTime getPublishedAt() {
+        return publishedAt;
+    }
+
+    public void setPublishedAt(LocalDateTime publishedAt) {
+        this.publishedAt = publishedAt;
     }
 
     public GptMakerAgent getAgent() {

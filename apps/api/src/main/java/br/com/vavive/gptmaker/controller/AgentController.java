@@ -1,6 +1,8 @@
 package br.com.vavive.gptmaker.controller;
 
 import br.com.vavive.gptmaker.dto.AgentResponse;
+import br.com.vavive.gptmaker.dto.ConversationExampleRequest;
+import br.com.vavive.gptmaker.dto.ConversationExampleResponse;
 import br.com.vavive.gptmaker.dto.CreateIntentRequest;
 import br.com.vavive.gptmaker.dto.CreateRuleRequest;
 import br.com.vavive.gptmaker.dto.CreateTrainingRequest;
@@ -14,6 +16,7 @@ import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -53,5 +56,20 @@ public class AgentController {
     @PostMapping("/agents/{id}/rules")
     public RuleResponse addRule(@PathVariable UUID id, @Valid @RequestBody CreateRuleRequest request) {
         return agentService.addRule(id, request);
+    }
+
+    @GetMapping("/agents/{id}/conversation-examples")
+    public List<ConversationExampleResponse> listExamples(@PathVariable UUID id) {
+        return agentService.listExamples(id);
+    }
+
+    @PostMapping("/agents/{id}/conversation-examples")
+    public ConversationExampleResponse addExample(@PathVariable UUID id, @RequestBody ConversationExampleRequest request) {
+        return agentService.addExample(id, request);
+    }
+
+    @PutMapping("/agents/{id}/conversation-examples/{exampleId}")
+    public ConversationExampleResponse updateExample(@PathVariable UUID id, @PathVariable UUID exampleId, @RequestBody ConversationExampleRequest request) {
+        return agentService.updateExample(id, exampleId, request);
     }
 }

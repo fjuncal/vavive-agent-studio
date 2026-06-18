@@ -29,8 +29,8 @@ export default function AgentDetailPage() {
   return (
     <AppShell>
       <PageHeader eyebrow="Agente" title={agent?.name ?? "Carregando"} description={agent ? `Agente da ${agent.franchiseName}.` : "Carregando dados do agente."} />
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
+      <section className="card">
         <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start">
           <div className="flex items-start gap-4">
             {agent?.avatar ? (
@@ -41,17 +41,17 @@ export default function AgentDetailPage() {
               </div>
             )}
             <div>
-            <h2 className="text-lg font-semibold text-ink">Configuracao atual</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-600">Franquia: {agent?.franchiseName ?? "-"}</p>
-              <p className="mt-1 text-sm leading-6 text-slate-600">Tom de voz: {agent?.toneOfVoice ?? "-"}</p>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Configuracao atual</h2>
+              <p className="mt-2 text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>Franquia: {agent?.franchiseName ?? "-"}</p>
+              <p className="mt-1 text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>Tom de voz: {agent?.toneOfVoice ?? "-"}</p>
             </div>
           </div>
           <StatusBadge status={agent?.status ?? "ATIVO"} />
         </div>
         <div className="mt-6 grid gap-3 sm:grid-cols-3">
           <Link href={`/agentes/${params?.id}/treinamentos`} className="rounded-xl bg-ink px-4 py-3 text-center text-sm font-semibold text-white">Treinamentos</Link>
-          <Link href={`/franquias/${agent?.franchiseId}/agente`} className="rounded-xl bg-slate-100 px-4 py-3 text-center text-sm font-semibold text-slate-700">Configuracao da franquia</Link>
-          <div className="rounded-xl bg-slate-50 px-4 py-3 text-center text-sm font-semibold text-slate-500">Regras e intencoes ficam centralizadas no setup da franquia.</div>
+          <Link href={`/franquias/${agent?.franchiseId}/agente`} className="rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-3 text-center text-sm font-semibold text-slate-700 dark:text-slate-200">Configuracao da franquia</Link>
+          <div className="rounded-xl px-4 py-3 text-center text-sm font-semibold" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>Regras e intencoes ficam centralizadas no setup da franquia.</div>
         </div>
       </section>
     </AppShell>

@@ -115,7 +115,7 @@ export default function DefaultAgentTextsPage() {
     return (
       <AppShell>
         <PageHeader eyebrow="Configuracoes" title="Textos padrao" description="Apenas SUPER_ADMIN pode acessar textos padrao da matriz." />
-        <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">Voce nao tem permissao para acessar este recurso.</p>
+        <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">Voce nao tem permissao para acessar este recurso.</p>
       </AppShell>
     );
   }
@@ -128,15 +128,15 @@ export default function DefaultAgentTextsPage() {
         description="Cadastre conteudos ativos da matriz que serao usados como sugestao no setup guiado e no contexto inicial do agente."
       />
 
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
+      {success ? <p className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</p> : null}
 
       <div className="grid gap-5 xl:grid-cols-[420px_1fr]">
-        <form onSubmit={handleSubmit} className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+        <form onSubmit={handleSubmit} className="card">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-ink">{selected ? "Editar texto" : "Novo texto"}</h2>
-              <p className="mt-2 text-sm text-slate-500">Use conteudo aprovado pela matriz. Franquias poderao customizar o setup depois.</p>
+              <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{selected ? "Editar texto" : "Novo texto"}</h2>
+              <p className="mt-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>Use conteudo aprovado pela matriz. Franquias poderao customizar o setup depois.</p>
             </div>
             {selected ? (
               <button type="button" onClick={resetForm} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
@@ -147,11 +147,11 @@ export default function DefaultAgentTextsPage() {
           <div className="mt-5 grid gap-4">
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Titulo</span>
-              <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
+              <input className="input-field" value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} required />
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Categoria</span>
-              <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as DefaultAgentTextCategory }))}>
+              <select className="input-field" value={form.category} onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as DefaultAgentTextCategory }))}>
                 {categories.map((category) => (
                   <option key={category} value={category}>{categoryLabel(category)}</option>
                 ))}
@@ -159,9 +159,9 @@ export default function DefaultAgentTextsPage() {
             </label>
             <label className="grid gap-1.5">
               <span className="text-sm font-medium text-slate-700">Conteudo</span>
-              <textarea className="min-h-[220px] rounded-xl border border-line bg-white px-3 py-3 text-sm leading-6 text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={form.content} onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} required />
+              <textarea className="input-field min-h-[220px] leading-6" value={form.content} onChange={(event) => setForm((current) => ({ ...current, content: event.target.value }))} required />
             </label>
-            <label className="flex items-center gap-2 text-sm text-slate-600">
+            <label className="flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
               <input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />
               Ativo para sugestoes e contexto inicial
             </label>
@@ -174,16 +174,16 @@ export default function DefaultAgentTextsPage() {
 
         <section className="grid gap-4">
           {isLoading ? (
-            <div className="rounded-2xl border border-line/80 bg-white/86 p-6 text-sm text-slate-500 shadow-soft">Carregando textos padrao...</div>
+            <div className="card p-6 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando textos padrao...</div>
           ) : items.length ? items.map((item) => (
-            <article key={item.id} className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <article key={item.id} className="card">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">{categoryLabel(item.category)}</p>
-                  <h2 className="mt-2 text-lg font-semibold text-ink">{item.title}</h2>
-                  <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{item.content}</p>
+                  <h2 className="mt-2 text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{item.title}</h2>
+                  <p className="mt-3 whitespace-pre-line text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>{item.content}</p>
                 </div>
-                <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${item.active ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+                <span className={`w-fit rounded-full px-3 py-1 text-xs font-semibold ${item.active ? "bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300" : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300"}`}>
                   {item.active ? "Ativo" : "Inativo"}
                 </span>
               </div>

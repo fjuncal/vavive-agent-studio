@@ -31,7 +31,25 @@ public class ConversationSession {
     private String lastResponse;
     private String chatId;
     private String interactionId;
+    private String channelType;
+    private String operationalStatus;
+    private String responsibleUserName;
+    private String syncStatus;
+    private String closedReason;
+    private String saleOutcome;
+
+    @jakarta.persistence.Column(length = 3000)
+    private String saleSummary;
+
+    private String handoffStatus;
+    private java.time.LocalDateTime handoffSentAt;
+
+    @jakarta.persistence.Column(length = 2000)
+    private String handoffError;
+
     private boolean humanTakeoverActive;
+    private LocalDateTime lastMessageAt;
+    private LocalDateTime lastSyncedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -60,6 +78,9 @@ public class ConversationSession {
         this.lastResponse = lastResponse;
         this.chatId = chatId;
         this.interactionId = interactionId;
+        this.channelType = "WEBCHAT";
+        this.operationalStatus = "aguardando_ia";
+        this.syncStatus = "local";
     }
 
     @PrePersist
@@ -89,6 +110,10 @@ public class ConversationSession {
         return agentName;
     }
 
+    public void setAgentName(String agentName) {
+        this.agentName = agentName;
+    }
+
     public String getContextId() {
         return contextId;
     }
@@ -97,8 +122,16 @@ public class ConversationSession {
         return customerName;
     }
 
+    public void setCustomerName(String customerName) {
+        this.customerName = customerName;
+    }
+
     public String getCustomerPhone() {
         return customerPhone;
+    }
+
+    public void setCustomerPhone(String customerPhone) {
+        this.customerPhone = customerPhone;
     }
 
     public String getFirstPrompt() {
@@ -135,6 +168,102 @@ public class ConversationSession {
 
     public void setHumanTakeoverActive(boolean humanTakeoverActive) {
         this.humanTakeoverActive = humanTakeoverActive;
+    }
+
+    public String getChannelType() {
+        return channelType;
+    }
+
+    public void setChannelType(String channelType) {
+        this.channelType = channelType;
+    }
+
+    public String getOperationalStatus() {
+        return operationalStatus;
+    }
+
+    public void setOperationalStatus(String operationalStatus) {
+        this.operationalStatus = operationalStatus;
+    }
+
+    public String getResponsibleUserName() {
+        return responsibleUserName;
+    }
+
+    public void setResponsibleUserName(String responsibleUserName) {
+        this.responsibleUserName = responsibleUserName;
+    }
+
+    public String getSyncStatus() {
+        return syncStatus;
+    }
+
+    public void setSyncStatus(String syncStatus) {
+        this.syncStatus = syncStatus;
+    }
+
+    public String getClosedReason() {
+        return closedReason;
+    }
+
+    public void setClosedReason(String closedReason) {
+        this.closedReason = closedReason;
+    }
+
+    public String getSaleOutcome() {
+        return saleOutcome;
+    }
+
+    public void setSaleOutcome(String saleOutcome) {
+        this.saleOutcome = saleOutcome;
+    }
+
+    public String getSaleSummary() {
+        return saleSummary;
+    }
+
+    public void setSaleSummary(String saleSummary) {
+        this.saleSummary = saleSummary;
+    }
+
+    public String getHandoffStatus() {
+        return handoffStatus;
+    }
+
+    public void setHandoffStatus(String handoffStatus) {
+        this.handoffStatus = handoffStatus;
+    }
+
+    public LocalDateTime getHandoffSentAt() {
+        return handoffSentAt;
+    }
+
+    public void setHandoffSentAt(LocalDateTime handoffSentAt) {
+        this.handoffSentAt = handoffSentAt;
+    }
+
+    public String getHandoffError() {
+        return handoffError;
+    }
+
+    public void setHandoffError(String handoffError) {
+        this.handoffError = handoffError;
+    }
+
+    public LocalDateTime getLastMessageAt() {
+        return lastMessageAt;
+    }
+
+    public void setLastMessageAt(LocalDateTime lastMessageAt) {
+        this.lastMessageAt = lastMessageAt;
+    }
+
+    public LocalDateTime getLastSyncedAt() {
+        return lastSyncedAt;
+    }
+
+    public void setLastSyncedAt(LocalDateTime lastSyncedAt) {
+        this.lastSyncedAt = lastSyncedAt;
     }
 
     public LocalDateTime getCreatedAt() {

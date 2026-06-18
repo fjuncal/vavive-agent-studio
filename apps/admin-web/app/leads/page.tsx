@@ -28,12 +28,12 @@ export default function LeadsPage() {
         title="Leads"
         description="Leads registrados pelas franquias. Acompanhe o status comercial de cada contato."
       />
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
+      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
       {leads.length ? (
         <DataTable
           rows={leads}
           columns={[
-            { header: "Nome", cell: (lead) => <span className="font-semibold text-ink">{lead.name}</span> },
+            { header: "Nome", cell: (lead) => <span className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{lead.name}</span> },
             { header: "Telefone", cell: (lead) => lead.phone },
             { header: "Servico", cell: (lead) => lead.service },
             { header: "Origem", cell: (lead) => lead.source },

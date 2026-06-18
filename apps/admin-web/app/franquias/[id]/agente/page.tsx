@@ -21,7 +21,7 @@ import {
   type FranchiseSummary,
   type GptMakerAgentOption
 } from "@/lib/api";
-import { Bot, ExternalLink, FileText, MessageSquare } from "lucide-react";
+import { Bot, ExternalLink, FileText, MessageSquare, Settings, Target } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -219,25 +219,25 @@ export default function FranchiseAgentPage() {
         description="Configure o agente, revise o contexto e gerencie treinamentos."
       />
 
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
-      {success ? <p className="rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
+      {success ? <p className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</p> : null}
 
       {isLoading ? (
-        <section className="rounded-2xl border border-line/80 bg-white/86 p-6 shadow-soft">
-          <p className="text-sm text-slate-500">Carregando...</p>
+        <section className="card p-6">
+          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando...</p>
         </section>
       ) : (
         <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
           <section className="grid gap-5">
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
+            <section className="card">
               {!connection?.workspaceId ? (
-                <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="rounded-2xl bg-amber-50 dark:bg-amber-950/50 p-4 text-sm text-amber-800 dark:text-amber-300">
                   {isSuperAdmin ? "Vincule uma integração na tela da franquia antes de criar o agente." : "Aguardando configuração pela administração."}
                 </p>
               ) : (
                 <>
                   {connection?.agentId && localAgent ? (
-                    <div className="flex items-center gap-4 rounded-2xl bg-slate-50 p-4">
+                    <div className="flex items-center gap-4 rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
                       {localAgent.avatar ? (
                         <img src={localAgent.avatar} alt={localAgent.name} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" />
                       ) : (
@@ -246,7 +246,7 @@ export default function FranchiseAgentPage() {
                         </div>
                       )}
                       <div>
-                        <p className="font-semibold text-ink">{localAgent.name}</p>
+                        <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{localAgent.name}</p>
                         <div className="mt-3 flex flex-wrap gap-2">
                           <Link href={`/conversas`} className="inline-flex items-center gap-1.5 rounded-lg bg-ink px-3 py-1.5 text-xs font-semibold text-white">
                             <MessageSquare size={14} /> Testar agente
@@ -264,11 +264,11 @@ export default function FranchiseAgentPage() {
                       <div className="mt-5 grid gap-4 md:grid-cols-2">
                         <label className="grid gap-1.5">
                           <span className="text-sm font-medium text-slate-700">Nome do agente</span>
-                          <input className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={agentName} onChange={(event) => setAgentName(event.target.value)} />
+                          <input className="input-field" value={agentName} onChange={(event) => setAgentName(event.target.value)} />
                         </label>
                         <label className="grid gap-1.5">
                           <span className="text-sm font-medium text-slate-700">Tom de voz</span>
-                          <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={communicationType} onChange={(event) => setCommunicationType(event.target.value as "FORMAL" | "NORMAL" | "RELAXED")}>
+                          <select className="input-field" value={communicationType} onChange={(event) => setCommunicationType(event.target.value as "FORMAL" | "NORMAL" | "RELAXED")}>
                             <option value="FORMAL">Formal</option>
                             <option value="NORMAL">Normal</option>
                             <option value="RELAXED">Leve</option>
@@ -276,7 +276,7 @@ export default function FranchiseAgentPage() {
                         </label>
                         <label className="grid gap-1.5">
                           <span className="text-sm font-medium text-slate-700">Objetivo</span>
-                          <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={objectiveType} onChange={(event) => setObjectiveType(event.target.value as "SUPPORT" | "SALE" | "PERSONAL")}>
+                          <select className="input-field" value={objectiveType} onChange={(event) => setObjectiveType(event.target.value as "SUPPORT" | "SALE" | "PERSONAL")}>
                             <option value="SALE">Comercial</option>
                             <option value="SUPPORT">Suporte</option>
                             <option value="PERSONAL">Personalizado</option>
@@ -290,24 +290,24 @@ export default function FranchiseAgentPage() {
                             key={option.label}
                             type="button"
                             onClick={() => setSelectedAvatar(option.value)}
-                            className={`rounded-2xl border p-3 text-left transition ${selectedAvatar === option.value ? "border-brand-500 bg-brand-50 ring-4 ring-brand-50" : "border-line bg-white hover:bg-slate-50"}`}
+                            className={`rounded-2xl border p-3 text-left transition ${selectedAvatar === option.value ? "border-brand-500 bg-brand-50 ring-4 ring-brand-50" : "border-line bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800"}`}
                           >
                             {option.value ? (
                               <img src={option.value} alt={option.label} className="h-16 w-16 rounded-2xl object-cover ring-1 ring-line" />
                             ) : (
-                              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold text-slate-500">Sem foto</div>
+                              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 dark:bg-slate-800 text-xs font-semibold" style={{ color: "var(--color-text-secondary)" }}>Sem foto</div>
                             )}
-                            <span className="mt-3 block text-sm font-semibold text-ink">{option.label}</span>
+                            <span className="mt-3 block text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{option.label}</span>
                           </button>
                         ))}
                       </div>
 
                       <div className="mt-5 grid gap-4">
-                        <div className="rounded-2xl border border-line/80 bg-slate-50 p-4">
+                        <div className="rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
                           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                             <div>
-                              <h3 className="font-semibold text-ink">Textos padrão aplicados</h3>
-                              <p className="mt-1 text-sm text-slate-500">Selecione os textos que irão compor o contexto final do agente.</p>
+                              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Textos padrão aplicados</h3>
+                              <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Selecione os textos que irão compor o contexto final do agente.</p>
                             </div>
                             <button type="button" onClick={applySelectedTexts} className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-line">
                               Atualizar preview
@@ -315,12 +315,12 @@ export default function FranchiseAgentPage() {
                           </div>
                           <div className="mt-4 grid gap-3">
                             {defaultTexts.map((item) => (
-                              <label key={item.id} className="rounded-xl bg-white p-4 text-sm text-slate-600 ring-1 ring-line">
+                              <label key={item.id} className="rounded-xl bg-white dark:bg-slate-900 p-4 text-sm ring-1 ring-line" style={{ color: "var(--color-text-secondary)" }}>
                                 <div className="flex items-start gap-3">
                                   <input type="checkbox" checked={selectedTextIds.includes(item.id)} onChange={() => toggleText(item.id)} className="mt-1" />
                                   <div>
-                                    <p className="font-semibold text-ink">{item.title}</p>
-                                    <p className="mt-1 text-xs uppercase tracking-[0.12em] text-slate-400">{item.category.replaceAll("_", " ")}</p>
+                                    <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{item.title}</p>
+                                    <p className="mt-1 text-xs uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>{item.category.replaceAll("_", " ")}</p>
                                     <p className="mt-2 whitespace-pre-line leading-6">{item.content}</p>
                                   </div>
                                 </div>
@@ -331,7 +331,7 @@ export default function FranchiseAgentPage() {
 
                         <label className="grid gap-1.5">
                           <span className="text-sm font-medium text-slate-700">Contexto final</span>
-                          <textarea className="min-h-[260px] rounded-2xl border border-line bg-white px-3 py-3 text-sm leading-6 text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={preview} onChange={(event) => setPreview(event.target.value)} />
+                          <textarea className="input-field min-h-[260px] leading-6" value={preview} onChange={(event) => setPreview(event.target.value)} />
                         </label>
                       </div>
 
@@ -351,12 +351,12 @@ export default function FranchiseAgentPage() {
                         ) : null}
                       </div>
 
-                      <details className="mt-5 rounded-2xl border border-line/80 bg-slate-50 p-4">
-                        <summary className="cursor-pointer text-sm font-semibold text-ink">Opções avançadas</summary>
+                      <details className="mt-5 rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
+                        <summary className="cursor-pointer text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Opções avançadas</summary>
                         <div className="mt-4 grid gap-4">
-                          <p className="text-sm text-slate-500">Vincular agente existente na integração.</p>
+                          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Vincular agente existente na integração.</p>
                           <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-                            <select className="rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none focus:border-brand-500 focus:ring-4 focus:ring-brand-50" value={selectedExistingAgentId} onChange={(event) => setSelectedExistingAgentId(event.target.value)}>
+                            <select className="input-field" value={selectedExistingAgentId} onChange={(event) => setSelectedExistingAgentId(event.target.value)}>
                               <option value="">Selecione um agente</option>
                               {workspaceAgents.map((agent) => (
                                 <option key={agent.id} value={agent.id}>{agent.name}</option>
@@ -381,33 +381,41 @@ export default function FranchiseAgentPage() {
           </section>
 
           <aside className="grid gap-5">
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="font-semibold text-ink">Resumo</h2>
-              <div className="mt-4 grid gap-3 text-sm text-slate-600">
-                <p className="rounded-xl bg-slate-50 p-3">Franquia: <strong className="text-ink">{franchise?.name ?? "-"}</strong></p>
-                <p className="rounded-xl bg-slate-50 p-3">Status: <strong className="text-ink">{franchise?.status?.replaceAll("_", " ") ?? "-"}</strong></p>
-                <p className="rounded-xl bg-slate-50 p-3">Agente: <strong className="text-ink">{connection?.agentName ?? "Não configurado"}</strong></p>
+            <section className="card">
+              <h2 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Resumo</h2>
+              <div className="mt-4 grid gap-3 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                <p className="rounded-xl p-3" style={{ background: "var(--color-bg-secondary)" }}>Franquia: <strong style={{ color: "var(--color-text-primary)" }}>{franchise?.name ?? "-"}</strong></p>
+                <p className="rounded-xl p-3" style={{ background: "var(--color-bg-secondary)" }}>Status: <strong style={{ color: "var(--color-text-primary)" }}>{franchise?.status?.replaceAll("_", " ") ?? "-"}</strong></p>
+                <p className="rounded-xl p-3" style={{ background: "var(--color-bg-secondary)" }}>Agente: <strong style={{ color: "var(--color-text-primary)" }}>{connection?.agentName ?? "Não configurado"}</strong></p>
               </div>
             </section>
 
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-              <h2 className="font-semibold text-ink">Ações</h2>
+            <section className="card">
+              <h2 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Ações</h2>
               <div className="mt-4 grid gap-3">
                 {connection?.agentId ? (
                   <>
-                    <Link href="/conversas" className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                    <Link href="/conversas" className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-line transition hover:bg-slate-100 dark:hover:bg-slate-800" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}>
                       <MessageSquare size={16} />
                       Testar agente
                     </Link>
                     {localAgent ? (
-                    <Link href={`/agentes/${localAgent.id}/treinamentos`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                    <Link href={`/agentes/${localAgent.id}/treinamentos`} className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-line transition hover:bg-slate-100 dark:hover:bg-slate-800" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}>
                       <FileText size={16} />
                       Treinamentos
                     </Link>
                     ) : null}
+                    <Link href={`/franquias/${franchise?.id}/agente/configuracoes`} className="card-interactive inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-line transition hover:bg-slate-100 dark:hover:bg-slate-800" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}>
+                      <Settings size={16} />
+                      Configurações do agente
+                    </Link>
+                    <Link href={`/franquias/${franchise?.id}/agente/intencoes`} className="card-interactive inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-line transition hover:bg-slate-100 dark:hover:bg-slate-800" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}>
+                      <Target size={16} />
+                      Intenções
+                    </Link>
                   </>
                 ) : null}
-                <Link href={`/franquias/${franchise?.id}`} className="inline-flex items-center gap-2 rounded-xl bg-slate-50 px-4 py-3 text-sm font-semibold text-ink ring-1 ring-line transition hover:bg-slate-100">
+                <Link href={`/franquias/${franchise?.id}`} className="inline-flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold ring-1 ring-line transition hover:bg-slate-100 dark:hover:bg-slate-800" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-primary)" }}>
                   <ExternalLink size={16} />
                   Voltar para franquia
                 </Link>

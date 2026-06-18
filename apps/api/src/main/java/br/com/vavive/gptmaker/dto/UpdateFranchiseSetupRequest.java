@@ -12,6 +12,7 @@ public record UpdateFranchiseSetupRequest(
     String schedules,
     String faq,
     String rules,
-    String toneOfVoice
+    String toneOfVoice,
+    String franchiseWhatsapp
 ) {
 }

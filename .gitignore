@@ -9,3 +9,6 @@ apps/api/target/
 .DS_Store
 npm-debug.log*
 .turbo/
+.codex
+.opencode
+openspec

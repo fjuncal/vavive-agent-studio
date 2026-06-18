@@ -3,27 +3,28 @@
 import { AppShell } from "@/components/AppShell";
 import { Field, FormSection } from "@/components/FormSection";
 import { PageHeader } from "@/components/PageHeader";
-import { RuleBuilderCard } from "@/components/RuleBuilderCard";
 import { Stepper } from "@/components/Stepper";
 import { TrainingPreviewCard } from "@/components/TrainingPreviewCard";
 import { useAuth } from "@/lib/auth";
 import {
+  createConversationExample,
+  getDefaultAgentTexts,
   getFranchiseSetup,
   getFranchises,
-  getDefaultAgentTexts,
   publishFranchiseAgent,
   saveFranchiseSetup,
+  updateConversationExample,
+  type ConversationExample,
   type DefaultAgentText,
   type FranchiseSetup,
   type FranchiseSummary,
   type PublishAgentResult,
   type UpdateFranchiseSetupPayload
 } from "@/lib/api";
-import clsx from "clsx";
-import { AlertCircle, CheckCircle2, Loader2, Send, Sparkles } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Save, Send } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
-const setupSteps = ["Escolher franquia", "Dados da franquia", "Textos padrão", "Serviços e regiões", "Regras de atendimento", "Revisão"];
+const steps = ["Dados", "Personalizacao", "Exemplos", "Revisao"];
 
 type SetupFormState = {
   franchiseName: string;
@@ -31,12 +32,13 @@ type SetupFormState = {
   city: string;
   state: string;
   responsibleName: string;
+  franchiseWhatsapp: string;
   services: string;
   prices: string;
   regions: string;
   schedules: string;
   faq: string;
-  customRules: string;
+  rules: string;
   toneOfVoice: string;
 };
 
@@ -46,101 +48,68 @@ const emptyForm: SetupFormState = {
   city: "",
   state: "",
   responsibleName: "",
+  franchiseWhatsapp: "",
   services: "",
   prices: "",
   regions: "",
   schedules: "",
   faq: "",
-  customRules: "",
+  rules: "",
   toneOfVoice: ""
 };
 
-function normalizeValue(value?: string | null) {
-  return value ?? "";
-}
-
-function splitRules(rawRules: string | null | undefined) {
-  const lines = normalizeValue(rawRules)
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const customRules = lines.join("\n");
-  return { customRules };
-}
-
 function toFormState(setup: FranchiseSetup): SetupFormState {
-  const parsedRules = splitRules(setup.rules);
   return {
-    franchiseName: normalizeValue(setup.franchiseName),
-    document: normalizeValue(setup.document),
-    city: normalizeValue(setup.city),
-    state: normalizeValue(setup.state),
-    responsibleName: normalizeValue(setup.responsibleName),
-    services: normalizeValue(setup.services),
-    prices: normalizeValue(setup.prices),
-    regions: normalizeValue(setup.regions),
-    schedules: normalizeValue(setup.schedules),
-    faq: normalizeValue(setup.faq),
-    customRules: parsedRules.customRules,
-    toneOfVoice: normalizeValue(setup.toneOfVoice)
+    franchiseName: setup.franchiseName || "",
+    document: setup.document || "",
+    city: setup.city || "",
+    state: setup.state || "",
+    responsibleName: setup.responsibleName || "",
+    franchiseWhatsapp: setup.franchiseWhatsapp || "",
+    services: setup.services || "",
+    prices: setup.prices || "",
+    regions: setup.regions || "",
+    schedules: setup.schedules || "",
+    faq: setup.faq || "",
+    rules: setup.rules || "",
+    toneOfVoice: setup.toneOfVoice || ""
   };
 }
 
-function buildRulesPayload(customRules: string) {
-  return customRules;
-}
+function ExampleCard({
+  example,
+  onSave
+}: {
+  example: ConversationExample | Omit<ConversationExample, "id" | "createdAt" | "updatedAt">;
+  onSave: (payload: { title: string; objective: string; messages: string; includeInTraining: boolean; status: string }) => void;
+}) {
+  const [title, setTitle] = useState(example.title || "");
+  const [objective, setObjective] = useState(example.objective || "");
+  const [messages, setMessages] = useState(example.messages || "");
+  const [status, setStatus] = useState(example.status || "RASCUNHO");
+  const [includeInTraining, setIncludeInTraining] = useState(example.includeInTraining);
 
-function buildTrainingPreview(form: SetupFormState) {
-  const sections = [
-    "TREINAMENTO VAVIVE",
-    "",
-    `FRANQUIA: ${form.franchiseName || "Não informado"}`,
-    `RESPONSÁVEL: ${form.responsibleName || "Não informado"}`,
-    `LOCALIZAÇÃO: ${[form.city, form.state].filter(Boolean).join(" / ") || "Não informado"}`,
-    "",
-    "SERVIÇOS:",
-    form.services || "Não informado",
-    "",
-    "PREÇOS:",
-    form.prices || "Não informado",
-    "",
-    "REGIÕES ATENDIDAS:",
-    form.regions || "Não informado",
-    "",
-    "HORÁRIOS:",
-    form.schedules || "Não informado",
-    "",
-    "PERGUNTAS FREQUENTES:",
-    form.faq || "Não informado",
-    "",
-    "REGRAS DO AGENTE:",
-    buildRulesPayload(form.customRules) || "Não informado",
-    "",
-    "TOM DE VOZ:",
-    form.toneOfVoice || "Não informado",
-    "",
-    "ORIENTAÇÃO:",
-    "Nunca invente informações. Quando faltar contexto, colete os dados ou transfira para a equipe."
-  ];
-
-  return sections.join("\n");
-}
-
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return "Ainda não publicado";
-  }
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
-
-function SectionSummary({ title, content }: { title: string; content: string }) {
   return (
-    <div className="rounded-2xl border border-line/80 bg-white/70 p-4">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{title}</p>
-      <p className="mt-2 whitespace-pre-line text-sm leading-7 text-slate-600">{content || "Não informado"}</p>
+    <div className="card p-4">
+      <div className="grid gap-3">
+        <input className="input-field" style={{ color: "var(--color-text-primary)" }} placeholder="Titulo do exemplo" value={title} onChange={(event) => setTitle(event.target.value)} />
+        <input className="input-field" style={{ color: "var(--color-text-primary)" }} placeholder="Objetivo do exemplo" value={objective} onChange={(event) => setObjective(event.target.value)} />
+        <textarea className="input-field min-h-[140px]" style={{ color: "var(--color-text-primary)" }} placeholder={"Cliente: ...\nAgente: ..."} value={messages} onChange={(event) => setMessages(event.target.value)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <select className="input-field" style={{ color: "var(--color-text-primary)" }} value={status} onChange={(event) => setStatus(event.target.value)}>
+            <option value="RASCUNHO">Rascunho</option>
+            <option value="PUBLICAR">Publicar</option>
+          </select>
+          <label className="inline-flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+            <input type="checkbox" checked={includeInTraining} onChange={(event) => setIncludeInTraining(event.target.checked)} />
+            Incluir no treinamento
+          </label>
+          <button type="button" onClick={() => onSave({ title, objective, messages, includeInTraining, status })} className="ml-auto inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2 text-sm font-semibold text-white">
+            <Save size={16} />
+            Salvar exemplo
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -148,29 +117,28 @@ function SectionSummary({ title, content }: { title: string; content: string }) 
 export default function GuidedSetupPage() {
   const { user } = useAuth();
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
-  const [defaultTexts, setDefaultTexts] = useState<DefaultAgentText[]>([]);
-  const [selectedFranchiseId, setSelectedFranchiseId] = useState<string>("");
+  const [selectedFranchiseId, setSelectedFranchiseId] = useState("");
   const [setup, setSetup] = useState<FranchiseSetup | null>(null);
   const [form, setForm] = useState<SetupFormState>(emptyForm);
   const [currentStep, setCurrentStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishResult, setPublishResult] = useState<PublishAgentResult | null>(null);
+  const [defaultTexts, setDefaultTexts] = useState<DefaultAgentText[]>([]);
 
-  const progressLabel = setup ? `${setup.completionPercentage}% concluído - ${setup.setupStatus.replaceAll("_", " ")}` : "Carregando";
-  const previewTitle = useMemo(() => `Treinamento ${form.franchiseName || "Vavive"}`, [form.franchiseName]);
-  const previewContent = useMemo(() => setup?.lastGeneratedTraining || buildTrainingPreview(form), [form, setup?.lastGeneratedTraining]);
+  useEffect(() => {
+    getDefaultAgentTexts()
+      .then((items) => setDefaultTexts(items.filter((t) => t.active)))
+      .catch(() => setDefaultTexts([]));
+  }, []);
 
   useEffect(() => {
     if (!user) {
       return;
     }
-
-    setIsLoading(true);
-    setError(null);
 
     getFranchises()
       .then((items) => {
@@ -180,41 +148,69 @@ export default function GuidedSetupPage() {
           setSelectedFranchiseId((current) => current || defaultId);
         }
       })
-      .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar as franquias.");
-      })
-      .finally(() => setIsLoading(false));
+      .catch(() => setFranchises([]));
   }, [user]);
-
-  useEffect(() => {
-    getDefaultAgentTexts()
-      .then((items) => setDefaultTexts(items.filter((item) => item.active)))
-      .catch(() => setDefaultTexts([]));
-  }, []);
 
   useEffect(() => {
     if (!selectedFranchiseId) {
       return;
     }
-
     setIsLoading(true);
     setError(null);
-    setSuccessMessage(null);
-    setPublishResult(null);
-
     getFranchiseSetup(selectedFranchiseId)
       .then((response) => {
         setSetup(response);
         setForm(toFormState(response));
       })
-      .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar a configuração.");
-      })
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar workbench."))
       .finally(() => setIsLoading(false));
   }, [selectedFranchiseId]);
 
+  const preview = useMemo(() => {
+    return [
+      "CONTEXTO BASE",
+      setup?.defaultContext || "-",
+      "",
+      "PERSONALIZACAO LOCAL",
+      `Franquia: ${form.franchiseName}`,
+      `Responsavel: ${form.responsibleName}`,
+      `WhatsApp franqueado: ${form.franchiseWhatsapp || "-"}`,
+      "",
+      "SERVICOS",
+      form.services || "-",
+      "",
+      "REGRAS",
+      form.rules || "-",
+      "",
+      "EXEMPLOS",
+      setup?.examples?.filter((item) => item.includeInTraining).map((item) => `${item.title}: ${item.objective || "-"}`).join("\n") || "-"
+    ].join("\n");
+  }, [form, setup]);
+
   function updateField<K extends keyof SetupFormState>(field: K, value: SetupFormState[K]) {
     setForm((current) => ({ ...current, [field]: value }));
+  }
+
+  function validateStep(step: number): string | null {
+    if (step === 0) {
+      if (!form.franchiseName.trim()) return "Nome da franquia e obrigatorio.";
+      if (!form.responsibleName.trim()) return "Responsavel e obrigatorio.";
+    }
+    return null;
+  }
+
+  function goToStep(step: number) {
+    if (step < 0 || step >= steps.length) return;
+    // Allow navigating back freely, validate only when going forward past current
+    if (step > currentStep) {
+      const validationError = validateStep(currentStep);
+      if (validationError) {
+        setError(validationError);
+        return;
+      }
+    }
+    setError(null);
+    setCurrentStep(step);
   }
 
   function buildPayload(): UpdateFranchiseSetupPayload {
@@ -224,331 +220,288 @@ export default function GuidedSetupPage() {
       city: form.city,
       state: form.state,
       responsibleName: form.responsibleName,
+      franchiseWhatsapp: form.franchiseWhatsapp,
       services: form.services,
       prices: form.prices,
       regions: form.regions,
       schedules: form.schedules,
       faq: form.faq,
-      rules: buildRulesPayload(form.customRules),
+      rules: form.rules,
       toneOfVoice: form.toneOfVoice
     };
   }
 
   async function persistSetup() {
     if (!selectedFranchiseId) {
-      return null;
+      return;
     }
-
     setIsSaving(true);
     setError(null);
-    setSuccessMessage(null);
+    setSuccess(null);
     try {
       const response = await saveFranchiseSetup(selectedFranchiseId, buildPayload());
       setSetup(response);
       setForm(toFormState(response));
-      setSuccessMessage("Etapa salva.");
-      return response;
+      setSuccess("Workbench salvo.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível salvar.");
-      return null;
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleStepAdvance(nextStep: number) {
-    const response = await persistSetup();
-    if (response) {
-      setCurrentStep(nextStep);
-    }
-  }
-
   async function handlePublish() {
-    const response = await persistSetup();
-    if (!response || !selectedFranchiseId) {
+    if (!selectedFranchiseId) {
       return;
     }
-
     setIsPublishing(true);
     setError(null);
-    setSuccessMessage(null);
+    setSuccess(null);
     try {
       const result = await publishFranchiseAgent(selectedFranchiseId);
       setPublishResult(result);
-      if (result.success) {
-        setSuccessMessage("Agente publicado com sucesso.");
-      }
-      const refreshedSetup = await getFranchiseSetup(selectedFranchiseId);
-      setSetup(refreshedSetup);
+      setSuccess(result.success ? "Treinamento publicado." : result.message);
+      const refreshed = await getFranchiseSetup(selectedFranchiseId);
+      setSetup(refreshed);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível publicar.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel publicar.");
     } finally {
       setIsPublishing(false);
     }
   }
 
-  const reviewItems = [
-    { title: "Franquia", content: [form.franchiseName, form.document, [form.city, form.state].filter(Boolean).join(" / "), form.responsibleName].filter(Boolean).join("\n") },
-    { title: "Serviços", content: form.services },
-    { title: "Preços", content: form.prices },
-    { title: "Regiões", content: form.regions },
-    { title: "Horários", content: form.schedules },
-    { title: "FAQ", content: form.faq },
-    { title: "Regras", content: buildRulesPayload(form.customRules) },
-    { title: "Tom de voz", content: form.toneOfVoice }
-  ];
+  async function handleSaveExample(exampleId: string | null, payload: { title: string; objective: string; messages: string; includeInTraining: boolean; status: string }) {
+    if (!setup?.agentId) {
+      setError("Agente da franquia ainda nao configurado.");
+      return;
+    }
+    setError(null);
+    try {
+      if (exampleId) {
+        await updateConversationExample(setup.agentId, exampleId, payload);
+      } else {
+        await createConversationExample(setup.agentId, payload);
+      }
+      const refreshed = await getFranchiseSetup(selectedFranchiseId);
+      setSetup(refreshed);
+      setSuccess("Exemplo salvo.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar exemplo.");
+    }
+  }
 
   return (
     <AppShell>
       <PageHeader
-        eyebrow="Configuração"
-        title="Configuração do agente"
-        description="Configure os dados da franquia, revise e gere o treinamento do agente."
+        eyebrow="Configuracao"
+        title="Workbench do agente"
+        description="Contexto base, personalizacao local, exemplos de conversa e publicacao auditavel."
       />
 
-      {error ? (
-        <div className="flex items-start gap-3 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">
-          <AlertCircle size={18} className="mt-0.5 shrink-0" />
-          <span>{error}</span>
-        </div>
-      ) : null}
+      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/30 px-4 py-3 text-sm text-rose-700 dark:text-rose-400">{error}</p> : null}
+      {success ? <p className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-400">{success}</p> : null}
 
-      {successMessage ? (
-        <div className="flex items-start gap-3 rounded-2xl bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          <CheckCircle2 size={18} className="mt-0.5 shrink-0" />
-          <span>{successMessage}</span>
-        </div>
-      ) : null}
-
-      <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+      <div className="grid gap-5 lg:grid-cols-[280px_1fr]">
         <Stepper
-          steps={setupSteps}
+          steps={steps}
           current={currentStep}
-          completed={setup ? setupSteps.map((_, index) => (index < Math.floor((setup.completionPercentage / 100) * (setupSteps.length - 1)) ? index : -1)).filter((index) => index >= 0) : []}
-          progressLabel={progressLabel}
-          onStepClick={(index) => {
-            if (isSaving || isPublishing) {
-              return;
-            }
-            void handleStepAdvance(index);
-          }}
+          completed={setup ? steps.map((_, index) => index < Math.floor((setup.completionPercentage / 100) * steps.length) ? index : -1).filter((index) => index >= 0) : []}
+          progressLabel={setup ? `${setup.completionPercentage}% - ${setup.setupStatus.replaceAll("_", " ")}` : "Carregando"}
+          onStepClick={(index) => goToStep(index)}
         />
 
         <div className="grid gap-5">
-          <FormSection title="Franquia" description="Selecione a franquia para configurar o agente.">
-            <label className="grid gap-1.5">
-              <span className="text-sm font-medium text-slate-700">Franquia</span>
+          {user?.role !== "ADMIN_FRANQUIA" ? (
+            <FormSection title="Franquia" description="Selecione a franquia para trabalhar no agente.">
               <select
-                className="w-full rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-50"
+                className="input-field"
+                style={{ color: "var(--color-text-primary)" }}
                 value={selectedFranchiseId}
-                onChange={(event) => {
-                  setCurrentStep(0);
-                  setSelectedFranchiseId(event.target.value);
-                }}
-                disabled={isLoading || user?.role === "ADMIN_FRANQUIA"}
+                onChange={(event) => setSelectedFranchiseId(event.target.value)}
               >
                 {franchises.map((franchise) => (
-                  <option key={franchise.id} value={franchise.id}>
-                    {franchise.name}
-                  </option>
+                  <option key={franchise.id} value={franchise.id}>{franchise.name}</option>
                 ))}
               </select>
-            </label>
-          </FormSection>
+            </FormSection>
+          ) : null}
 
           {isLoading ? (
-            <section className="rounded-2xl border border-line/80 bg-white/86 p-6 shadow-soft">
-              <div className="flex items-center gap-3 text-sm text-slate-500">
-                <Loader2 size={18} className="animate-spin" />
-                Carregando...
-              </div>
+            <section className="card p-6">
+              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando workbench...</p>
             </section>
           ) : null}
 
-          {!isLoading && currentStep === 1 ? (
-            <FormSection title="Dados da franquia" description="Informações oficiais usadas no treinamento do agente.">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Nome comercial" placeholder="Vavive Vila Mariana" value={form.franchiseName} onChange={(value) => updateField("franchiseName", value)} />
-                <Field label="Responsável" placeholder="Gestor da unidade" value={form.responsibleName} onChange={(value) => updateField("responsibleName", value)} />
-                <Field label="Documento" placeholder="CNPJ da franquia" value={form.document} onChange={(value) => updateField("document", value)} />
-                <Field label="Cidade" placeholder="São Paulo" value={form.city} onChange={(value) => updateField("city", value)} />
-                <Field label="Estado" placeholder="SP" value={form.state} onChange={(value) => updateField("state", value)} />
+          {!isLoading && currentStep === 0 ? (
+            <>
+              <FormSection title="Dados operacionais" description="Informacoes locais da franquia usadas no atendimento e no handoff.">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field label="Nome da franquia" value={form.franchiseName} onChange={(value) => updateField("franchiseName", value)} />
+                  <Field label="Responsavel" value={form.responsibleName} onChange={(value) => updateField("responsibleName", value)} />
+                  <Field label="Documento" value={form.document} onChange={(value) => updateField("document", value)} />
+                  <Field label="Cidade" value={form.city} onChange={(value) => updateField("city", value)} />
+                  <Field label="Estado" value={form.state} onChange={(value) => updateField("state", value)} />
+                  <Field label="WhatsApp do franqueado" value={form.franchiseWhatsapp} onChange={(value) => updateField("franchiseWhatsapp", value)} />
+                </div>
+              </FormSection>
+              <div className="flex justify-end">
+                <button type="button" onClick={() => goToStep(1)} className="btn-primary inline-flex items-center gap-2">
+                  Proximo
+                  <ChevronRight size={16} />
+                </button>
               </div>
-            </FormSection>
+            </>
+          ) : null}
+
+          {!isLoading && currentStep === 1 ? (
+            <div className="grid gap-5">
+              <FormSection title="Contexto base da matriz" description="Texto global atualmente ativo na matriz.">
+                <div className="rounded-2xl p-4 text-sm leading-7 whitespace-pre-line" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>
+                  {setup?.defaultContext || "Sem contexto global ativo."}
+                </div>
+              </FormSection>
+              <FormSection title="Personalizacao local" description="Informacoes proprias da franquia para o agente.">
+                <div className="grid gap-4">
+                  <Field label="Servicos" textarea value={form.services} onChange={(value) => updateField("services", value)} />
+                  <Field label="Precos" textarea value={form.prices} onChange={(value) => updateField("prices", value)} />
+                  <Field label="Regioes atendidas" textarea value={form.regions} onChange={(value) => updateField("regions", value)} />
+                  <Field label="Horarios" textarea value={form.schedules} onChange={(value) => updateField("schedules", value)} />
+                  <Field label="FAQ" textarea value={form.faq} onChange={(value) => updateField("faq", value)} />
+                  <Field label="Regras locais" textarea value={form.rules} onChange={(value) => updateField("rules", value)} />
+                  <Field label="Tom de voz" textarea value={form.toneOfVoice} onChange={(value) => updateField("toneOfVoice", value)} />
+                </div>
+              </FormSection>
+              {defaultTexts.length > 0 ? (
+                <FormSection title="Textos padrao da matriz" description="Referencias globais ativas. Use como base para personalizacao local.">
+                  <div className="grid gap-5">
+                    {(["CONTEXTO_VAVIVE", "REGRAS_ATENDIMENTO", "TOM_DE_VOZ", "SERVICOS", "FAQ", "RESTRICOES"] as const).map((cat) => {
+                      const items = defaultTexts.filter((t) => t.category === cat);
+                      if (items.length === 0) return null;
+                      const labels: Record<string, string> = {
+                        CONTEXTO_VAVIVE: "Contexto Vavive",
+                        REGRAS_ATENDIMENTO: "Regras de Atendimento",
+                        TOM_DE_VOZ: "Tom de Voz",
+                        SERVICOS: "Servicos",
+                        FAQ: "FAQ",
+                        RESTRICOES: "Restricoes"
+                      };
+                      return (
+                        <div key={cat}>
+                          <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: "var(--color-text-secondary)" }}>
+                            {labels[cat] || cat}
+                          </h4>
+                          <div className="grid gap-3">
+                            {items.map((item) => (
+                              <div key={item.id} className="rounded-2xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+                                <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{item.title}</p>
+                                <p className="mt-1 whitespace-pre-line text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>{item.content}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </FormSection>
+              ) : null}
+              <div className="flex justify-between">
+                <button type="button" onClick={() => goToStep(0)} className="btn-secondary inline-flex items-center gap-2">
+                  <ChevronLeft size={16} />
+                  Voltar
+                </button>
+                <button type="button" onClick={() => goToStep(2)} className="btn-primary inline-flex items-center gap-2">
+                  Proximo
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
           ) : null}
 
           {!isLoading && currentStep === 2 ? (
-            <FormSection title="Textos padrão" description="Textos cadastrados pela administração para orientar o agente.">
-              {defaultTexts.length ? (
-                <div className="grid gap-3">
-                  {defaultTexts.map((item) => (
-                    <article key={item.id} className="rounded-2xl border border-line/80 bg-white p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-brand-500">{item.category.replaceAll("_", " ")}</p>
-                          <h3 className="mt-1 font-semibold text-ink">{item.title}</h3>
-                        </div>
-                        {item.category === "TOM_DE_VOZ" ? (
-                          <button type="button" onClick={() => updateField("toneOfVoice", item.content)} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-700">
-                            Usar tom
-                          </button>
-                        ) : null}
-                      </div>
-                      <p className="mt-3 whitespace-pre-line text-sm leading-6 text-slate-600">{item.content}</p>
-                    </article>
+            <div className="grid gap-5">
+              <FormSection title="Exemplos de conversa" description="Exemplos rastreaveis para treino do agente.">
+                <div className="grid gap-4">
+                  {setup?.examples?.map((example) => (
+                    <ExampleCard key={example.id} example={example} onSave={(payload) => void handleSaveExample(example.id, payload)} />
                   ))}
+                  <ExampleCard
+                    example={{ title: "", objective: "", messages: "", status: "RASCUNHO", includeInTraining: true }}
+                    onSave={(payload) => void handleSaveExample(null, payload)}
+                  />
                 </div>
-              ) : (
-                <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Nenhum texto padrão ativo.</p>
-              )}
-            </FormSection>
+              </FormSection>
+              <div className="flex justify-between">
+                <button type="button" onClick={() => goToStep(1)} className="btn-secondary inline-flex items-center gap-2">
+                  <ChevronLeft size={16} />
+                  Voltar
+                </button>
+                <button type="button" onClick={() => goToStep(3)} className="btn-primary inline-flex items-center gap-2">
+                  Proximo
+                  <ChevronRight size={16} />
+                </button>
+              </div>
+            </div>
           ) : null}
 
           {!isLoading && currentStep === 3 ? (
-            <FormSection title="Serviços e regiões" description="Informações comerciais da franquia para o agente.">
-              <div className="grid gap-4 md:grid-cols-2">
-                <Field label="Serviços oferecidos" placeholder="Cuidador por hora, plantão noturno..." textarea value={form.services} onChange={(value) => updateField("services", value)} />
-                <Field label="Preços" placeholder="Faixas de preço e condições" textarea value={form.prices} onChange={(value) => updateField("prices", value)} />
-                <Field label="Regiões atendidas" placeholder="Bairros, cidades atendidas" textarea value={form.regions} onChange={(value) => updateField("regions", value)} />
-                <Field label="Horários" placeholder="Horário de funcionamento" textarea value={form.schedules} onChange={(value) => updateField("schedules", value)} />
-                <Field label="Perguntas frequentes" placeholder="Pergunta e resposta" textarea value={form.faq} onChange={(value) => updateField("faq", value)} />
-                <Field label="Tom de voz" placeholder="Acolhedor, consultivo..." textarea value={form.toneOfVoice} onChange={(value) => updateField("toneOfVoice", value)} />
-              </div>
-            </FormSection>
-          ) : null}
-
-          {!isLoading && currentStep === 4 ? (
             <div className="grid gap-5">
-              <FormSection title="Regras de atendimento" description="Defina como o agente deve se comportar.">
-                {defaultTexts.filter((t) => t.category === "REGRAS_ATENDIMENTO").length ? (
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    {defaultTexts.filter((t) => t.category === "REGRAS_ATENDIMENTO").map((rule) => (
-                      <RuleBuilderCard
-                        key={rule.id}
-                        title={rule.title}
-                        description={rule.content}
-                        checked={form.customRules.includes(rule.title)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            updateField("customRules", form.customRules ? `${form.customRules}\n${rule.title}` : rule.title);
-                          } else {
-                            updateField("customRules", form.customRules.split("\n").filter((l) => l.trim() !== rule.title).join("\n"));
-                          }
-                        }}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-500">Nenhuma regra cadastrada.</p>
-                )}
-              </FormSection>
-              <FormSection title="Regras adicionais" description="Regras específicas da operação local.">
-                <Field label="Regras" placeholder="Uma regra por linha" textarea value={form.customRules} onChange={(value) => updateField("customRules", value)} />
-              </FormSection>
-            </div>
-          ) : null}
-
-          {!isLoading && currentStep >= 5 ? (
-            <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
-              <section className="grid gap-5">
-                <FormSection title="Revisão final" description="Confira todos os dados antes de gerar o treinamento.">
-                  <div className="grid gap-4">
-                    {reviewItems.map((item) => (
-                      <SectionSummary key={item.title} title={item.title} content={item.content} />
-                    ))}
-                  </div>
-                </FormSection>
-
-                <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">Publicação</p>
-                      <h2 className="mt-2 text-lg font-semibold text-ink">Gerar treinamento</h2>
-                      <p className="mt-2 text-sm leading-6 text-slate-500">
-                        Gera o treinamento e envia para configurar o agente.
-                      </p>
-                    </div>
-                    <span className={clsx("rounded-full px-3 py-1 text-xs font-semibold", setup?.setupStatus === "PRONTO_PARA_PUBLICAR" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700")}>
-                      {setup?.setupStatus?.replaceAll("_", " ") || "EM CONFIGURAÇÃO"}
-                    </span>
-                  </div>
-
-                  <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-mist px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">% concluído</p>
-                      <p className="mt-2 text-lg font-semibold text-ink">{setup?.completionPercentage ?? 0}%</p>
-                    </div>
-                    <div className="rounded-xl bg-mist px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Última publicação</p>
-                      <p className="mt-2 text-sm font-medium text-ink">{formatDateTime(setup?.lastPublishedAt)}</p>
-                    </div>
-                    <div className="rounded-xl bg-mist px-4 py-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-400">Último treinamento</p>
-                      <p className="mt-2 text-sm font-medium text-ink">{setup?.lastGeneratedTraining ? "Gerado" : "Não gerado"}</p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => void handlePublish()}
-                    disabled={isSaving || isPublishing || !selectedFranchiseId}
-                    className="mt-5 inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isPublishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                    Gerar treinamento
-                  </button>
-
-                  {publishResult ? (
-                    <div
-                      className={clsx(
-                        "mt-4 rounded-2xl border p-4 text-sm",
-                        publishResult.success ? "border-emerald-100 bg-emerald-50 text-emerald-800" : "border-rose-100 bg-rose-50 text-rose-800"
-                      )}
-                    >
-                      <p className="font-semibold">{publishResult.success ? "Concluído" : "Não concluído"}</p>
-                      <p className="mt-2">{publishResult.message}</p>
-                      {!publishResult.success ? <p className="mt-2">O treinamento foi salvo para nova tentativa.</p> : null}
-                    </div>
-                  ) : null}
-                </section>
-              </section>
-
-              <TrainingPreviewCard title={previewTitle} content={previewContent} />
-            </div>
-          ) : null}
-
-          {!isLoading ? (
-            <div className="flex flex-col gap-3 rounded-2xl border border-line/80 bg-white/86 p-4 shadow-soft sm:flex-row sm:items-center sm:justify-between">
-              <div className="text-sm text-slate-500">
-                {setup ? (
-                  <>
-                    Status: <span className="font-semibold text-ink">{setup.setupStatus.replaceAll("_", " ")}</span>
-                  </>
-                ) : (
-                  "Selecione uma franquia."
-                )}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setCurrentStep((step) => Math.max(step - 1, 0))}
-                  disabled={currentStep === 0 || isSaving || isPublishing}
-                  className="rounded-xl border border-line bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+              <div className="flex justify-start">
+                <button type="button" onClick={() => goToStep(2)} className="btn-secondary inline-flex items-center gap-2">
+                  <ChevronLeft size={16} />
                   Voltar
                 </button>
-                {currentStep < setupSteps.length - 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => void handleStepAdvance(currentStep + 1)}
-                    disabled={isSaving || isPublishing || !selectedFranchiseId}
-                    className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
-                    Salvar e continuar
-                  </button>
-                ) : null}
               </div>
+              <div className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
+              <section className="grid gap-5">
+                <FormSection title="Revisao e publicacao" description="Confira base global, customizacao e historico antes de publicar.">
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>
+                      <p><strong style={{ color: "var(--color-text-primary)" }}>Setup:</strong> {setup?.setupStatus.replaceAll("_", " ")}</p>
+                      <p className="mt-2"><strong style={{ color: "var(--color-text-primary)" }}>Ultima publicacao:</strong> {setup?.lastPublishedAt ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(setup.lastPublishedAt)) : "Nunca publicada"}</p>
+                    </div>
+
+                    <div className="rounded-2xl p-4 text-sm" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>
+                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Treinamentos recentes</p>
+                      {setup?.recentTrainings?.length ? (
+                        <div className="mt-3 grid gap-3">
+                          {setup.recentTrainings.map((training) => (
+                            <div key={training.id} className="card px-3 py-3">
+                              <div className="flex items-start justify-between gap-3">
+                                <div>
+                                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{training.title}</p>
+                                  <p className="mt-1 text-xs" style={{ color: "var(--color-text-secondary)" }}>{training.contentSummary || training.message || "Sem resumo"}</p>
+                                </div>
+                                <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400" />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-3">Nenhum treinamento salvo.</p>
+                      )}
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button type="button" onClick={() => void persistSetup()} disabled={isSaving} className="inline-flex items-center gap-2 rounded-xl bg-white dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold ring-1 ring-line dark:ring-slate-700 disabled:opacity-60" style={{ color: "var(--color-text-secondary)" }}>
+                        {isSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                        Salvar workbench
+                      </button>
+                      <button type="button" onClick={() => void handlePublish()} disabled={isPublishing} className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+                        {isPublishing ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                        Publicar treinamento
+                      </button>
+                    </div>
+
+                    {publishResult ? (
+                      <div className={`rounded-2xl border p-4 text-sm ${publishResult.success ? "border-emerald-100 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-400" : "border-rose-100 dark:border-rose-800 bg-rose-50 dark:bg-rose-950/30 text-rose-800 dark:text-rose-400"}`}>
+                        {publishResult.message}
+                      </div>
+                    ) : null}
+                  </div>
+                </FormSection>
+              </section>
+              <TrainingPreviewCard title={`Workbench - ${form.franchiseName || "Franquia"}`} content={preview} />
+            </div>
             </div>
           ) : null}
         </div>

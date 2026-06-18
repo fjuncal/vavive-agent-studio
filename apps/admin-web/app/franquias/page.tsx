@@ -7,16 +7,50 @@ import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { getFranchises, getWorkspaceMapping, type FranchiseSummary, type WorkspaceMapping } from "@/lib/api";
-import { Building2, Link2, PlugZap } from "lucide-react";
+import {
+  Building2,
+  Link2,
+  PlugZap,
+  Plus,
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  Clock
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-function StatCard({ label, value, description }: { label: string; value: number; description: string }) {
+function StatCard({ label, value, description, icon: Icon, variant = "default" }: {
+  label: string;
+  value: number;
+  description: string;
+  icon: typeof Building2;
+  variant?: "default" | "success" | "warning";
+}) {
+  const variantStyles = {
+    default: "",
+    success: "bg-emerald-50 dark:bg-emerald-900/30",
+    warning: "bg-amber-50 dark:bg-amber-900/30"
+  };
+
+  const iconStyles = {
+    default: "bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400",
+    success: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
+    warning: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
+  };
+
   return (
-    <article className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">{label}</p>
-      <p className="mt-3 text-3xl font-semibold tracking-tight text-ink">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{description}</p>
+    <article className={`card group ${variantStyles[variant]}`} {...(variant === "default" ? { style: { background: "var(--color-bg-secondary)" } } : {})}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] truncate" style={{ color: "var(--color-text-tertiary)" }}>{label}</p>
+          <p className="mt-3 text-3xl font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>{value}</p>
+        </div>
+        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${iconStyles[variant]} transition-transform duration-200 group-hover:scale-110`}>
+          <Icon size={22} />
+        </div>
+      </div>
+      <p className="mt-4 text-xs" style={{ color: "var(--color-text-secondary)" }}>{description}</p>
     </article>
   );
 }
@@ -67,105 +101,216 @@ export default function FranchisesPage() {
         actionLabel={isSuperAdmin ? "Nova franquia" : undefined}
         actionHref={isSuperAdmin ? "/franquias/nova" : undefined}
       />
-      {error ? <p className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{error}</p> : null}
 
-      {isSuperAdmin ? (
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Franquias ativas" value={activeCount} description="Com workspace e agente conectados." />
-          <StatCard label="Franquias sem agente" value={withoutAgentCount} description="Workspace conectada, agente pendente." />
-          <StatCard label="Franquias pendentes" value={pendingCount} description="Aguardando configuracao da matriz." />
-          <StatCard label="Conexões disponíveis" value={unlinkedWorkspaceCount} description={isLoadingMapping ? "Carregando..." : "Disponíveis para vincular."} />
+      {error && (
+        <div className="rounded-2xl bg-rose-50 dark:bg-rose-900/30 border border-rose-100 dark:border-rose-800 px-5 py-4 text-sm text-rose-700 dark:text-rose-400 animate-in flex items-center gap-2">
+          <AlertCircle size={18} className="text-rose-600 dark:text-rose-400 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      {/* Stats */}
+      {isSuperAdmin && (
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 stagger-children">
+          <StatCard
+            label="Franquias ativas"
+            value={activeCount}
+            description="Com workspace e agente conectados."
+            icon={CheckCircle2}
+            variant="success"
+          />
+          <StatCard
+            label="Sem agente"
+            value={withoutAgentCount}
+            description="Workspace conectada, agente pendente."
+            icon={Building2}
+            variant="warning"
+          />
+          <StatCard
+            label="Pendentes"
+            value={pendingCount}
+            description="Aguardando configuração da matriz."
+            icon={Clock}
+            variant="warning"
+          />
+          <StatCard
+            label="Conexões disponíveis"
+            value={unlinkedWorkspaceCount}
+            description={isLoadingMapping ? "Carregando..." : "Disponíveis para vincular."}
+            icon={PlugZap}
+          />
         </section>
-      ) : null}
+      )}
 
-      {isSuperAdmin ? (
-        <section className="rounded-2xl border border-line/80 bg-white/86 p-5 shadow-soft">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      {/* Connection Issues */}
+      {isSuperAdmin && (
+        <section className="card">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-5">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Conexão</p>
-              <h2 className="mt-2 text-lg font-semibold text-ink">Pendências de conexão</h2>
-              <p className="mt-2 text-sm text-slate-500">Gerencie franquias sem integração e integrações disponíveis.</p>
+              <p className="section-title">Conexão</p>
+              <h2 className="section-subtitle">Pendências de conexão</h2>
+              <p className="mt-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>Gerencie franquias sem integração e integrações disponíveis.</p>
             </div>
-            {mappingError ? <span className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">Falha ao carregar</span> : null}
+            {mappingError && (
+              <span className="badge-danger">Falha ao carregar</span>
+            )}
           </div>
-          {mappingError ? <p className="mt-4 rounded-xl bg-rose-50 px-4 py-3 text-sm text-rose-700">{mappingError}</p> : null}
-          <div className="mt-5 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <h3 className="font-semibold text-ink">Franquias sem integração</h3>
+
+          {mappingError && (
+            <div className="rounded-xl bg-rose-50 dark:bg-rose-900/30 border border-rose-100 dark:border-rose-800 px-4 py-3 text-sm text-rose-700 dark:text-rose-400 mb-5">
+              {mappingError}
+            </div>
+          )}
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Franchises without integration */}
+            <div className="rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
+              <h3 className="font-semibold flex items-center gap-2" style={{ color: "var(--color-text-primary)" }}>
+                <AlertCircle size={16} className="text-amber-500" />
+                Franquias sem integração
+              </h3>
               <div className="mt-3 grid gap-3">
                 {mapping?.franchisesWithoutWorkspace.length ? mapping.franchisesWithoutWorkspace.map((item) => (
-                  <div key={item.franchiseId} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div key={item.franchiseId} className="flex flex-col gap-3 rounded-xl card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-semibold text-ink">{item.franchiseName}</p>
-                      <p className="text-sm text-slate-500">{item.city} / {item.state}</p>
+                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{item.franchiseName}</p>
+                      <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{item.city} / {item.state}</p>
                     </div>
-                    <Link href={`/franquias/${item.franchiseId}`} className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                    <Link
+                      href={`/franquias/${item.franchiseId}`}
+                      className="btn-primary py-2 px-3 text-xs"
+                    >
                       <Link2 size={14} />
-                        Vincular
+                      Vincular
                     </Link>
                   </div>
                 )) : (
-                  <p className="rounded-xl bg-white p-4 text-sm text-slate-500">Nenhuma franquia pendente de integração.</p>
+                  <div className="rounded-xl card p-4 text-sm text-center" style={{ color: "var(--color-text-secondary)" }}>
+                    Nenhuma franquia pendente de integração.
+                  </div>
                 )}
               </div>
             </div>
-            <div className="rounded-2xl bg-slate-50 p-4">
-              <h3 className="font-semibold text-ink">Integrações disponíveis</h3>
+
+            {/* Available integrations */}
+            <div className="rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
+              <h3 className="font-semibold flex items-center gap-2" style={{ color: "var(--color-text-primary)" }}>
+                <PlugZap size={16} className="text-brand-600" />
+                Integrações disponíveis
+              </h3>
               <div className="mt-3 grid gap-3">
                 {mapping?.unlinkedWorkspaces.length ? mapping.unlinkedWorkspaces.map((workspace) => (
-                  <div key={workspace.workspaceId} className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+                  <div key={workspace.workspaceId} className="flex flex-col gap-3 rounded-xl card p-4 shadow-sm sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                      <p className="font-semibold text-ink">{workspace.workspaceName || "Integração"}</p>
-                      <p className="text-sm text-slate-500">Disponível.</p>
+                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{workspace.workspaceName || "Integração"}</p>
+                      <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Disponível para vincular.</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Link href={`/franquias/nova?workspaceId=${encodeURIComponent(workspace.workspaceId)}`} className="rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                      <Link
+                        href={`/franquias/nova?workspaceId=${encodeURIComponent(workspace.workspaceId)}`}
+                        className="btn-primary py-2 px-3 text-xs"
+                      >
+                        <Plus size={14} />
                         Criar franquia
                       </Link>
-                      <Link href="/franquias" className="rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-line">
-                        Linkar existente
+                      <Link
+                        href="/franquias"
+                        className="btn-secondary py-2 px-3 text-xs"
+                      >
+                        Vincular existente
                       </Link>
                     </div>
                   </div>
                 )) : (
-                  <p className="rounded-xl bg-white p-4 text-sm text-slate-500">Nenhuma integração disponível.</p>
+                  <div className="rounded-xl card p-4 text-sm text-center" style={{ color: "var(--color-text-secondary)" }}>
+                    Nenhuma integração disponível.
+                  </div>
                 )}
               </div>
             </div>
           </div>
         </section>
-      ) : null}
+      )}
 
-      {!isSuperAdmin && franchises[0]?.status === "PENDENTE_CONFIGURACAO" ? (
-        <p className="rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-800">Sua franquia ainda nao esta ativa. Aguarde a configuracao pela matriz.</p>
-      ) : null}
+      {/* Pending notice for franchise admin */}
+      {!isSuperAdmin && franchises[0]?.status === "PENDENTE_CONFIGURACAO" && (
+        <div className="rounded-2xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 px-5 py-4 text-sm text-amber-700 dark:text-amber-400 animate-in flex items-center gap-2">
+          <Clock size={18} className="text-amber-600 dark:text-amber-400 shrink-0" />
+          Sua franquia ainda não está ativa. Aguarde a configuração pela matriz.
+        </div>
+      )}
 
+      {/* Table */}
       {franchises.length ? (
         <DataTable
           rows={franchises}
           columns={[
-            { header: "Franquia", cell: (franchise) => <Link className="font-semibold text-ink hover:text-brand-700" href={`/franquias/${franchise.id}`}>{franchise.name}</Link> },
-            { header: "Cidade", cell: (franchise) => `${franchise.city} / ${franchise.state}` },
-            ...(isSuperAdmin ? [{ header: "Conexão", cell: (franchise: FranchiseSummary) => franchise.workspaceName ?? "Sem integração" }] : []),
-            { header: "Agente", cell: (franchise) => franchise.agentName ?? "Sem agente" },
-            { header: "Status", cell: (franchise) => <StatusBadge status={franchise.status} /> },
             {
-              header: "Acao",
+              header: "Franquia",
               cell: (franchise) => (
-                <Link href={franchise.agentId ? `/franquias/${franchise.id}` : franchise.workspaceId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`} className="inline-flex rounded-xl bg-ink px-3 py-2 text-xs font-semibold text-white">
+                <Link className="font-semibold hover:text-brand-700 transition-colors" style={{ color: "var(--color-text-primary)" }} href={`/franquias/${franchise.id}`}>
+                  {franchise.name}
+                </Link>
+              )
+            },
+            {
+              header: "Cidade",
+              cell: (franchise) => (
+                <span style={{ color: "var(--color-text-secondary)" }}>{franchise.city} / {franchise.state}</span>
+              )
+            },
+            ...(isSuperAdmin ? [{
+              header: "Conexão",
+              cell: (franchise: FranchiseSummary) => (
+                <span style={{ color: franchise.workspaceName ? "var(--color-text-primary)" : "var(--color-text-tertiary)" }}>
+                  {franchise.workspaceName ?? "Sem integração"}
+                </span>
+              )
+            }] : []),
+            {
+              header: "Agente",
+              cell: (franchise) => (
+                <span style={{ color: franchise.agentName ? "var(--color-text-primary)" : "var(--color-text-tertiary)" }}>
+                  {franchise.agentName ?? "Sem agente"}
+                </span>
+              )
+            },
+            {
+              header: "Status",
+              cell: (franchise) => <StatusBadge status={franchise.status} />
+            },
+            {
+              header: "Ação",
+              className: "text-right",
+              cell: (franchise) => (
+                <Link
+                  href={franchise.agentId ? `/franquias/${franchise.id}` : franchise.workspaceId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`}
+                  className="btn-primary py-2 px-3 text-xs inline-flex"
+                >
                   {franchise.agentId ? "Abrir" : franchise.workspaceId ? "Configurar agente" : "Configurar"}
+                  <ArrowRight size={14} />
                 </Link>
               )
             }
           ]}
         />
       ) : (
-        <EmptyState icon={Building2} title="Nenhuma franquia cadastrada" description="Ainda nao ha dados reais para exibir." />
+        <EmptyState
+          icon={Building2}
+          title="Nenhuma franquia cadastrada"
+          description="Ainda não há dados reais para exibir."
+          action={isSuperAdmin ? { label: "Criar primeira franquia", href: "/franquias/nova" } : undefined}
+        />
       )}
 
-      {isSuperAdmin && mapping && !mapping.linked.length && !mapping.unlinkedWorkspaces.length && !mapping.franchisesWithoutWorkspace.length ? (
-        <EmptyState icon={PlugZap} title="Nenhuma conexão encontrada" description="Quando houver integrações disponíveis, aparecerão aqui." />
-      ) : null}
+      {/* Empty mapping state */}
+      {isSuperAdmin && mapping && !mapping.linked.length && !mapping.unlinkedWorkspaces.length && !mapping.franchisesWithoutWorkspace.length && (
+        <EmptyState
+          icon={PlugZap}
+          title="Nenhuma conexão encontrada"
+          description="Quando houver integrações disponíveis, aparecerão aqui."
+        />
+      )}
     </AppShell>
   );
 }
