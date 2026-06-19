@@ -20,6 +20,8 @@ export function formatCreditsStatus(status?: WorkspaceCredits["status"]) {
   switch (status) {
     case "AVAILABLE":
       return "disponivel";
+    case "STALE":
+      return "cache";
     case "NO_WORKSPACE":
       return "sem workspace";
     case "UNAVAILABLE":

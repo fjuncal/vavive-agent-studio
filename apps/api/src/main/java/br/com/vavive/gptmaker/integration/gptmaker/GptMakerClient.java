@@ -164,9 +164,14 @@ public class GptMakerClient {
         }
 
         try {
-            log.info("Calling GPTMaker POST {} name={} communicationType={} type={}", endpoint, sanitize(request.name()), sanitize(request.communicationType()), sanitize(request.type()));
-            ResponseEntity<String> response = feignClient.createAgent(workspaceId, request);
+            GptMakerCreateAgentRequest sanitizedRequest = sanitizeAgentRequest(request);
+            log.info("Calling GPTMaker POST {} name={} communicationType={} type={} avatar={} behaviorLen={}",
+                endpoint, sanitize(sanitizedRequest.name()), sanitize(sanitizedRequest.communicationType()),
+                sanitize(sanitizedRequest.type()), sanitize(sanitizedRequest.avatar()),
+                sanitizedRequest.behavior() != null ? sanitizedRequest.behavior().length() : 0);
+            ResponseEntity<String> response = feignClient.createAgent(workspaceId, sanitizedRequest);
             String body = response.getBody();
+            log.debug("GPTMaker POST {} response body: {}", endpoint, preview(body));
             JsonNode payload = parseBody(body, endpoint, response.getStatusCode().value());
             GptMakerCreateAgentResponse createdAgent = parseCreatedAgent(payload, endpoint);
             log.info("GPTMaker POST {} status={} createdAgentId={} createdAgentName={}", endpoint, response.getStatusCode().value(), sanitize(createdAgent.id()), sanitize(createdAgent.name()));
@@ -175,7 +180,7 @@ public class GptMakerClient {
             log.warn("GPTMaker POST {} status=TIMEOUT", endpoint);
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel criar o agente no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
         } catch (FeignException exception) {
-            log.warn("GPTMaker POST {} status={}", endpoint, exception.status());
+            log.warn("GPTMaker POST {} status={} body={}", endpoint, exception.status(), preview(exception.contentUTF8()));
             if (isWorkspaceAgentLimitError(exception)) {
                 throw new GptMakerIntegrationException(
                     "GPTMAKER_AGENT_LIMIT",
@@ -193,7 +198,9 @@ public class GptMakerClient {
                     ? "O GPTMaker rejeitou os dados do novo agente. Revise o formulario e tente novamente."
                     : exception.status() == 401 || exception.status() == 403
                         ? "Nao foi possivel autenticar na API GPTMaker. Verifique o token configurado no backend."
-                        : "Nao foi possivel criar o agente no GPTMaker.";
+                        : exception.status() == 500
+                            ? "GPTMaker retornou erro interno (500). Verifique se os dados enviados sao validos. Detalhes: " + preview(exception.contentUTF8())
+                            : "Nao foi possivel criar o agente no GPTMaker.";
             throw new GptMakerIntegrationException(
                 resolveErrorCode(exception),
                 message,
@@ -1202,6 +1209,24 @@ public class GptMakerClient {
             sanitized = sanitized.replace(token, "[REDACTED]");
         }
         return sanitized.length() > 500 ? sanitized.substring(0, 500) : sanitized;
+    }
+
+    private GptMakerCreateAgentRequest sanitizeAgentRequest(GptMakerCreateAgentRequest request) {
+        String avatar = request.avatar();
+        // GPTMaker expects URL, not data URI. Filter out data URIs.
+        if (avatar != null && avatar.startsWith("data:")) {
+            avatar = null;
+        }
+        return new GptMakerCreateAgentRequest(
+            request.name(),
+            avatar,
+            request.behavior(),
+            request.communicationType(),
+            request.type(),
+            request.jobName(),
+            request.jobSite(),
+            request.jobDescription()
+        );
     }
 
     private String preview(String value) {

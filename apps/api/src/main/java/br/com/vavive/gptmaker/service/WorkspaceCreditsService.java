@@ -60,6 +60,10 @@ public class WorkspaceCreditsService {
             long credits = readLong(payload, "credits", "totalCredits", "total", "credit");
             long used = readLong(payload, "used", "usedCredits", "consumed", "usage");
             long remaining = readLong(payload, "remaining", "available", "availableCredits", "balance");
+            // GPTMaker API returns { credits, status } where credits = available balance
+            if (remaining == 0 && credits > 0 && used == 0) {
+                remaining = credits;
+            }
             if (remaining == 0 && credits > 0 && used > 0) {
                 remaining = Math.max(credits - used, 0);
             }

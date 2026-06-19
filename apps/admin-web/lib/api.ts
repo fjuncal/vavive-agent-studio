@@ -831,14 +831,28 @@ export function getWorkspaceCredits(franchiseId: string) {
   return apiFetch<WorkspaceCredits>(`/franchises/${franchiseId}/credits`);
 }
 
-export function getAgentSettings(franchiseId: string) {
-  return apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-settings`);
+const DEFAULT_AGENT_SETTINGS: Record<string, unknown> = {
+  prefferModel: "GPT_4_O",
+  timezone: "America/Sao_Paulo",
+  enabledHumanTransfer: false,
+  enabledReminder: false,
+  splitMessages: false,
+  enabledEmoji: false,
+  limitSubjects: false,
+  signMessages: false,
+  messageGroupingTime: "NO_GROUP",
+};
+
+export async function getAgentSettings(franchiseId: string): Promise<Record<string, unknown>> {
+  const remote = await apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-settings`);
+  return { ...DEFAULT_AGENT_SETTINGS, ...remote };
 }
 
 export function updateAgentSettings(franchiseId: string, settings: Record<string, unknown>) {
+  const merged = { ...DEFAULT_AGENT_SETTINGS, ...settings };
   return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent-settings`, {
     method: "POST",
-    body: JSON.stringify(settings)
+    body: JSON.stringify(merged)
   });
 }
 

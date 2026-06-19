@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { AssistantAvatar, buildAssistantAvatarDataUri } from "@/components/AssistantAvatar";
+import { AssistantAvatar, buildAssistantAvatarDataUri, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormWizard, type WizardStep } from "@/components/FormWizard";
 import { PageHeader } from "@/components/PageHeader";
@@ -29,10 +29,11 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback, type ReactNode } from "react";
 
 const avatarOptions = [
+  { value: "random-gamified", label: "Aleatorio", description: "Avatar gamificado aleatorio" },
   { value: buildAssistantAvatarDataUri("#EEF2FF", "#4F46E5", "AT"), label: "Atendimento", description: "Tom profissional" },
-  { value: buildAssistantAvatarDataUri("#ECFDF5", "#047857", "CO"), label: "Comercial", description: "Tom energético" },
+  { value: buildAssistantAvatarDataUri("#ECFDF5", "#047857", "CO"), label: "Comercial", description: "Tom energetico" },
   { value: buildAssistantAvatarDataUri("#FFF7ED", "#C2410C", "SU"), label: "Suporte", description: "Tom acolhedor" },
-  { value: "", label: "Sem avatar", description: "Usar ícone padrão" },
+  { value: "", label: "Sem avatar", description: "Usar icone padrao" },
 ];
 
 const toneOptions = [
@@ -124,11 +125,14 @@ export default function AgentWizardPage() {
     setIsSaving(true);
     setError(null);
     try {
+      const resolvedAvatar = selectedAvatar === "random-gamified"
+        ? buildGamifiedAvatarDataUri(agentName + Date.now().toString())
+        : selectedAvatar || undefined;
       const response = await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
         workspaceName: connection.workspaceName ?? undefined,
         agentName,
-        avatar: selectedAvatar || undefined,
+        avatar: resolvedAvatar,
         communicationType,
         type: objectiveType,
         jobName: franchise?.name ?? "Vavive",
@@ -265,7 +269,12 @@ export default function AgentWizardPage() {
 
           {selectedAvatar && (
             <div className="flex items-center gap-3 p-4 rounded-xl" style={{ background: "var(--color-bg-secondary)" }}>
-              <AssistantAvatar src={selectedAvatar} alt="Preview" fallbackLabel={agentName} className="h-12 w-12" />
+              <AssistantAvatar
+                src={selectedAvatar === "random-gamified" ? buildGamifiedAvatarDataUri(agentName || "bot") : selectedAvatar}
+                alt="Preview"
+                fallbackLabel={agentName}
+                className="h-12 w-12"
+              />
               <div>
                 <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Preview</p>
                 <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>{agentName}</p>

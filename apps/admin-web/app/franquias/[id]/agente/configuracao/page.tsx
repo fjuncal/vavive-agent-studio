@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { AssistantAvatar, buildAssistantAvatarDataUri } from "@/components/AssistantAvatar";
+import { AssistantAvatar, buildAssistantAvatarDataUri, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { Field } from "@/components/FormSection";
 import { OptionCards, RichTextarea, SelectField, ToggleField } from "@/components/FriendlyForm";
@@ -31,6 +31,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 const avatarOptions = [
+  { label: "Aleatorio", value: "random-gamified", description: "Avatar gamificado aleatorio" },
   { label: "Atendimento", value: buildAssistantAvatarDataUri("#EEF2FF", "#4F46E5", "AT"), description: "Visual neutro" },
   { label: "Comercial", value: buildAssistantAvatarDataUri("#ECFDF5", "#047857", "CO"), description: "Foco em vendas" },
   { label: "Suporte", value: buildAssistantAvatarDataUri("#FFF7ED", "#C2410C", "SU"), description: "Foco em apoio" },
@@ -220,11 +221,14 @@ export default function AgentConfigPage() {
             communicationType,
             objectiveType
           };
+      const resolvedAvatar = profileDraft.selectedAvatar === "random-gamified"
+        ? buildGamifiedAvatarDataUri(profileDraft.agentName || "bot")
+        : profileDraft.selectedAvatar || undefined;
       const updated = await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
         workspaceName: connection.workspaceName ?? undefined,
         agentName: profileDraft.agentName,
-        avatar: profileDraft.selectedAvatar || undefined,
+        avatar: resolvedAvatar,
         communicationType: profileDraft.communicationType,
         type: profileDraft.objectiveType,
         confirmCriticalChange: true,
@@ -321,7 +325,12 @@ export default function AgentConfigPage() {
                 className={`rounded-2xl border p-3 text-left transition ${selectedAvatar === option.value ? "border-brand-500 bg-brand-50 ring-4 ring-brand-50" : "border-line bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"}`}
               >
                 {option.value ? (
-                  <AssistantAvatar src={option.value} alt={option.label} fallbackLabel={option.label} className="h-16 w-16 object-cover ring-1 ring-line" />
+                  <AssistantAvatar
+                    src={option.value === "random-gamified" ? buildGamifiedAvatarDataUri(agentName || "bot") : option.value}
+                    alt={option.label}
+                    fallbackLabel={option.label}
+                    className="h-16 w-16 object-cover ring-1 ring-line"
+                  />
                 ) : (
                   <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold dark:bg-slate-800" style={{ color: "var(--color-text-secondary)" }}>
                     Sem foto
