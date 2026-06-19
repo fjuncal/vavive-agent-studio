@@ -887,8 +887,21 @@ export function createGptMakerIntention(franchiseId: string, payload: { name: st
   });
 }
 
+export function deleteGptMakerIntention(franchiseId: string, intentionId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/intentions/${intentionId}`, {
+    method: "DELETE"
+  });
+}
+
 export function getGptMakerTrainings(franchiseId: string) {
   return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/trainings`);
+}
+
+export function createGptMakerTraining(franchiseId: string, payload: { type?: string; text: string }) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/trainings`, {
+    method: "POST",
+    body: JSON.stringify({ type: payload.type || "TEXT", text: payload.text })
+  });
 }
 
 export function deleteGptMakerTraining(franchiseId: string, trainingId: string) {
@@ -897,12 +910,84 @@ export function deleteGptMakerTraining(franchiseId: string, trainingId: string) 
   });
 }
 
+export function updateGptMakerTraining(franchiseId: string, trainingId: string, payload: { type?: string; text: string }) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/trainings/${trainingId}`, {
+    method: "PUT",
+    body: JSON.stringify({ type: payload.type || "TEXT", text: payload.text })
+  });
+}
+
+export function updateGptMakerIntention(franchiseId: string, intentionId: string, payload: Record<string, unknown>) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/intentions/${intentionId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getTransferRules(franchiseId: string) {
   return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/transfer-rules`);
 }
 
+export function createTransferRule(franchiseId: string, payload: Record<string, unknown>) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/transfer-rules`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateTransferRule(franchiseId: string, ruleId: string, payload: Record<string, unknown>) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/transfer-rules/${ruleId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteTransferRule(franchiseId: string, ruleId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/transfer-rules/${ruleId}`, {
+    method: "DELETE"
+  });
+}
+
 export function getIdleActions(franchiseId: string) {
   return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/idle-actions`);
+}
+
+export function createIdleAction(franchiseId: string, payload: Record<string, unknown>) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/idle-actions`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateIdleAction(franchiseId: string, actionId: string, payload: Record<string, unknown>) {
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/idle-actions/${actionId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteIdleAction(franchiseId: string, actionId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/idle-actions/${actionId}`, {
+    method: "DELETE"
+  });
+}
+
+export function activateAgent(franchiseId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent/activate`, {
+    method: "PUT"
+  });
+}
+
+export function inactivateAgent(franchiseId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent/inactivate`, {
+    method: "PUT"
+  });
+}
+
+export function deleteGptMakerAgent(franchiseId: string) {
+  return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent/delete`, {
+    method: "DELETE"
+  });
 }
 
 export function createFranchiseChannel(franchiseId: string, name: string, type: string) {

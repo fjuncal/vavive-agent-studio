@@ -43,6 +43,15 @@ public interface GptMakerFeignClient {
     @GetMapping("/v2/agent/{agentId}")
     ResponseEntity<String> getAgent(@PathVariable String agentId);
 
+    @PutMapping("/v2/agent/{agentId}/active")
+    ResponseEntity<String> activateAgent(@PathVariable String agentId);
+
+    @PutMapping("/v2/agent/{agentId}/inactive")
+    ResponseEntity<String> inactivateAgent(@PathVariable String agentId);
+
+    @DeleteMapping("/v2/agent/{agentId}")
+    ResponseEntity<String> deleteAgent(@PathVariable String agentId);
+
     @GetMapping("/v2/agent/{agentId}/settings")
     ResponseEntity<String> getAgentSettings(@PathVariable String agentId);
 
@@ -68,6 +77,12 @@ public interface GptMakerFeignClient {
     GptMakerCreateIntentResponse createIntent(
         @PathVariable String agentId,
         @RequestBody GptMakerCreateIntentRequest request
+    );
+
+    @PostMapping("/v2/agent/{agentId}/intentions")
+    ResponseEntity<String> createIntentionRaw(
+        @PathVariable String agentId,
+        @RequestBody Object intention
     );
 
     @GetMapping("/v2/agent/{agentId}/trainings")
@@ -127,9 +142,30 @@ public interface GptMakerFeignClient {
     @PostMapping("/v2/transfer-rules/agent/{agentId}")
     ResponseEntity<String> createTransferRule(@PathVariable String agentId, @RequestBody Object rule);
 
+    @PutMapping("/v2/transfer-rule/{ruleId}")
+    ResponseEntity<String> updateTransferRule(@PathVariable String ruleId, @RequestBody Object rule);
+
+    @DeleteMapping("/v2/transfer-rule/{ruleId}")
+    ResponseEntity<String> deleteTransferRule(@PathVariable String ruleId);
+
     @GetMapping("/v2/idle-actions/agent/{agentId}")
     ResponseEntity<String> listIdleActions(@PathVariable String agentId);
 
     @PostMapping("/v2/idle-actions/agent/{agentId}")
     ResponseEntity<String> createIdleAction(@PathVariable String agentId, @RequestBody Object action);
+
+    @PutMapping("/v2/idle-action/{actionId}")
+    ResponseEntity<String> updateIdleAction(@PathVariable String actionId, @RequestBody Object action);
+
+    @DeleteMapping("/v2/idle-action/{actionId}")
+    ResponseEntity<String> deleteIdleAction(@PathVariable String actionId);
+
+    @PutMapping("/v2/training/{trainingId}")
+    ResponseEntity<String> updateTraining(@PathVariable String trainingId, @RequestBody Object training);
+
+    @PutMapping("/v2/intention/{intentionId}")
+    ResponseEntity<String> updateIntention(@PathVariable String intentionId, @RequestBody Object intention);
+
+    @DeleteMapping("/v2/intention/{intentionId}")
+    ResponseEntity<String> deleteIntention(@PathVariable String intentionId);
 }

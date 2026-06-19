@@ -11,61 +11,124 @@ function hashCode(str: string): number {
   return Math.abs(hash);
 }
 
-const BG_COLORS = ["#EEF2FF", "#ECFDF5", "#FFF7ED", "#FDF2F8", "#F0F9FF", "#FEF3C7", "#F3E8FF", "#ECFCCB"];
-const BODY_COLORS = ["#4F46E5", "#047857", "#C2410C", "#BE185D", "#0369A1", "#B45309", "#7C3AED", "#65A30D"];
-const EYE_STYLES = ["round", "square", "dot"];
-const MOUTH_STYLES = ["smile", "neutral", "open", "grin"];
-const ANTENNA_STYLES = ["single", "double", "none"];
-const ACCESSORY_STYLES = ["none", "headphones", "hat"];
+const BG_COLORS = [
+  "#EEF2FF", "#ECFDF5", "#FFF7ED", "#FDF2F8",
+  "#F0F9FF", "#FEF3C7", "#F3E8FF", "#ECFCCB",
+  "#E0F2FE", "#D1FAE5", "#FEF9C3", "#FCE7F3"
+];
+
+const BODY_COLORS = [
+  "#6366F1", "#10B981", "#F97316", "#EC4899",
+  "#3B82F6", "#EAB308", "#8B5CF6", "#14B8A6",
+  "#EF4444", "#06B6D4", "#A855F7", "#F59E0B"
+];
+
+const FACE_STYLES = ["robot", "alien", "monster", "cat"];
+const EYE_STYLES = ["big", "sleepy", "wink", "star"];
+const MOUTH_STYLES = ["happy", "grin", "tongue", "ooh"];
+const ACCESSORY_STYLES = ["none", "crown", "bow", "glasses", "halo"];
 
 export function buildGamifiedAvatarDataUri(seed: string): string {
   const h = hashCode(seed);
   const bg = BG_COLORS[h % BG_COLORS.length];
   const body = BODY_COLORS[(h >> 3) % BODY_COLORS.length];
-  const eyeStyle = EYE_STYLES[(h >> 6) % EYE_STYLES.length];
-  const mouthStyle = MOUTH_STYLES[(h >> 9) % MOUTH_STYLES.length];
-  const antennaStyle = ANTENNA_STYLES[(h >> 12) % ANTENNA_STYLES.length];
+  const faceStyle = FACE_STYLES[(h >> 6) % FACE_STYLES.length];
+  const eyeStyle = EYE_STYLES[(h >> 9) % EYE_STYLES.length];
+  const mouthStyle = MOUTH_STYLES[(h >> 12) % MOUTH_STYLES.length];
   const accessoryStyle = ACCESSORY_STYLES[(h >> 15) % ACCESSORY_STYLES.length];
 
-  const eyes = eyeStyle === "round"
-    ? `<circle cx="100" cy="120" r="12" fill="white"/><circle cx="156" cy="120" r="12" fill="white"/><circle cx="103" cy="118" r="5" fill="${body}"/><circle cx="159" cy="118" r="5" fill="${body}"/>`
-    : eyeStyle === "square"
-    ? `<rect x="88" y="108" width="24" height="24" rx="4" fill="white"/><rect x="144" y="108" width="24" height="24" rx="4" fill="white"/><rect x="96" y="114" width="8" height="8" rx="2" fill="${body}"/><rect x="152" y="114" width="8" height="8" rx="2" fill="${body}"/>`
-    : `<circle cx="100" cy="120" r="6" fill="white"/><circle cx="156" cy="120" r="6" fill="white"/>`;
+  // Body shape based on face style
+  const bodyShape = faceStyle === "robot"
+    ? `<rect x="76" y="60" width="104" height="110" rx="28" fill="${body}"/>
+       <rect x="68" y="76" width="12" height="40" rx="6" fill="${body}"/>
+       <rect x="176" y="76" width="12" height="40" rx="6" fill="${body}"/>`
+    : faceStyle === "alien"
+    ? `<ellipse cx="128" cy="110" rx="60" ry="55" fill="${body}"/>
+       <ellipse cx="128" cy="70" rx="30" ry="20" fill="${body}" opacity="0.8"/>`
+    : faceStyle === "monster"
+    ? `<path d="M68 80 Q68 50 128 50 Q188 50 188 80 L188 150 Q188 180 128 180 Q68 180 68 150 Z" fill="${body}"/>
+       <path d="M80 180 L90 200 L100 180" fill="${body}"/>
+       <path d="M156 180 L166 200 L176 180" fill="${body}"/>`
+    : `<circle cx="128" cy="110" r="56" fill="${body}"/>
+       <ellipse cx="90" cy="110" rx="20" ry="18" fill="${body}" opacity="0.8"/>
+       <ellipse cx="166" cy="110" rx="20" ry="18" fill="${body}" opacity="0.8"/>`;
 
-  const mouth = mouthStyle === "smile"
-    ? `<path d="M108 158 Q128 178 148 158" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>`
-    : mouthStyle === "neutral"
-    ? `<line x1="108" y1="162" x2="148" y2="162" stroke="white" stroke-width="4" stroke-linecap="round"/>`
-    : mouthStyle === "open"
-    ? `<ellipse cx="128" cy="164" rx="16" ry="10" fill="white"/>`
-    : `<path d="M104 158 Q116 174 128 158 Q140 174 152 158" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>`;
+  // Eyes
+  const eyes = eyeStyle === "big"
+    ? `<circle cx="104" cy="105" r="16" fill="white"/>
+       <circle cx="152" cy="105" r="16" fill="white"/>
+       <circle cx="108" cy="103" r="8" fill="#1E293B"/>
+       <circle cx="156" cy="103" r="8" fill="#1E293B"/>
+       <circle cx="110" cy="100" r="3" fill="white"/>
+       <circle cx="158" cy="100" r="3" fill="white"/>`
+    : eyeStyle === "sleepy"
+    ? `<ellipse cx="104" cy="108" rx="14" ry="8" fill="white"/>
+       <ellipse cx="152" cy="108" rx="14" ry="8" fill="white"/>
+       <circle cx="108" cy="108" r="5" fill="#1E293B"/>
+       <circle cx="156" cy="108" r="5" fill="#1E293B"/>`
+    : eyeStyle === "wink"
+    ? `<circle cx="104" cy="105" r="14" fill="white"/>
+       <circle cx="108" cy="103" r="7" fill="#1E293B"/>
+       <circle cx="110" cy="100" r="2.5" fill="white"/>
+       <path d="M140 105 Q152 95 164 105" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>`
+    : `<path d="M92 105 L104 95 L116 105 L104 115 Z" fill="white"/>
+       <path d="M140 105 L152 95 L164 105 L152 115 Z" fill="white"/>
+       <circle cx="104" cy="105" r="4" fill="#1E293B"/>
+       <circle cx="152" cy="105" r="4" fill="#1E293B"/>`;
 
-  const antenna = antennaStyle === "single"
-    ? `<line x1="128" y1="60" x2="128" y2="40" stroke="${body}" stroke-width="4" stroke-linecap="round"/><circle cx="128" cy="36" r="6" fill="${body}"/>`
-    : antennaStyle === "double"
-    ? `<line x1="104" y1="64" x2="96" y2="40" stroke="${body}" stroke-width="3" stroke-linecap="round"/><circle cx="96" cy="36" r="5" fill="${body}"/><line x1="152" y1="64" x2="160" y2="40" stroke="${body}" stroke-width="3" stroke-linecap="round"/><circle cx="160" cy="36" r="5" fill="${body}"/>`
+  // Mouth
+  const mouth = mouthStyle === "happy"
+    ? `<path d="M104 135 Q128 158 152 135" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>`
+    : mouthStyle === "grin"
+    ? `<path d="M96 132 Q128 165 160 132" fill="white"/>
+       <path d="M104 132 Q128 145 152 132" fill="${body}"/>`
+    : mouthStyle === "tongue"
+    ? `<path d="M104 135 Q128 155 152 135" stroke="white" stroke-width="4" fill="none" stroke-linecap="round"/>
+       <ellipse cx="128" cy="150" rx="8" ry="6" fill="#EF4444"/>`
+    : `<ellipse cx="128" cy="142" rx="12" ry="10" fill="white"/>`;
+
+  // Cheeks (blush)
+  const cheeks = `<circle cx="80" cy="125" r="10" fill="#FCA5A5" opacity="0.4"/>
+                   <circle cx="176" cy="125" r="10" fill="#FCA5A5" opacity="0.4"/>`;
+
+  // Accessory
+  const accessory = accessoryStyle === "crown"
+    ? `<path d="M92 58 L104 38 L118 52 L128 32 L138 52 L152 38 L164 58" fill="#EAB308" stroke="#CA8A04" stroke-width="2"/>
+       <circle cx="104" cy="40" r="3" fill="#EF4444"/>
+       <circle cx="128" cy="34" r="3" fill="#3B82F6"/>
+       <circle cx="152" cy="40" r="3" fill="#10B981"/>`
+    : accessoryStyle === "bow"
+    ? `<path d="M108 52 Q88 32 108 22 Q118 28 128 22 Q138 28 148 22 Q168 32 148 52 Q138 46 128 52 Q118 46 108 52" fill="#EC4899"/>
+       <circle cx="128" cy="42" r="5" fill="#F472B6"/>`
+    : accessoryStyle === "glasses"
+    ? `<circle cx="104" cy="105" r="20" fill="none" stroke="#1E293B" stroke-width="4"/>
+       <circle cx="152" cy="105" r="20" fill="none" stroke="#1E293B" stroke-width="4"/>
+       <line x1="124" y1="105" x2="132" y2="105" stroke="#1E293B" stroke-width="4"/>
+       <line x1="84" y1="105" x2="72" y2="100" stroke="#1E293B" stroke-width="3"/>
+       <line x1="172" y1="105" x2="184" y2="100" stroke="#1E293B" stroke-width="3"/>`
+    : accessoryStyle === "halo"
+    ? `<ellipse cx="128" cy="52" rx="32" ry="8" fill="none" stroke="#EAB308" stroke-width="4"/>
+       <ellipse cx="128" cy="52" rx="32" ry="8" fill="#EAB308" opacity="0.2"/>`
     : "";
 
-  const accessory = accessoryStyle === "headphones"
-    ? `<path d="M80 110 Q80 70 128 70 Q176 70 176 110" stroke="${body}" stroke-width="6" fill="none"/><rect x="72" y="106" width="16" height="24" rx="8" fill="${body}"/><rect x="168" y="106" width="16" height="24" rx="8" fill="${body}"/>`
-    : accessoryStyle === "hat"
-    ? `<rect x="88" y="56" width="80" height="12" rx="6" fill="${body}"/><rect x="100" y="36" width="56" height="24" rx="8" fill="${body}"/>`
+  // Antenna for robot
+  const antenna = faceStyle === "robot"
+    ? `<line x1="128" y1="60" x2="128" y2="38" stroke="${body}" stroke-width="4" stroke-linecap="round"/>
+       <circle cx="128" cy="34" r="6" fill="${body}"/>
+       <circle cx="128" cy="34" r="3" fill="white" opacity="0.6"/>`
     : "";
 
   const svg = `
     <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
       <rect width="256" height="256" rx="48" fill="${bg}"/>
-      <rect x="76" y="64" width="104" height="120" rx="24" fill="${body}"/>
-      <rect x="88" y="80" width="80" height="88" rx="16" fill="${bg}" opacity="0.3"/>
-      ${eyes}
-      ${mouth}
+      ${bodyShape}
       ${antenna}
+      ${eyes}
+      ${cheeks}
+      ${mouth}
       ${accessory}
-      <rect x="60" y="188" width="136" height="28" rx="14" fill="${body}" opacity="0.8"/>
-      <circle cx="96" cy="202" r="4" fill="white" opacity="0.6"/>
-      <circle cx="128" cy="202" r="4" fill="white" opacity="0.6"/>
-      <circle cx="160" cy="202" r="4" fill="white" opacity="0.6"/>
+      <rect x="88" y="180" width="80" height="24" rx="12" fill="${body}" opacity="0.7"/>
+      <rect x="76" y="192" width="104" height="16" rx="8" fill="${body}" opacity="0.5"/>
     </svg>
   `.trim();
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;

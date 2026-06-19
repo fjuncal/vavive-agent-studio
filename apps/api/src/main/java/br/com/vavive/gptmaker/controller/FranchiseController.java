@@ -256,14 +256,19 @@ public class FranchiseController {
         return franchiseService.updateAgentWebhooks(id, webhooks);
     }
 
-    @GetMapping("/franchises/{id}/gptmaker/intentions")
-    public Object listIntentions(@PathVariable UUID id) {
-        return franchiseService.listIntentions(id);
-    }
-
     @GetMapping("/franchises/{id}/gptmaker/trainings")
     public Object listTrainings(@PathVariable UUID id) {
         return franchiseService.listTrainings(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/trainings")
+    public Object createTraining(@PathVariable UUID id, @RequestBody Object training) {
+        return franchiseService.createTraining(id, training);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/trainings/{trainingId}")
+    public Object updateTraining(@PathVariable UUID id, @PathVariable String trainingId, @RequestBody Object training) {
+        return franchiseService.updateTraining(id, trainingId, training);
     }
 
     @DeleteMapping("/franchises/{id}/gptmaker/trainings/{trainingId}")
@@ -271,13 +276,78 @@ public class FranchiseController {
         return franchiseService.deleteTraining(id, trainingId);
     }
 
+    @GetMapping("/franchises/{id}/gptmaker/intentions")
+    public Object listIntentions(@PathVariable UUID id) {
+        return franchiseService.listIntentions(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/intentions")
+    public Object createIntention(@PathVariable UUID id, @RequestBody Object intention) {
+        return franchiseService.createIntention(id, intention);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/intentions/{intentionId}")
+    public Object updateIntention(@PathVariable UUID id, @PathVariable String intentionId, @RequestBody Object intention) {
+        return franchiseService.updateIntention(id, intentionId, intention);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/intentions/{intentionId}")
+    public Object deleteIntention(@PathVariable UUID id, @PathVariable String intentionId) {
+        return franchiseService.deleteIntention(id, intentionId);
+    }
+
     @GetMapping("/franchises/{id}/gptmaker/transfer-rules")
     public Object listTransferRules(@PathVariable UUID id) {
         return franchiseService.listTransferRules(id);
     }
 
+    @PostMapping("/franchises/{id}/gptmaker/transfer-rules")
+    public Object createTransferRule(@PathVariable UUID id, @RequestBody Object rule) {
+        return franchiseService.createTransferRule(id, rule);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/transfer-rules/{ruleId}")
+    public Object updateTransferRule(@PathVariable UUID id, @PathVariable String ruleId, @RequestBody Object rule) {
+        return franchiseService.updateTransferRule(id, ruleId, rule);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/transfer-rules/{ruleId}")
+    public Object deleteTransferRule(@PathVariable UUID id, @PathVariable String ruleId) {
+        return franchiseService.deleteTransferRule(id, ruleId);
+    }
+
     @GetMapping("/franchises/{id}/gptmaker/idle-actions")
     public Object listIdleActions(@PathVariable UUID id) {
         return franchiseService.listIdleActions(id);
+    }
+
+    @PostMapping("/franchises/{id}/gptmaker/idle-actions")
+    public Object createIdleAction(@PathVariable UUID id, @RequestBody Object action) {
+        return franchiseService.createIdleAction(id, action);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/idle-actions/{actionId}")
+    public Object updateIdleAction(@PathVariable UUID id, @PathVariable String actionId, @RequestBody Object action) {
+        return franchiseService.updateIdleAction(id, actionId, action);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/idle-actions/{actionId}")
+    public Object deleteIdleAction(@PathVariable UUID id, @PathVariable String actionId) {
+        return franchiseService.deleteIdleAction(id, actionId);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/agent/activate")
+    public Object activateAgent(@PathVariable UUID id) {
+        return franchiseService.activateAgent(id);
+    }
+
+    @PutMapping("/franchises/{id}/gptmaker/agent/inactivate")
+    public Object inactivateAgent(@PathVariable UUID id) {
+        return franchiseService.inactivateAgent(id);
+    }
+
+    @DeleteMapping("/franchises/{id}/gptmaker/agent/delete")
+    public Object deleteAgent(@PathVariable UUID id) {
+        return franchiseService.deleteAgent(id);
     }
 }

@@ -1,15 +1,25 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
+import { AssistantAvatar, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/components/Toast";
 import { useAuth } from "@/lib/auth";
-import { getAgents, getFranchises, type AgentSummary, type FranchiseSummary } from "@/lib/api";
-import { Bot, Building2, ExternalLink, ArrowRight, Search } from "lucide-react";
+import {
+  activateAgent,
+  inactivateAgent,
+  deleteGptMakerAgent,
+  getAgents,
+  getFranchises,
+  type AgentSummary,
+  type FranchiseSummary
+} from "@/lib/api";
+import { Bot, Building2, ExternalLink, ArrowRight, MoreVertical, Settings, PowerOff, Power, Trash2, Search } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 function statusFor(franchise: FranchiseSummary) {
   if (!franchise.workspaceId) {
@@ -19,6 +29,123 @@ function statusFor(franchise: FranchiseSummary) {
     return "SEM_AGENTE";
   }
   return franchise.status || "ATIVA";
+}
+
+function AgentMenu({ franchiseId, status, onRefresh }: { franchiseId: string; status: string; onRefresh: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<null | "inactivate" | "activate" | "delete">(null);
+  const ref = useRef<HTMLDivElement>(null);
+  const { error: showError, success: showSuccess } = useToast();
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const isActive = status === "ATIVA" || status === "ATIVO";
+
+  async function handleAction(action: string) {
+    try {
+      if (action === "inactivate") {
+        await inactivateAgent(franchiseId);
+        showSuccess("Agente inativado.");
+      } else if (action === "activate") {
+        await activateAgent(franchiseId);
+        showSuccess("Agente ativado.");
+      } else if (action === "delete") {
+        await deleteGptMakerAgent(franchiseId);
+        showSuccess("Agente removido.");
+      }
+      onRefresh();
+    } catch (err) {
+      showError(err instanceof Error ? err.message : "Erro ao executar acao.");
+    }
+    setConfirmAction(null);
+    setOpen(false);
+  }
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(!open)} className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <MoreVertical size={18} style={{ color: "var(--color-text-secondary)" }} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border bg-white shadow-lg dark:bg-slate-900" style={{ borderColor: "var(--color-border)" }}>
+          <Link href={`/franquias/${franchiseId}/agente/configuracao`} onClick={() => setOpen(false)} className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800" style={{ color: "var(--color-text-primary)" }}>
+            <Settings size={14} /> Editar configuracao
+          </Link>
+          {isActive ? (
+            <button type="button" onClick={() => setConfirmAction("inactivate")} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800" style={{ color: "var(--color-text-primary)" }}>
+              <PowerOff size={14} /> Inativar agente
+            </button>
+          ) : (
+            <button type="button" onClick={() => setConfirmAction("activate")} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800" style={{ color: "var(--color-text-primary)" }}>
+              <Power size={14} /> Ativar agente
+            </button>
+          )}
+          <button type="button" onClick={() => setConfirmAction("delete")} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+            <Trash2 size={14} /> Remover agente
+          </button>
+        </div>
+      )}
+
+      <ConfirmDialog
+        isOpen={confirmAction === "inactivate"}
+        title="Inativar agente"
+        description="O agente parara de responder nas conversas. Deseja continuar?"
+        confirmLabel="Inativar"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void handleAction("inactivate")}
+      />
+      <ConfirmDialog
+        isOpen={confirmAction === "activate"}
+        title="Ativar agente"
+        description="O agente voltara a responder nas conversas. Deseja continuar?"
+        confirmLabel="Ativar"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void handleAction("activate")}
+      />
+      <ConfirmDialog
+        isOpen={confirmAction === "delete"}
+        title="Remover agente"
+        description="Esta acao remove o agente permanentemente. Deseja continuar?"
+        confirmLabel="Remover"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => void handleAction("delete")}
+      />
+    </div>
+  );
+}
+
+function AgentListItem({ franchise, agent, onRefresh }: { franchise: FranchiseSummary; agent?: AgentSummary; onRefresh: () => void }) {
+  const status = statusFor(franchise);
+  const isActive = status === "ATIVA" || status === "ATIVO";
+
+  return (
+    <div className="card flex items-center gap-4 p-4">
+      <AssistantAvatar
+        src={agent?.avatar || buildGamifiedAvatarDataUri(franchise.name)}
+        alt={agent?.name ?? franchise.agentName ?? franchise.name}
+        fallbackLabel={franchise.name}
+        className="h-12 w-12 shrink-0"
+      />
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <p className="font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>
+            {agent?.name ?? franchise.agentName ?? franchise.name}
+          </p>
+          <StatusBadge status={isActive ? "ATIVA" : status === "INATIVA" ? "INATIVA" : status} />
+        </div>
+        <p className="text-sm truncate" style={{ color: "var(--color-text-secondary)" }}>
+          {franchise.name} — {franchise.city}/{franchise.state}
+        </p>
+      </div>
+      <AgentMenu franchiseId={franchise.id} status={status} onRefresh={onRefresh} />
+    </div>
+  );
 }
 
 function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: FranchiseSummary; agent?: AgentSummary; isSuperAdmin: boolean }) {
@@ -49,7 +176,7 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
           <Bot size={16} className="text-brand-600 dark:text-brand-400" />
           Agente
         </div>
-        <p className="mt-1">{agent?.name ?? franchise.agentName ?? "Não configurado"}</p>
+        <p className="mt-1">{agent?.name ?? franchise.agentName ?? "Nao configurado"}</p>
       </div>
 
       <div className="mt-4 flex items-center justify-between">
@@ -65,12 +192,6 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
         </Link>
       </div>
 
-      {!isSuperAdmin && franchise.status === "PENDENTE_CONFIGURACAO" && (
-        <p className="mt-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-400">
-          Aguardando configuração.
-        </p>
-      )}
-
       <div className="mt-4 flex flex-wrap gap-2">
         <Link
           href={franchise.agentId ? `/franquias/${franchise.id}/agente/configuracao` : `/franquias/${franchise.id}/agente/novo`}
@@ -79,10 +200,7 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
           {franchise.agentId ? "Abrir agente" : "Criar agente"}
         </Link>
         {franchise.agentId && (
-          <Link
-            href={`/franquias/${franchise.id}`}
-            className="btn-secondary py-2 px-4 text-xs"
-          >
+          <Link href={`/franquias/${franchise.id}`} className="btn-secondary py-2 px-4 text-xs">
             <ExternalLink size={14} />
             Franquia
           </Link>
@@ -98,6 +216,7 @@ export default function AgentsPage() {
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
   const [agents, setAgents] = useState<AgentSummary[]>([]);
   const [search, setSearch] = useState("");
+  const [refreshKey, setRefreshKey] = useState(0);
   const isSuperAdmin = user?.role === "SUPER_ADMIN";
 
   useEffect(() => {
@@ -114,7 +233,11 @@ export default function AgentsPage() {
           showError(agentResult.reason instanceof Error ? agentResult.reason.message : "Erro ao carregar agentes.");
         }
       });
-  }, [showError]);
+  }, [showError, refreshKey]);
+
+  function handleRefresh() {
+    setRefreshKey((k) => k + 1);
+  }
 
   const filteredFranchises = useMemo(() => {
     const list = isSuperAdmin
@@ -128,7 +251,7 @@ export default function AgentsPage() {
       f.name.toLowerCase().includes(query) ||
       f.city.toLowerCase().includes(query)
     );
-  }, [franchises, isSuperAdmin, user, search]);
+  }, [franchises, isSuperAdmin, user, search, refreshKey]);
 
   return (
     <AppShell>
@@ -152,26 +275,50 @@ export default function AgentsPage() {
         </div>
       )}
 
-      {filteredFranchises.length ? (
-        <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
-          {filteredFranchises.map((franchise) => {
-            const agent = agents.find((item) => item.franchiseId === franchise.id);
-            return (
-              <FranchiseCard
-                key={franchise.id}
-                franchise={franchise}
-                agent={agent}
-                isSuperAdmin={isSuperAdmin}
-              />
-            );
-          })}
-        </section>
+      {isSuperAdmin ? (
+        filteredFranchises.length ? (
+          <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 stagger-children">
+            {filteredFranchises.map((franchise) => {
+              const agent = agents.find((item) => item.franchiseId === franchise.id);
+              return (
+                <FranchiseCard
+                  key={franchise.id}
+                  franchise={franchise}
+                  agent={agent}
+                  isSuperAdmin={isSuperAdmin}
+                />
+              );
+            })}
+          </section>
+        ) : (
+          <EmptyState
+            icon={Bot}
+            title={search ? "Nenhuma franquia encontrada" : "Nenhum agente encontrado"}
+            description={search ? "Tente buscar com outros termos." : "Ainda nao ha dados para exibir."}
+          />
+        )
       ) : (
-        <EmptyState
-          icon={Bot}
-          title={search ? "Nenhuma franquia encontrada" : "Nenhum agente encontrado"}
-          description={search ? "Tente buscar com outros termos." : "Ainda não há dados para exibir."}
-        />
+        filteredFranchises.length ? (
+          <section className="space-y-3">
+            {filteredFranchises.map((franchise) => {
+              const agent = agents.find((item) => item.franchiseId === franchise.id);
+              return (
+                <AgentListItem
+                  key={franchise.id}
+                  franchise={franchise}
+                  agent={agent}
+                  onRefresh={handleRefresh}
+                />
+              );
+            })}
+          </section>
+        ) : (
+          <EmptyState
+            icon={Bot}
+            title="Nenhum agente encontrado"
+            description="Configure o agente da sua franquia para comecar."
+          />
+        )
       )}
     </AppShell>
   );

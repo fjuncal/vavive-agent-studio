@@ -607,6 +607,61 @@ class GptMakerClientTest {
         public ResponseEntity<String> createIdleAction(String agentId, Object action) {
             return ResponseEntity.ok("{\"success\":true}");
         }
+
+        @Override
+        public ResponseEntity<String> createIntentionRaw(String agentId, Object intention) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateTransferRule(String ruleId, Object rule) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteTransferRule(String ruleId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateIdleAction(String actionId, Object action) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteIdleAction(String actionId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateTraining(String trainingId, Object training) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateIntention(String intentionId, Object intention) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteIntention(String intentionId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> activateAgent(String agentId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> inactivateAgent(String agentId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteAgent(String agentId) {
+            return ResponseEntity.ok("{\"success\":true}");
+        }
     }
 
     private static FeignException feignException(int status, String body) {

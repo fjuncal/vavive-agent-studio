@@ -914,6 +914,30 @@ public class FranchiseService {
         }
     }
 
+    public Object createTraining(UUID franchiseId, Object training) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.sendTrainingObject(franchise.getAgentId(), training);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateTraining(UUID franchiseId, String trainingId, Object training) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateTraining(trainingId, training);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
     public Object deleteTraining(UUID franchiseId, String trainingId) {
         Franchise franchise = requireFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
@@ -921,6 +945,43 @@ public class FranchiseService {
         }
         try {
             gptMakerClient.deleteTraining(trainingId);
+            return java.util.Map.of("success", true);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object createIntention(UUID franchiseId, Object intention) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.createIntentionObject(franchise.getAgentId(), intention);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateIntention(UUID franchiseId, String intentionId, Object intention) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateIntention(intentionId, intention);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object deleteIntention(UUID franchiseId, String intentionId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            gptMakerClient.deleteIntention(intentionId);
             return java.util.Map.of("success", true);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
@@ -939,6 +1000,43 @@ public class FranchiseService {
         }
     }
 
+    public Object createTransferRule(UUID franchiseId, Object rule) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.createTransferRule(franchise.getAgentId(), rule);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateTransferRule(UUID franchiseId, String ruleId, Object rule) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateTransferRule(ruleId, rule);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object deleteTransferRule(UUID franchiseId, String ruleId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            gptMakerClient.deleteTransferRule(ruleId);
+            return java.util.Map.of("success", true);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
     public Object listIdleActions(UUID franchiseId) {
         Franchise franchise = requireFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
@@ -946,6 +1044,91 @@ public class FranchiseService {
         }
         try {
             return gptMakerClient.listIdleActions(franchise.getAgentId());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object createIdleAction(UUID franchiseId, Object action) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.createIdleAction(franchise.getAgentId(), action);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateIdleAction(UUID franchiseId, String actionId, Object action) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            return gptMakerClient.updateIdleAction(actionId, action);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object deleteIdleAction(UUID franchiseId, String actionId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            gptMakerClient.deleteIdleAction(actionId);
+            return java.util.Map.of("success", true);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object activateAgent(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            var result = gptMakerClient.activateAgent(franchise.getAgentId());
+            franchise.setStatus("ATIVA");
+            franchiseRepository.save(franchise);
+            return result;
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object inactivateAgent(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            var result = gptMakerClient.inactivateAgent(franchise.getAgentId());
+            franchise.setStatus("INATIVA");
+            franchiseRepository.save(franchise);
+            return result;
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object deleteAgent(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            gptMakerClient.deleteAgent(franchise.getAgentId());
+            franchise.setAgentId(null);
+            franchise.setAgentName(null);
+            franchise.setGptMakerLastSyncAt(null);
+            refreshStatus(franchise);
+            franchiseRepository.save(franchise);
+            return java.util.Map.of("success", true);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }

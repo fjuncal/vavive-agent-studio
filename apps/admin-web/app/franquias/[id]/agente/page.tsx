@@ -18,10 +18,10 @@ import {
   type FranchiseSummary,
   type GptMakerAgentOption
 } from "@/lib/api";
-import { Bot, ExternalLink, FileText, MessageSquare, Settings, Target } from "lucide-react";
+import { Bot, ExternalLink, FileText, MessageSquare, MoreVertical, Settings, Target, Trash2, PowerOff } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 
 const avatarOptions = [
   { label: "Atendimento", value: buildAssistantAvatarDataUri("#EEF2FF", "#4F46E5", "AT") },
@@ -29,6 +29,40 @@ const avatarOptions = [
   { label: "Suporte", value: buildAssistantAvatarDataUri("#FFF7ED", "#C2410C", "SU") },
   { label: "Sem avatar", value: "" }
 ];
+
+function AgentMenu({ onEdit, onInactivate, onRemove }: { onEdit: () => void; onInactivate: () => void; onRemove: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  return (
+    <div ref={ref} className="relative">
+      <button type="button" onClick={() => setOpen(!open)} className="rounded-lg p-2 hover:bg-gray-100 dark:hover:bg-gray-800">
+        <MoreVertical size={18} />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-10 z-50 w-48 rounded-xl border bg-white shadow-lg dark:bg-slate-900" style={{ borderColor: "var(--color-border)" }}>
+          <button type="button" onClick={() => { onEdit(); setOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800" style={{ color: "var(--color-text-primary)" }}>
+            <Settings size={14} /> Editar configuracao
+          </button>
+          <button type="button" onClick={() => { onInactivate(); setOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-slate-800" style={{ color: "var(--color-text-primary)" }}>
+            <PowerOff size={14} /> Inativar agente
+          </button>
+          <button type="button" onClick={() => { onRemove(); setOpen(false); }} className="flex w-full items-center gap-2 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20">
+            <Trash2 size={14} /> Remover agente
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function FranchiseAgentPage() {
   const params = useParams<{ id: string }>();
@@ -46,7 +80,7 @@ export default function FranchiseAgentPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [confirmAction, setConfirmAction] = useState<null | "replace-agent" | "clear-agent">(null);
+  const [confirmAction, setConfirmAction] = useState<null | "replace-agent" | "clear-agent" | "inactivate-agent">(null);
 
   useEffect(() => {
     if (!params?.id) {
@@ -200,8 +234,17 @@ export default function FranchiseAgentPage() {
                 <>
                   <div className="flex items-center gap-4 rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
                     <AssistantAvatar src={selectedAvatar || undefined} alt={agentName} fallbackLabel={agentName} className="h-16 w-16 object-cover ring-1 ring-line" />
-                    <div>
-                      <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{connection?.agentName ?? agentName}</p>
+                    <div className="flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{connection?.agentName ?? agentName}</p>
+                        {connection?.agentId && (
+                          <AgentMenu
+                            onEdit={() => window.location.href = `/franquias/${params?.id}/agente/configuracao`}
+                            onInactivate={() => setConfirmAction("inactivate-agent")}
+                            onRemove={() => setConfirmAction("clear-agent")}
+                          />
+                        )}
+                      </div>
                       <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
                         {connection?.agentId ? "Assistente ativo na unidade." : "Assistente ainda nao provisionado."}
                       </p>
@@ -345,6 +388,17 @@ export default function FranchiseAgentPage() {
         confirmLabel="Remover"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleClearAgent()}
+      />
+      <ConfirmDialog
+        isOpen={confirmAction === "inactivate-agent"}
+        title="Inativar assistente"
+        description="Esta acao inativa o assistente. Ele parara de responder nas conversas."
+        confirmLabel="Inativar"
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={() => {
+          setConfirmAction(null);
+          setSuccess("Agente inativado (funcionalidade em desenvolvimento).");
+        }}
       />
     </AppShell>
   );

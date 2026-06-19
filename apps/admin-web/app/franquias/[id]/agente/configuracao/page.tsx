@@ -3,24 +3,41 @@
 import { AppShell } from "@/components/AppShell";
 import { AssistantAvatar, buildAssistantAvatarDataUri, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
+import { IdleActionsSettings } from "@/components/IdleActionsSettings";
 import { OptionCards, RichTextarea, SelectField, ToggleField } from "@/components/FriendlyForm";
 import { PageHeader } from "@/components/PageHeader";
 import { TabConfig, type TabItem } from "@/components/TabConfig";
-import { useToast } from "@/components/Toast";
+import { Toast, useToast } from "@/components/Toast";
+import { TransferRulesSettings } from "@/components/TransferRulesSettings";
+import { WebhooksSettings } from "@/components/WebhooksSettings";
 import {
   clearFranchiseAgent,
   createGptMakerIntention,
+  createGptMakerTraining,
+  createIdleAction,
+  createTransferRule,
   customizeFranchiseAssistantBlock,
+  deleteGptMakerIntention,
+  deleteGptMakerTraining,
+  deleteIdleAction,
+  deleteTransferRule,
   getAgentSettings,
+  getAgentWebhooks,
   getFranchiseAssistantConfiguration,
   getFranchiseById,
   getFranchiseGptMakerConnection,
   getGptMakerIntentions,
   getGptMakerTrainings,
+  getIdleActions,
+  getTransferRules,
   provisionFranchiseGptMakerAgent,
   updateAgentSettings,
+  updateAgentWebhooks,
   updateFranchiseAssistantBlock,
+  updateIdleAction,
+  updateTransferRule,
   type FranchiseAssistantConfiguration,
   type FranchiseGptMakerConnection,
   type FranchiseSummary,
@@ -120,6 +137,9 @@ export default function AgentConfigPage() {
   const [settings, setSettings] = useState<Record<string, unknown>>({});
   const [trainings, setTrainings] = useState<Array<{ id?: string; title?: string; content?: string }>>([]);
   const [intentions, setIntentions] = useState<GptMakerIntention[]>([]);
+  const [idleActions, setIdleActions] = useState<Array<Record<string, unknown>>>([]);
+  const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
+  const [transferRules, setTransferRules] = useState<Array<Record<string, unknown>>>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
@@ -165,15 +185,32 @@ export default function AgentConfigPage() {
       getFranchiseAssistantConfiguration(params.id),
       getAgentSettings(params.id).catch(() => ({})),
       getGptMakerIntentions(params.id).catch(() => []),
-      getGptMakerTrainings(params.id).catch(() => [])
+      getGptMakerTrainings(params.id).catch(() => []),
+      getIdleActions(params.id).catch(() => ({ actions: [] })),
+      getAgentWebhooks(params.id).catch(() => ({})),
+      getTransferRules(params.id).catch(() => [])
     ])
-      .then(([franchiseData, connectionData, configurationData, settingsData, intentionsData, trainingsData]) => {
+      .then(([franchiseData, connectionData, configurationData, settingsData, intentionsData, trainingsData, idleActionsData, webhooksData, transferRulesData]) => {
         setFranchise(franchiseData);
         setConnection(connectionData);
         setConfiguration(configurationData);
         setSettings(settingsData);
-        setIntentions(intentionsData);
-        setTrainings(trainingsData as Array<{ id?: string; title?: string; content?: string }>);
+        setIntentions(Array.isArray(intentionsData) ? intentionsData : []);
+        // Map GPTMaker training format {id, type, text} to frontend format {id, title, content}
+        const trainingsArray = Array.isArray(trainingsData) ? trainingsData as Array<Record<string, unknown>> : [];
+        const mappedTrainings = trainingsArray.map((t) => ({
+          id: t.id as string | undefined,
+          title: (t.title as string) || (t.type as string) || "Treinamento",
+          content: (t.content as string) || (t.text as string) || "",
+        }));
+        setTrainings(mappedTrainings);
+        // Map idle actions
+        const idleActionsObj = idleActionsData as Record<string, unknown>;
+        setIdleActions(Array.isArray(idleActionsObj?.actions) ? idleActionsObj.actions as Array<Record<string, unknown>> : []);
+        // Map webhooks
+        setWebhooks(webhooksData as Record<string, unknown>);
+        // Map transfer rules
+        setTransferRules(Array.isArray(transferRulesData) ? transferRulesData as Array<Record<string, unknown>> : []);
         const settingsObject = settingsData as Record<string, unknown>;
         applyProfileDraft(configurationData, settingsObject, connectionData, franchiseData);
       })
@@ -275,15 +312,31 @@ export default function AgentConfigPage() {
     }
   }, [params?.id, settings, showError, showSuccess]);
 
-  const handleAddTraining = useCallback(() => {
-    if (!newTrainingTitle.trim() || !newTrainingContent.trim()) {
+  const handleAddTraining = useCallback(async () => {
+    if (!params?.id || !newTrainingContent.trim()) {
       return;
     }
-    setTrainings((current) => [...current, { title: newTrainingTitle, content: newTrainingContent }]);
-    setNewTrainingTitle("");
-    setNewTrainingContent("");
-    showSuccess("Treinamento adicionado na fila local.");
-  }, [newTrainingContent, newTrainingTitle, showSuccess]);
+    setIsSaving(true);
+    try {
+      const created = await createGptMakerTraining(params.id, {
+        type: "TEXT",
+        text: newTrainingContent
+      });
+      const createdRecord = created as Record<string, unknown>;
+      setTrainings((current) => [...current, {
+        id: createdRecord.id as string | undefined,
+        title: newTrainingTitle || (createdRecord.type as string) || "Treinamento",
+        content: newTrainingContent
+      }]);
+      setNewTrainingTitle("");
+      setNewTrainingContent("");
+      showSuccess("Treinamento criado com sucesso.");
+    } catch (requestError) {
+      showError(requestError instanceof Error ? requestError.message : "Nao foi possivel criar treinamento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [newTrainingContent, newTrainingTitle, params?.id, showError, showSuccess]);
 
   const handleAddIntention = useCallback(async () => {
     if (!params?.id || !newIntentionName.trim()) {
@@ -394,9 +447,29 @@ export default function AgentConfigPage() {
           {trainings.length ? (
             <div className="space-y-3">
               {trainings.map((training, index) => (
-                <div key={training.id ?? index} className="card p-4">
-                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{training.title || `Treinamento ${index + 1}`}</p>
-                  <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{training.content || ""}</p>
+                <div key={training.id ?? index} className="card p-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{training.title || `Treinamento ${index + 1}`}</p>
+                    <p className="mt-1 text-sm line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{training.content || ""}</p>
+                  </div>
+                  {training.id && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!params?.id) return;
+                        try {
+                          await deleteGptMakerTraining(params.id, training.id!);
+                          setTrainings((current) => current.filter((t) => t.id !== training.id));
+                          showSuccess("Treinamento removido.");
+                        } catch (err) {
+                          showError(err instanceof Error ? err.message : "Erro ao remover treinamento.");
+                        }
+                      }}
+                      className="text-sm text-red-500 hover:text-red-700 shrink-0"
+                    >
+                      Remover
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -404,10 +477,10 @@ export default function AgentConfigPage() {
             <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhum treinamento cadastrado.</p>
           )}
           <div className="card p-4 space-y-4">
-            <Field label="Titulo" value={newTrainingTitle} onChange={setNewTrainingTitle} placeholder="Ex: Servicos da unidade" disabled={Boolean(useStandardTrainings)} />
+            <Field label="Titulo (opcional)" value={newTrainingTitle} onChange={setNewTrainingTitle} placeholder="Ex: Servicos da unidade" disabled={Boolean(useStandardTrainings)} />
             <RichTextarea label="Conteudo" value={newTrainingContent} onChange={setNewTrainingContent} rows={4} placeholder="Conteudo do treinamento" disabled={Boolean(useStandardTrainings)} />
-            <button type="button" onClick={handleAddTraining} disabled={Boolean(useStandardTrainings) || !newTrainingTitle.trim() || !newTrainingContent.trim()} className="btn-secondary text-sm">
-              Adicionar treinamento
+            <button type="button" onClick={handleAddTraining} disabled={Boolean(useStandardTrainings) || !newTrainingContent.trim() || isSaving} className="btn-secondary text-sm">
+              {isSaving ? "Salvando..." : "Adicionar treinamento"}
             </button>
           </div>
         </div>
@@ -429,9 +502,27 @@ export default function AgentConfigPage() {
           {intentions.length ? (
             <div className="space-y-3">
               {intentions.map((intention) => (
-                <div key={intention.id} className="card p-4">
-                  <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{intention.description}</p>
-                  {intention.instructions ? <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{intention.instructions}</p> : null}
+                <div key={intention.id} className="card p-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{intention.description}</p>
+                    {intention.instructions ? <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{intention.instructions}</p> : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!params?.id) return;
+                      try {
+                        await deleteGptMakerIntention(params.id, intention.id);
+                        setIntentions((current) => current.filter((i) => i.id !== intention.id));
+                        showSuccess("Intencao removida.");
+                      } catch (err) {
+                        showError(err instanceof Error ? err.message : "Erro ao remover intencao.");
+                      }
+                    }}
+                    className="text-sm text-red-500 hover:text-red-700 shrink-0"
+                  >
+                    Remover
+                  </button>
                 </div>
               ))}
             </div>
@@ -456,40 +547,115 @@ export default function AgentConfigPage() {
       icon: <Settings size={16} />,
       content: (
         <div className="space-y-6">
-          <SelectField
-            label="Modelo"
-            value={String(settings.prefferModel ?? "GPT_4_O")}
-            onChange={(value) => setSettings((current) => ({ ...current, prefferModel: value }))}
-            options={[
-              { value: "GPT_4_O", label: "GPT-4o" },
-              { value: "GPT_4_O_MINI", label: "GPT-4o Mini" },
-              { value: "GPT_5", label: "GPT-5" },
-              { value: "CLAUDE_4_5_SONNET", label: "Claude 4.5 Sonnet" }
+          <TabConfig
+            tabs={[
+              {
+                id: "conversation",
+                label: "Conversa",
+                content: (
+                  <ConversationSettings
+                    settings={settings}
+                    onSave={async (newSettings) => {
+                      if (!params?.id) return;
+                      setIsSaving(true);
+                      try {
+                        await updateAgentSettings(params.id, newSettings);
+                        setSettings(newSettings);
+                        showSuccess("Configuracoes salvas.");
+                      } catch (err) {
+                        showError(err instanceof Error ? err.message : "Erro ao salvar configuracoes.");
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                    isSaving={isSaving}
+                  />
+                )
+              },
+              {
+                id: "idle-actions",
+                label: "Acoes de Inatividade",
+                badge: String(idleActions.length),
+                content: (
+                  <IdleActionsSettings
+                    actions={idleActions}
+                    onCreate={async (payload) => {
+                      if (!params?.id) return;
+                      const result = await createIdleAction(params.id, payload);
+                      setIdleActions((prev) => [...prev, result as Record<string, unknown>]);
+                      showSuccess("Acao criada.");
+                    }}
+                    onUpdate={async (actionId, payload) => {
+                      if (!params?.id) return;
+                      await updateIdleAction(params.id, actionId, payload);
+                      setIdleActions((prev) => prev.map((a) => a.id === actionId ? { ...a, ...payload } : a));
+                      showSuccess("Acao atualizada.");
+                    }}
+                    onDelete={async (actionId) => {
+                      if (!params?.id) return;
+                      await deleteIdleAction(params.id, actionId);
+                      setIdleActions((prev) => prev.filter((a) => a.id !== actionId));
+                      showSuccess("Acao removida.");
+                    }}
+                    isSaving={isSaving}
+                  />
+                )
+              },
+              {
+                id: "webhooks",
+                label: "Webhooks",
+                content: (
+                  <WebhooksSettings
+                    webhooks={webhooks}
+                    onSave={async (newWebhooks) => {
+                      if (!params?.id) return;
+                      setIsSaving(true);
+                      try {
+                        await updateAgentWebhooks(params.id, newWebhooks);
+                        setWebhooks(newWebhooks);
+                        showSuccess("Webhooks salvos.");
+                      } catch (err) {
+                        showError(err instanceof Error ? err.message : "Erro ao salvar webhooks.");
+                      } finally {
+                        setIsSaving(false);
+                      }
+                    }}
+                    isSaving={isSaving}
+                  />
+                )
+              },
+              {
+                id: "transfer-rules",
+                label: "Regras de Transferencia",
+                badge: String(transferRules.length),
+                content: (
+                  <TransferRulesSettings
+                    rules={transferRules}
+                    onCreate={async (payload) => {
+                      if (!params?.id) return;
+                      const result = await createTransferRule(params.id, payload);
+                      setTransferRules((prev) => [...prev, result as Record<string, unknown>]);
+                      showSuccess("Regra criada.");
+                    }}
+                    onUpdate={async (ruleId, payload) => {
+                      if (!params?.id) return;
+                      await updateTransferRule(params.id, ruleId, payload);
+                      setTransferRules((prev) => prev.map((r) => r.id === ruleId ? { ...r, ...payload } : r));
+                      showSuccess("Regra atualizada.");
+                    }}
+                    onDelete={async (ruleId) => {
+                      if (!params?.id) return;
+                      await deleteTransferRule(params.id, ruleId);
+                      setTransferRules((prev) => prev.filter((r) => r.id !== ruleId));
+                      showSuccess("Regra removida.");
+                    }}
+                    isSaving={isSaving}
+                  />
+                )
+              }
             ]}
+            defaultTab="conversation"
           />
-          <SelectField
-            label="Fuso horario"
-            value={String(settings.timezone ?? "America/Sao_Paulo")}
-            onChange={(value) => setSettings((current) => ({ ...current, timezone: value }))}
-            options={[
-              { value: "America/Sao_Paulo", label: "America/Sao_Paulo" },
-              { value: "America/Manaus", label: "America/Manaus" }
-            ]}
-          />
-          <div className="grid gap-3 md:grid-cols-2">
-            <ToggleField label="Transferencia humana" checked={Boolean(settings.enabledHumanTransfer)} onChange={(value) => setSettings((current) => ({ ...current, enabledHumanTransfer: value }))} />
-            <ToggleField label="Lembretes" checked={Boolean(settings.enabledReminder)} onChange={(value) => setSettings((current) => ({ ...current, enabledReminder: value }))} />
-            <ToggleField label="Separar mensagens" checked={Boolean(settings.splitMessages)} onChange={(value) => setSettings((current) => ({ ...current, splitMessages: value }))} />
-            <ToggleField label="Usar emojis" checked={Boolean(settings.enabledEmoji)} onChange={(value) => setSettings((current) => ({ ...current, enabledEmoji: value }))} />
-            <ToggleField label="Limitar assuntos" checked={Boolean(settings.limitSubjects)} onChange={(value) => setSettings((current) => ({ ...current, limitSubjects: value }))} />
-            <ToggleField label="Assinar mensagens" checked={Boolean(settings.signMessages)} onChange={(value) => setSettings((current) => ({ ...current, signMessages: value }))} />
-          </div>
-          <div className="flex justify-end">
-            <button type="button" onClick={handleSaveSettings} disabled={isSaving} className="btn-primary">
-              <Save size={16} />
-              {isSaving ? "Salvando..." : "Salvar configuracoes"}
-            </button>
-          </div>
         </div>
       )
     }
