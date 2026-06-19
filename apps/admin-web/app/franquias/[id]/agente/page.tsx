@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/AppShell";
 import { AssistantAvatar, buildAssistantAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { PageHeader } from "@/components/PageHeader";
 import {
   clearFranchiseAgent,
@@ -381,11 +382,11 @@ export default function FranchiseAgentPage() {
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleProvisionAgent(true)}
       />
-      <ConfirmDialog
+      <DeleteConfirmDialog
         isOpen={confirmAction === "clear-agent"}
-        title="Limpar assistente"
-        description="Esta acao remove o assistente atual da unidade."
-        confirmLabel="Remover"
+        title="Remover assistente"
+        description="Esta acao remove o assistente permanentemente do GPTMaker e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
+        confirmText="remover"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleClearAgent()}
       />

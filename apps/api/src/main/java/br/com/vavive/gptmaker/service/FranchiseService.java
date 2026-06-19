@@ -31,6 +31,8 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentReques
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerWorkspaceResponse;
 import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
+import br.com.vavive.gptmaker.repository.AgentIntentRepository;
+import br.com.vavive.gptmaker.repository.AgentRuleRepository;
 import br.com.vavive.gptmaker.repository.AgentConversationExampleRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
@@ -54,6 +56,8 @@ public class FranchiseService {
     private final FranchiseSetupRepository franchiseSetupRepository;
     private final GptMakerAgentRepository agentRepository;
     private final AgentTrainingRepository trainingRepository;
+    private final AgentIntentRepository intentRepository;
+    private final AgentRuleRepository ruleRepository;
     private final AgentConversationExampleRepository exampleRepository;
     private final TrainingGeneratorService trainingGeneratorService;
     private final SetupProgressService setupProgressService;
@@ -69,6 +73,8 @@ public class FranchiseService {
         FranchiseSetupRepository franchiseSetupRepository,
         GptMakerAgentRepository agentRepository,
         AgentTrainingRepository trainingRepository,
+        AgentIntentRepository intentRepository,
+        AgentRuleRepository ruleRepository,
         AgentConversationExampleRepository exampleRepository,
         TrainingGeneratorService trainingGeneratorService,
         SetupProgressService setupProgressService,
@@ -83,6 +89,8 @@ public class FranchiseService {
         this.franchiseSetupRepository = franchiseSetupRepository;
         this.agentRepository = agentRepository;
         this.trainingRepository = trainingRepository;
+        this.intentRepository = intentRepository;
+        this.ruleRepository = ruleRepository;
         this.exampleRepository = exampleRepository;
         this.trainingGeneratorService = trainingGeneratorService;
         this.setupProgressService = setupProgressService;
@@ -1095,6 +1103,12 @@ public class FranchiseService {
             var result = gptMakerClient.activateAgent(franchise.getAgentId());
             franchise.setStatus("ATIVA");
             franchiseRepository.save(franchise);
+            // Also update local agent status
+            agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                .ifPresent(agent -> {
+                    agent.setStatus("ATIVO");
+                    agentRepository.save(agent);
+                });
             return result;
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
@@ -1110,6 +1124,12 @@ public class FranchiseService {
             var result = gptMakerClient.inactivateAgent(franchise.getAgentId());
             franchise.setStatus("INATIVA");
             franchiseRepository.save(franchise);
+            // Also update local agent status
+            agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                .ifPresent(agent -> {
+                    agent.setStatus("INATIVO");
+                    agentRepository.save(agent);
+                });
             return result;
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
@@ -1121,17 +1141,28 @@ public class FranchiseService {
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
+        // Try to delete from GPTMaker, but don't fail if already gone
         try {
             gptMakerClient.deleteAgent(franchise.getAgentId());
-            franchise.setAgentId(null);
-            franchise.setAgentName(null);
-            franchise.setGptMakerLastSyncAt(null);
-            refreshStatus(franchise);
-            franchiseRepository.save(franchise);
-            return java.util.Map.of("success", true);
         } catch (GptMakerIntegrationException exception) {
-            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+            // Agent might already be deleted in GPTMaker, continue with local cleanup
         }
+        // Delete related entities first (trainings, intentions, rules, examples)
+        List<GptMakerAgent> agents = agentRepository.findByFranchiseId(franchise.getId());
+        for (GptMakerAgent agent : agents) {
+            trainingRepository.findByAgentIdOrderByCreatedAtDesc(agent.getId()).forEach(trainingRepository::delete);
+            intentRepository.findByAgentId(agent.getId()).forEach(intentRepository::delete);
+            ruleRepository.findByAgentId(agent.getId()).forEach(ruleRepository::delete);
+            exampleRepository.findByAgentIdOrderByCreatedAtDesc(agent.getId()).forEach(exampleRepository::delete);
+        }
+        // Now delete the agent entities
+        agents.forEach(agentRepository::delete);
+        franchise.setAgentId(null);
+        franchise.setAgentName(null);
+        franchise.setGptMakerLastSyncAt(null);
+        franchise.setStatus("SEM_AGENTE");
+        franchiseRepository.save(franchise);
+        return java.util.Map.of("success", true);
     }
 
     private Franchise requireFranchise(UUID id) {

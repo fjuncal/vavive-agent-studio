@@ -1454,11 +1454,15 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            var response = feignClient.createTraining(agentId, convertToTrainingRequest(training));
+            var request = convertToTrainingRequest(training);
+            log.info("Sending training to GPTMaker: agentId={} type={} textLen={}", agentId, request.type(), request.text() != null ? request.text().length() : 0);
+            var response = feignClient.createTraining(agentId, request);
+            log.info("GPTMaker training response: {}", response);
             return objectMapper.valueToTree(response);
         } catch (RetryableException exception) {
-            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel enviar o treinamento ao GPTMaker agora.", exception.getMessage());
         } catch (FeignException exception) {
+            log.error("GPTMaker training error: status={} body={}", exception.status(), exception.contentUTF8());
             throw mapFeignException(exception, "/v2/agent/" + agentId + "/trainings");
         }
     }
@@ -1555,7 +1559,7 @@ public class GptMakerClient {
             ResponseEntity<String> response = feignClient.activateAgent(agentId);
             return parseResponse(response, "/v2/agent/" + agentId + "/active");
         } catch (RetryableException exception) {
-            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel ativar o agente no GPTMaker agora.", exception.getMessage());
         } catch (FeignException exception) {
             throw mapFeignException(exception, "/v2/agent/" + agentId + "/active");
         }
@@ -1575,8 +1579,9 @@ public class GptMakerClient {
             ResponseEntity<String> response = feignClient.inactivateAgent(agentId);
             return parseResponse(response, "/v2/agent/" + agentId + "/inactive");
         } catch (RetryableException exception) {
-            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel inativar o agente no GPTMaker agora.", exception.getMessage());
         } catch (FeignException exception) {
+            log.error("GPTMaker inactivate error: status={} body={}", exception.status(), exception.contentUTF8());
             throw mapFeignException(exception, "/v2/agent/" + agentId + "/inactive");
         }
     }
@@ -1594,7 +1599,7 @@ public class GptMakerClient {
         try {
             feignClient.deleteAgent(agentId);
         } catch (RetryableException exception) {
-            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel remover o agente no GPTMaker agora.", exception.getMessage());
         } catch (FeignException exception) {
             throw mapFeignException(exception, "/v2/agent/" + agentId);
         }

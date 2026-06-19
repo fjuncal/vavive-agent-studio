@@ -3,6 +3,7 @@
 import { AppShell } from "@/components/AppShell";
 import { AssistantAvatar, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -108,11 +109,11 @@ function AgentMenu({ franchiseId, status, onRefresh }: { franchiseId: string; st
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleAction("activate")}
       />
-      <ConfirmDialog
+      <DeleteConfirmDialog
         isOpen={confirmAction === "delete"}
         title="Remover agente"
-        description="Esta acao remove o agente permanentemente. Deseja continuar?"
-        confirmLabel="Remover"
+        description="Esta acao remove o agente permanentemente do GPTMaker e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
+        confirmText="remover"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleAction("delete")}
       />
@@ -253,6 +254,18 @@ export default function AgentsPage() {
     );
   }, [franchises, isSuperAdmin, user, search, refreshKey]);
 
+  // For ADMIN_FRANQUIA, only show franchises with agents
+  const franchisesWithAgents = useMemo(() => {
+    if (isSuperAdmin) return filteredFranchises;
+    return filteredFranchises.filter((f) => f.agentId);
+  }, [filteredFranchises, isSuperAdmin]);
+
+  // For ADMIN_FRANQUIA, get the first franchise without agent for the "create" button
+  const franchiseWithoutAgent = useMemo(() => {
+    if (isSuperAdmin) return null;
+    return filteredFranchises.find((f) => !f.agentId);
+  }, [filteredFranchises, isSuperAdmin]);
+
   return (
     <AppShell>
       <PageHeader
@@ -298,9 +311,9 @@ export default function AgentsPage() {
           />
         )
       ) : (
-        filteredFranchises.length ? (
+        franchisesWithAgents.length ? (
           <section className="space-y-3">
-            {filteredFranchises.map((franchise) => {
+            {franchisesWithAgents.map((franchise) => {
               const agent = agents.find((item) => item.franchiseId === franchise.id);
               return (
                 <AgentListItem
@@ -315,8 +328,12 @@ export default function AgentsPage() {
         ) : (
           <EmptyState
             icon={Bot}
-            title="Nenhum agente encontrado"
-            description="Configure o agente da sua franquia para comecar."
+            title="Nenhum assistente configurado"
+            description="Crie seu primeiro assistente para comecar a atender seus clientes."
+            action={franchiseWithoutAgent ? {
+              label: "Criar meu assistente",
+              href: `/franquias/${franchiseWithoutAgent.id}/agente/novo`
+            } : undefined}
           />
         )
       )}
