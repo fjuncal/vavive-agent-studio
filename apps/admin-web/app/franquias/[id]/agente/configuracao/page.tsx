@@ -49,6 +49,34 @@ const communicationOptions = [
   { value: "RELAXED", label: "Relaxado", description: "Mais proximo e leve" }
 ];
 
+const communicationTypeValues = new Set(["FORMAL", "NORMAL", "RELAXED"]);
+const objectiveTypeValues = new Set(["SUPPORT", "SALE", "PERSONAL"]);
+
+function resolveProfileDraft(
+  configuration: FranchiseAssistantConfiguration | null,
+  settings: Record<string, unknown>,
+  connection: FranchiseGptMakerConnection | null,
+  franchise: FranchiseSummary | null
+) {
+  const rolePayload = configuration?.blocks.find((block) => block.blockType === "ROLE")?.payload ?? {};
+  const communicationType = typeof rolePayload.communicationType === "string" && communicationTypeValues.has(rolePayload.communicationType)
+    ? rolePayload.communicationType as "FORMAL" | "NORMAL" | "RELAXED"
+    : "NORMAL";
+  const objectiveType = typeof rolePayload.type === "string" && objectiveTypeValues.has(rolePayload.type)
+    ? rolePayload.type as "SUPPORT" | "SALE" | "PERSONAL"
+    : "SALE";
+
+  return {
+    agentName: connection?.agentName ?? franchise?.name ?? "",
+    selectedAvatar: typeof settings.avatar === "string" ? settings.avatar : "",
+    communicationType,
+    objectiveType,
+    useEmojis: Boolean(settings.enabledEmoji ?? settings.useEmojis),
+    signMessages: Boolean(settings.signMessages),
+    limitSubjects: Boolean(settings.limitSubjects)
+  };
+}
+
 function BlockNotice({
   title,
   active,
@@ -109,6 +137,22 @@ export default function AgentConfigPage() {
   const [newIntentionDescription, setNewIntentionDescription] = useState("");
   const [newIntentionInstructions, setNewIntentionInstructions] = useState("");
 
+  const applyProfileDraft = useCallback((
+    nextConfiguration: FranchiseAssistantConfiguration | null,
+    nextSettings: Record<string, unknown>,
+    nextConnection: FranchiseGptMakerConnection | null,
+    nextFranchise: FranchiseSummary | null
+  ) => {
+    const draft = resolveProfileDraft(nextConfiguration, nextSettings, nextConnection, nextFranchise);
+    setAgentName(draft.agentName);
+    setSelectedAvatar(draft.selectedAvatar);
+    setCommunicationType(draft.communicationType);
+    setObjectiveType(draft.objectiveType);
+    setUseEmojis(draft.useEmojis);
+    setSignMessages(draft.signMessages);
+    setLimitSubjects(draft.limitSubjects);
+  }, []);
+
   useEffect(() => {
     if (!params?.id) {
       return;
@@ -129,16 +173,12 @@ export default function AgentConfigPage() {
         setSettings(settingsData);
         setIntentions(intentionsData);
         setTrainings(trainingsData as Array<{ id?: string; title?: string; content?: string }>);
-        setAgentName(connectionData.agentName ?? franchiseData.name);
         const settingsObject = settingsData as Record<string, unknown>;
-        setSelectedAvatar(String(settingsObject.avatar ?? ""));
-        setUseEmojis(Boolean(settingsObject.enabledEmoji ?? settingsObject.useEmojis));
-        setSignMessages(Boolean(settingsObject.signMessages));
-        setLimitSubjects(Boolean(settingsObject.limitSubjects));
+        applyProfileDraft(configurationData, settingsObject, connectionData, franchiseData);
       })
       .catch((requestError) => showError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar configuracao do assistente."))
       .finally(() => setIsLoading(false));
-  }, [params?.id, showError]);
+  }, [applyProfileDraft, params?.id, showError]);
 
   const hasAgent = Boolean(connection?.agentId);
   const behaviorBlock = useMemo(() => configuration?.blocks.find((block) => block.blockType === "BEHAVIOR"), [configuration]);
@@ -148,7 +188,10 @@ export default function AgentConfigPage() {
   const useStandardTrainings = trainingsBlock?.mode === "STANDARD";
   const useStandardIntentions = intentionsBlock?.mode === "STANDARD";
 
-  const refreshBlockMode = useCallback(async (blockType: "TRAININGS" | "INTENTIONS", mode: "STANDARD" | "CUSTOM") => {
+  const refreshBlockMode = useCallback(async (
+    blockType: "BEHAVIOR" | "TRAININGS" | "INTENTIONS",
+    mode: "STANDARD" | "CUSTOM"
+  ) => {
     if (!params?.id) {
       return;
     }
@@ -156,8 +199,11 @@ export default function AgentConfigPage() {
       ? await customizeFranchiseAssistantBlock(params.id, blockType)
       : await updateFranchiseAssistantBlock(params.id, blockType, "STANDARD");
     setConfiguration(next);
+    if (blockType === "BEHAVIOR") {
+      applyProfileDraft(next, settings, connection, franchise);
+    }
     showSuccess(mode === "CUSTOM" ? "Bloco customizado para a unidade." : "Bloco voltou para o padrao da matriz.");
-  }, [params?.id, showSuccess]);
+  }, [applyProfileDraft, connection, franchise, params?.id, settings, showSuccess]);
 
   const handleSaveProfile = useCallback(async () => {
     if (!params?.id || !connection?.workspaceId) {
@@ -166,24 +212,49 @@ export default function AgentConfigPage() {
     }
     setIsSaving(true);
     try {
+      const profileDraft = useStandardPersonality
+        ? resolveProfileDraft(configuration, settings, connection, franchise)
+        : {
+            agentName,
+            selectedAvatar,
+            communicationType,
+            objectiveType
+          };
       const updated = await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
         workspaceName: connection.workspaceName ?? undefined,
-        agentName,
-        avatar: selectedAvatar || undefined,
-        communicationType,
-        type: objectiveType,
+        agentName: profileDraft.agentName,
+        avatar: profileDraft.selectedAvatar || undefined,
+        communicationType: profileDraft.communicationType,
+        type: profileDraft.objectiveType,
         confirmCriticalChange: true,
         jobName: franchise?.name ?? "Assistente Vavive"
       });
       setConnection(updated);
+      if (useStandardPersonality) {
+        applyProfileDraft(configuration, settings, updated, franchise);
+      }
       showSuccess("Perfil do assistente salvo com sucesso.");
     } catch (requestError) {
       showError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar o perfil.");
     } finally {
       setIsSaving(false);
     }
-  }, [agentName, communicationType, connection?.workspaceId, connection?.workspaceName, franchise?.name, objectiveType, params?.id, selectedAvatar, showError, showSuccess]);
+  }, [
+    agentName,
+    applyProfileDraft,
+    communicationType,
+    configuration,
+    connection,
+    franchise,
+    objectiveType,
+    params?.id,
+    selectedAvatar,
+    settings,
+    showError,
+    showSuccess,
+    useStandardPersonality
+  ]);
 
   const handleSaveSettings = useCallback(async () => {
     if (!params?.id) {
@@ -279,15 +350,21 @@ export default function AgentConfigPage() {
           <BlockNotice
             title="Personalidade"
             active={Boolean(useStandardPersonality)}
-            onCustomize={() => showSuccess("A unidade ja pode editar personalidade nesta tela.")}
-            onRestore={() => showSuccess("A unidade ja esta usando configuracao propria nesta tela.")}
+            onCustomize={() => void refreshBlockMode("BEHAVIOR", "CUSTOM")}
+            onRestore={() => void refreshBlockMode("BEHAVIOR", "STANDARD")}
           />
-          <OptionCards label="Tom de voz" value={communicationType} onChange={(value) => setCommunicationType(value as typeof communicationType)} options={communicationOptions} />
+          <OptionCards
+            label="Tom de voz"
+            value={communicationType}
+            onChange={(value) => setCommunicationType(value as typeof communicationType)}
+            options={communicationOptions}
+            disabled={Boolean(useStandardPersonality)}
+          />
           <div className="space-y-3">
             <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Comportamento</p>
-            <ToggleField label="Usar emojis" checked={useEmojis} onChange={setUseEmojis} />
-            <ToggleField label="Assinar mensagens" checked={signMessages} onChange={setSignMessages} />
-            <ToggleField label="Limitar assuntos" checked={limitSubjects} onChange={setLimitSubjects} />
+            <ToggleField label="Usar emojis" checked={useEmojis} onChange={setUseEmojis} disabled={Boolean(useStandardPersonality)} />
+            <ToggleField label="Assinar mensagens" checked={signMessages} onChange={setSignMessages} disabled={Boolean(useStandardPersonality)} />
+            <ToggleField label="Limitar assuntos" checked={limitSubjects} onChange={setLimitSubjects} disabled={Boolean(useStandardPersonality)} />
           </div>
         </div>
       )

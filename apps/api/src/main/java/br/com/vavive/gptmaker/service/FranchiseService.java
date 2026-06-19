@@ -439,6 +439,7 @@ public class FranchiseService {
         requireCriticalAgentConfirmation(franchise, request.agentName(), request.confirmCriticalChange());
 
         String context = vaviveDefaultContextService.buildForFranchise(franchise);
+        String behavior = resolveBehavior(context, request.jobDescription());
         String jobDescription = mergeJobDescription(context, request.jobDescription());
 
         GptMakerCreateAgentResponse createdAgent;
@@ -448,7 +449,7 @@ public class FranchiseService {
                 new GptMakerCreateAgentRequest(
                     request.agentName(),
                     request.avatar(),
-                    context,
+                    behavior,
                     request.communicationType(),
                     request.type(),
                     request.jobName(),
@@ -819,6 +820,13 @@ public class FranchiseService {
             return context;
         }
         return customJobDescription;
+    }
+
+    private String resolveBehavior(String context, String customJobDescription) {
+        if (customJobDescription != null && !customJobDescription.isBlank()) {
+            return context + "\n\nDescricao complementar da configuracao:\n" + customJobDescription;
+        }
+        return context;
     }
 
     private HttpStatus statusForGptMakerException(GptMakerIntegrationException exception) {
