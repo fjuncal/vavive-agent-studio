@@ -19,7 +19,7 @@ public record GptMakerCreateIntentRequest(
     List<GptMakerIntentVariable> variables,
     String requestBody
 ) {
-    public record GptMakerIntentField(String name, String jsonName, String description, boolean required) {
+    public record GptMakerIntentField(String name, String jsonName, String description, String type, boolean required) {
     }
 
     public record GptMakerIntentHeader(String name, String value) {

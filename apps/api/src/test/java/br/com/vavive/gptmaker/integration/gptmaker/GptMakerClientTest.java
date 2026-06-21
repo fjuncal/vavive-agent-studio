@@ -662,6 +662,16 @@ class GptMakerClientTest {
         public ResponseEntity<String> deleteAgent(String agentId) {
             return ResponseEntity.ok("{\"success\":true}");
         }
+
+        @Override
+        public ResponseEntity<String> updateAgent(String agentId, Object request) {
+            return ResponseEntity.ok("{\"id\":\"" + agentId + "\",\"success\":true}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateAssistant(String assistantId, Object request) {
+            return ResponseEntity.ok("{\"id\":\"" + assistantId + "\",\"success\":true}");
+        }
     }
 
     private static FeignException feignException(int status, String body) {

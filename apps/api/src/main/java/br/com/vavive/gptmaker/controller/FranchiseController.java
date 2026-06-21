@@ -256,6 +256,11 @@ public class FranchiseController {
         return franchiseService.updateAgentWebhooks(id, webhooks);
     }
 
+    @PutMapping("/franchises/{id}/gptmaker/agent")
+    public Object updateAgent(@PathVariable UUID id, @RequestBody Object request) {
+        return franchiseService.updateAgent(id, request);
+    }
+
     @GetMapping("/franchises/{id}/gptmaker/trainings")
     public Object listTrainings(@PathVariable UUID id) {
         return franchiseService.listTrainings(id);
@@ -346,8 +351,18 @@ public class FranchiseController {
         return franchiseService.inactivateAgent(id);
     }
 
+    @PutMapping("/franchises/{id}/gptmaker/agent/status")
+    public Object updateAgentStatus(@PathVariable UUID id, @RequestBody Object request) {
+        return franchiseService.updateAgentStatus(id, request);
+    }
+
     @DeleteMapping("/franchises/{id}/gptmaker/agent/delete")
     public Object deleteAgent(@PathVariable UUID id) {
         return franchiseService.deleteAgent(id);
+    }
+
+    @GetMapping("/franchises/{id}/gptmaker/agent/sync-status")
+    public Object syncAgentStatus(@PathVariable UUID id) {
+        return franchiseService.syncAgentStatus(id);
     }
 }

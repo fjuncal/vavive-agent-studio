@@ -1,18 +1,19 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { AssistantAvatar, buildAssistantAvatarDataUri, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
 import { IdleActionsSettings } from "@/components/IdleActionsSettings";
 import { OptionCards, RichTextarea, SelectField, ToggleField } from "@/components/FriendlyForm";
 import { PageHeader } from "@/components/PageHeader";
+import { StatusDropdown } from "@/components/StatusDropdown";
 import { TabConfig, type TabItem } from "@/components/TabConfig";
-import { Toast, useToast } from "@/components/Toast";
+import { useToast } from "@/components/Toast";
 import { TransferRulesSettings } from "@/components/TransferRulesSettings";
 import { WebhooksSettings } from "@/components/WebhooksSettings";
 import {
+  activateAgent,
   clearFranchiseAgent,
   createGptMakerIntention,
   createGptMakerTraining,
@@ -32,7 +33,8 @@ import {
   getGptMakerTrainings,
   getIdleActions,
   getTransferRules,
-  provisionFranchiseGptMakerAgent,
+  inactivateAgent,
+  updateGptMakerAgent,
   updateAgentSettings,
   updateAgentWebhooks,
   updateFranchiseAssistantBlock,
@@ -41,19 +43,12 @@ import {
   type FranchiseAssistantConfiguration,
   type FranchiseGptMakerConnection,
   type FranchiseSummary,
-  type GptMakerIntention
+  type GptMakerIntention,
+  type AgentSyncStatus,
 } from "@/lib/api";
 import { BookOpen, Bot, Plus, Save, Settings, Sparkles, Target } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-
-const avatarOptions = [
-  { label: "Aleatorio", value: "random-gamified", description: "Avatar gamificado aleatorio" },
-  { label: "Atendimento", value: buildAssistantAvatarDataUri("#EEF2FF", "#4F46E5", "AT"), description: "Visual neutro" },
-  { label: "Comercial", value: buildAssistantAvatarDataUri("#ECFDF5", "#047857", "CO"), description: "Foco em vendas" },
-  { label: "Suporte", value: buildAssistantAvatarDataUri("#FFF7ED", "#C2410C", "SU"), description: "Foco em apoio" },
-  { label: "Sem avatar", value: "", description: "Usar fallback local" }
-];
 
 const objectiveOptions = [
   { value: "SALE", label: "Vendas", description: "Conduzir fechamento" },
@@ -77,18 +72,20 @@ function resolveProfileDraft(
   franchise: FranchiseSummary | null
 ) {
   const rolePayload = configuration?.blocks.find((block) => block.blockType === "ROLE")?.payload ?? {};
+  const behaviorPayload = configuration?.blocks.find((block) => block.blockType === "BEHAVIOR")?.payload ?? {};
   const communicationType = typeof rolePayload.communicationType === "string" && communicationTypeValues.has(rolePayload.communicationType)
     ? rolePayload.communicationType as "FORMAL" | "NORMAL" | "RELAXED"
     : "NORMAL";
   const objectiveType = typeof rolePayload.type === "string" && objectiveTypeValues.has(rolePayload.type)
     ? rolePayload.type as "SUPPORT" | "SALE" | "PERSONAL"
     : "SALE";
+  const behavior = typeof behaviorPayload.instruction === "string" ? behaviorPayload.instruction : "";
 
   return {
     agentName: connection?.agentName ?? franchise?.name ?? "",
-    selectedAvatar: typeof settings.avatar === "string" ? settings.avatar : "",
     communicationType,
     objectiveType,
+    behavior,
     useEmojis: Boolean(settings.enabledEmoji ?? settings.useEmojis),
     signMessages: Boolean(settings.signMessages),
     limitSubjects: Boolean(settings.limitSubjects)
@@ -140,14 +137,15 @@ export default function AgentConfigPage() {
   const [idleActions, setIdleActions] = useState<Array<Record<string, unknown>>>([]);
   const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
   const [transferRules, setTransferRules] = useState<Array<Record<string, unknown>>>([]);
+  const [syncStatus, setSyncStatus] = useState<AgentSyncStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   const [agentName, setAgentName] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [communicationType, setCommunicationType] = useState<"FORMAL" | "NORMAL" | "RELAXED">("NORMAL");
   const [objectiveType, setObjectiveType] = useState<"SUPPORT" | "SALE" | "PERSONAL">("SALE");
+  const [behavior, setBehavior] = useState("");
   const [useEmojis, setUseEmojis] = useState(false);
   const [signMessages, setSignMessages] = useState(false);
   const [limitSubjects, setLimitSubjects] = useState(false);
@@ -166,9 +164,9 @@ export default function AgentConfigPage() {
   ) => {
     const draft = resolveProfileDraft(nextConfiguration, nextSettings, nextConnection, nextFranchise);
     setAgentName(draft.agentName);
-    setSelectedAvatar(draft.selectedAvatar);
     setCommunicationType(draft.communicationType);
     setObjectiveType(draft.objectiveType);
+    setBehavior(draft.behavior);
     setUseEmojis(draft.useEmojis);
     setSignMessages(draft.signMessages);
     setLimitSubjects(draft.limitSubjects);
@@ -188,7 +186,7 @@ export default function AgentConfigPage() {
       getGptMakerTrainings(params.id).catch(() => []),
       getIdleActions(params.id).catch(() => ({ actions: [] })),
       getAgentWebhooks(params.id).catch(() => ({})),
-      getTransferRules(params.id).catch(() => [])
+      getTransferRules(params.id).catch(() => []),
     ])
       .then(([franchiseData, connectionData, configurationData, settingsData, intentionsData, trainingsData, idleActionsData, webhooksData, transferRulesData]) => {
         setFranchise(franchiseData);
@@ -211,6 +209,12 @@ export default function AgentConfigPage() {
         setWebhooks(webhooksData as Record<string, unknown>);
         // Map transfer rules
         setTransferRules(Array.isArray(transferRulesData) ? transferRulesData as Array<Record<string, unknown>> : []);
+        setSyncStatus({
+          status: connectionData.status || franchiseData.status || "ATIVA",
+          agentId: connectionData.agentId ?? null,
+          agentName: connectionData.agentName ?? null,
+          syncedAt: connectionData.lastSyncAt ?? undefined,
+        });
         const settingsObject = settingsData as Record<string, unknown>;
         applyProfileDraft(configurationData, settingsObject, connectionData, franchiseData);
       })
@@ -219,6 +223,7 @@ export default function AgentConfigPage() {
   }, [applyProfileDraft, params?.id, showError]);
 
   const hasAgent = Boolean(connection?.agentId);
+  const agentStatus = syncStatus?.status || connection?.status || franchise?.status || "ATIVA";
   const behaviorBlock = useMemo(() => configuration?.blocks.find((block) => block.blockType === "BEHAVIOR"), [configuration]);
   const trainingsBlock = useMemo(() => configuration?.blocks.find((block) => block.blockType === "TRAININGS"), [configuration]);
   const intentionsBlock = useMemo(() => configuration?.blocks.find((block) => block.blockType === "INTENTIONS"), [configuration]);
@@ -244,8 +249,7 @@ export default function AgentConfigPage() {
   }, [applyProfileDraft, connection, franchise, params?.id, settings, showSuccess]);
 
   const handleSaveProfile = useCallback(async () => {
-    if (!params?.id || !connection?.workspaceId) {
-      showError("Workspace nao vinculado. Vincule a unidade primeiro.");
+    if (!params?.id) {
       return;
     }
     setIsSaving(true);
@@ -254,26 +258,24 @@ export default function AgentConfigPage() {
         ? resolveProfileDraft(configuration, settings, connection, franchise)
         : {
             agentName,
-            selectedAvatar,
             communicationType,
-            objectiveType
+            objectiveType,
+            behavior
           };
-      const resolvedAvatar = profileDraft.selectedAvatar === "random-gamified"
-        ? buildGamifiedAvatarDataUri(profileDraft.agentName || "bot")
-        : profileDraft.selectedAvatar || undefined;
-      const updated = await provisionFranchiseGptMakerAgent(params.id, {
-        workspaceId: connection.workspaceId,
-        workspaceName: connection.workspaceName ?? undefined,
-        agentName: profileDraft.agentName,
-        avatar: resolvedAvatar,
+
+      // Use updateAgent instead of provisionAgent to avoid creating a new agent
+      await updateGptMakerAgent(params.id, {
+        name: profileDraft.agentName,
         communicationType: profileDraft.communicationType,
         type: profileDraft.objectiveType,
-        confirmCriticalChange: true,
+        behavior: profileDraft.behavior,
         jobName: franchise?.name ?? "Assistente Vavive"
       });
-      setConnection(updated);
+
+      // Update local state
+      setConnection((prev) => prev ? { ...prev, agentName: profileDraft.agentName } : null);
       if (useStandardPersonality) {
-        applyProfileDraft(configuration, settings, updated, franchise);
+        applyProfileDraft(configuration, settings, connection, franchise);
       }
       showSuccess("Perfil do assistente salvo com sucesso.");
     } catch (requestError) {
@@ -284,13 +286,13 @@ export default function AgentConfigPage() {
   }, [
     agentName,
     applyProfileDraft,
+    behavior,
     communicationType,
     configuration,
     connection,
     franchise,
     objectiveType,
     params?.id,
-    selectedAvatar,
     settings,
     showError,
     showSuccess,
@@ -369,31 +371,52 @@ export default function AgentConfigPage() {
       content: (
         <div className="space-y-6">
           <Field label="Nome do assistente" value={agentName} onChange={setAgentName} required />
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {avatarOptions.map((option) => (
-              <button
-                key={option.label}
-                type="button"
-                onClick={() => setSelectedAvatar(option.value)}
-                className={`rounded-2xl border p-3 text-left transition ${selectedAvatar === option.value ? "border-brand-500 bg-brand-50 ring-4 ring-brand-50" : "border-line bg-white hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800"}`}
-              >
-                {option.value ? (
-                  <AssistantAvatar
-                    src={option.value === "random-gamified" ? buildGamifiedAvatarDataUri(agentName || "bot") : option.value}
-                    alt={option.label}
-                    fallbackLabel={option.label}
-                    className="h-16 w-16 object-cover ring-1 ring-line"
-                  />
-                ) : (
-                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-100 text-xs font-semibold dark:bg-slate-800" style={{ color: "var(--color-text-secondary)" }}>
-                    Sem foto
-                  </div>
-                )}
-                <span className="mt-3 block text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{option.label}</span>
-              </button>
-            ))}
-          </div>
+          <OptionCards
+            label="Comunicacao"
+            description="Como o assistente se comunica"
+            value={communicationType}
+            onChange={(value) => setCommunicationType(value as typeof communicationType)}
+            options={communicationOptions}
+          />
           <OptionCards label="Objetivo" value={objectiveType} onChange={(value) => setObjectiveType(value as typeof objectiveType)} options={objectiveOptions} />
+          <RichTextarea
+            label="Comportamento"
+            placeholder="Descreva como o agente deve se comportar durante a conversa..."
+            value={behavior}
+            onChange={setBehavior}
+            rows={5}
+          />
+          <div className="space-y-2">
+            <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Status do agente</p>
+            <StatusDropdown
+              currentStatus={agentStatus}
+              onChange={async (newStatus) => {
+                if (!params?.id) return;
+                setIsSaving(true);
+                            try {
+                              let nextStatus = newStatus;
+                              if (newStatus === "ATIVA") {
+                                await activateAgent(params.id);
+                              } else if (newStatus === "INATIVA") {
+                                await inactivateAgent(params.id);
+                              }
+                              // TRAINING is intentionally disabled for now. GPTMaker rejects this update with the current token/API contract.
+                              setSyncStatus((prev) => ({
+                                status: nextStatus,
+                                agentId: prev?.agentId ?? connection?.agentId ?? null,
+                                agentName: prev?.agentName ?? connection?.agentName ?? null,
+                                syncedAt: new Date().toISOString(),
+                              }));
+                              showSuccess(`Status alterado para ${newStatus === "ATIVA" ? "Ativo" : newStatus === "TRAINING" ? "Treinamento" : "Desativado"}.`);
+                            } catch (e) {
+                              showError(e instanceof Error ? e.message : "Nao foi possivel alterar o status do agente.");
+                            } finally {
+                              setIsSaving(false);
+                            }
+                          }}
+              disabled={isSaving}
+            />
+          </div>
           <div className="flex justify-end">
             <button type="button" onClick={handleSaveProfile} disabled={isSaving} className="btn-primary">
               <Save size={16} />

@@ -279,13 +279,22 @@ export function BlockEditor({
         return (
           <ItemListEditor
             label="Treinamentos padrao"
-            description="Cada item vira uma base de conhecimento inicial."
+            description="Cada item vira uma base de conhecimento inicial. Suporta TEXT, WEBSITE, VIDEO, DOCUMENT."
             items={asItems(draft.items)}
             onChange={updateItems}
-            factory={() => ({ title: "", content: "" })}
+            factory={() => ({ type: "TEXT", text: "", title: "", content: "" })}
             fields={[
+              { key: "type", label: "Tipo (TEXT, WEBSITE, VIDEO, DOCUMENT)", placeholder: "TEXT" },
               { key: "title", label: "Titulo", placeholder: "Ex: Servicos da unidade" },
-              { key: "content", label: "Conteudo", textarea: true, rows: 4, placeholder: "Descreva o treinamento." }
+              { key: "text", label: "Texto (para TEXT)", textarea: true, rows: 4, placeholder: "Conteudo do treinamento de texto." },
+              { key: "content", label: "Conteudo (alternativo)", textarea: true, rows: 3, placeholder: "Conteudo alternativo." },
+              { key: "website", label: "URL do website (para WEBSITE)", placeholder: "https://exemplo.com" },
+              { key: "trainingSubPages", label: "Sub-paginas (DISABLED/ACTIVE)", placeholder: "DISABLED" },
+              { key: "trainingInterval", label: "Intervalo atualizacao", placeholder: "ONE_WEEK" },
+              { key: "video", label: "URL do video (para VIDEO)", placeholder: "https://youtube.com/watch?v=..." },
+              { key: "documentUrl", label: "URL do documento (para DOCUMENT)", placeholder: "https://storage.exemplo.com/doc.pdf" },
+              { key: "documentName", label: "Nome do documento", placeholder: "documento.pdf" },
+              { key: "documentMimetype", label: "MIME type", placeholder: "application/pdf" },
             ]}
             readOnly={disabled}
           />
@@ -294,14 +303,32 @@ export function BlockEditor({
         return (
           <ItemListEditor
             label="Intencoes padrao"
-            description="Configure gatilhos padrao para a unidade."
+            description="Configure gatilhos padrao para a unidade. Type: WEBHOOK ou INSTRUCTIONS."
             items={asItems(draft.items)}
             onChange={updateItems}
-            factory={() => ({ name: "", description: "", instructions: "" })}
+            factory={() => ({
+              description: "",
+              instructions: "",
+              details: "",
+              type: "WEBHOOK",
+              httpMethod: "POST",
+              url: "",
+              headers: [],
+              params: [],
+              requestBody: "",
+              fields: [],
+              variables: [],
+              autoGenerateParams: false,
+              autoGenerateBody: false,
+            })}
             fields={[
-              { key: "name", label: "Nome tecnico", placeholder: "Ex: agendar-visita" },
-              { key: "description", label: "Descricao", placeholder: "Quando esta intencao deve ser usada" },
-              { key: "instructions", label: "Instrucoes", textarea: true, rows: 4, placeholder: "O que o assistente deve fazer" }
+              { key: "description", label: "Nome / Descricao", placeholder: "Ex: emitir-segunda-via" },
+              { key: "instructions", label: "Quando usar", placeholder: "Quando o cliente pedir segunda via" },
+              { key: "details", label: "Detalhes / Instrucoes de saida", textarea: true, rows: 3, placeholder: "Instrucoes de como interpretar a resposta" },
+              { key: "type", label: "Tipo (WEBHOOK/INSTRUCTIONS)", placeholder: "WEBHOOK" },
+              { key: "httpMethod", label: "Metodo HTTP (GET/POST/PUT/DELETE)", placeholder: "POST" },
+              { key: "url", label: "URL do webhook", placeholder: "https://api.exemplo.com/webhook" },
+              { key: "requestBody", label: "Body JSON (opcional)", textarea: true, rows: 3, placeholder: '{"key": "value"}' },
             ]}
             readOnly={disabled}
           />

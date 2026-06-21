@@ -12,6 +12,7 @@ public record ProvisionFranchiseGptMakerAgentRequest(
     Boolean confirmCriticalChange,
     String jobName,
     String jobSite,
-    String jobDescription
+    String jobDescription,
+    String behavior
 ) {
 }

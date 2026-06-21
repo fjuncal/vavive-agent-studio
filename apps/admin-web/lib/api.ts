@@ -277,6 +277,7 @@ export type ProvisionFranchiseGptMakerAgentPayload = {
   jobName?: string;
   jobSite?: string;
   jobDescription?: string;
+  behavior?: string;
 };
 
 export type DefaultAgentTextCategory =
@@ -611,7 +612,7 @@ export function getAgentTrainings(id: string) {
   return apiFetch<TrainingSummary[]>(`/agents/${id}/trainings`);
 }
 
-export function createAgentTraining(id: string, payload: { title: string; content: string }) {
+export function createAgentTraining(id: string, payload: Record<string, unknown>) {
   return apiFetch<TrainingSummary>(`/agents/${id}/trainings`, {
     method: "POST",
     body: JSON.stringify(payload)
@@ -640,6 +641,13 @@ export function getFranchiseDefaultContext(id: string) {
 export function provisionFranchiseGptMakerAgent(id: string, payload: ProvisionFranchiseGptMakerAgentPayload) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker/agent`, {
     method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateGptMakerAgent(id: string, payload: Record<string, unknown>) {
+  return apiFetch<Record<string, unknown>>(`/franchises/${id}/gptmaker/agent`, {
+    method: "PUT",
     body: JSON.stringify(payload)
   });
 }
@@ -874,13 +882,22 @@ export type GptMakerIntention = {
   instructions: string;
   details?: string;
   active: boolean;
+  httpMethod?: string;
+  url?: string;
+  headers?: { name: string; value: string }[];
+  params?: { name: string; value: string }[];
+  variables?: { valueExpression: string; defaultFieldKey?: string; customField?: Record<string, unknown> }[];
+  fields?: { name: string; jsonName: string; description: string; type: string; required: boolean }[];
+  requestBody?: string;
+  autoGenerateParams?: boolean;
+  autoGenerateBody?: boolean;
 };
 
 export function getGptMakerIntentions(franchiseId: string) {
   return apiFetch<GptMakerIntention[]>(`/franchises/${franchiseId}/gptmaker/intentions`);
 }
 
-export function createGptMakerIntention(franchiseId: string, payload: { name: string; description: string; instructions: string }) {
+export function createGptMakerIntention(franchiseId: string, payload: Record<string, unknown>) {
   return apiFetch<GptMakerIntention>(`/franchises/${franchiseId}/gptmaker/intentions`, {
     method: "POST",
     body: JSON.stringify(payload)
@@ -897,10 +914,10 @@ export function getGptMakerTrainings(franchiseId: string) {
   return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/trainings`);
 }
 
-export function createGptMakerTraining(franchiseId: string, payload: { type?: string; text: string }) {
+export function createGptMakerTraining(franchiseId: string, payload: Record<string, unknown>) {
   return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/trainings`, {
     method: "POST",
-    body: JSON.stringify({ type: payload.type || "TEXT", text: payload.text })
+    body: JSON.stringify(payload)
   });
 }
 
@@ -984,10 +1001,29 @@ export function inactivateAgent(franchiseId: string) {
   });
 }
 
+export function updateGptMakerAgentStatus(franchiseId: string, status: "ATIVA" | "INATIVA" | "TRAINING") {
+  return apiFetch<AgentSyncStatus>(`/franchises/${franchiseId}/gptmaker/agent/status`, {
+    method: "PUT",
+    body: JSON.stringify({ status })
+  });
+}
+
 export function deleteGptMakerAgent(franchiseId: string) {
   return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/gptmaker/agent/delete`, {
     method: "DELETE"
   });
+}
+
+export type AgentSyncStatus = {
+  status: string;
+  agentId?: string | null;
+  agentName?: string | null;
+  syncedAt?: string | null;
+  message?: string | null;
+};
+
+export function syncAgentStatus(franchiseId: string) {
+  return apiFetch<AgentSyncStatus>(`/franchises/${franchiseId}/gptmaker/agent/sync-status`);
 }
 
 export function createFranchiseChannel(franchiseId: string, name: string, type: string) {

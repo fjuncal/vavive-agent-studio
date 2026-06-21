@@ -1,7 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { AssistantAvatar, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
+import { AssistantAvatar } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
@@ -21,6 +21,19 @@ import {
 import { Bot, Building2, ExternalLink, ArrowRight, MoreVertical, Settings, PowerOff, Power, Trash2, Search } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState, useRef } from "react";
+
+function hashCode(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
+
+function getMultiAvatarUrl(seed: string): string {
+  const hash = hashCode(seed);
+  return `https://api.multiavatar.com/${hash}.svg`;
+}
 
 function statusFor(franchise: FranchiseSummary) {
   if (!franchise.workspaceId) {
@@ -123,22 +136,47 @@ function AgentMenu({ franchiseId, status, onRefresh }: { franchiseId: string; st
 
 function AgentListItem({ franchise, agent, onRefresh }: { franchise: FranchiseSummary; agent?: AgentSummary; onRefresh: () => void }) {
   const status = statusFor(franchise);
-  const isActive = status === "ATIVA" || status === "ATIVO";
+  const statusConfig = (() => {
+    switch (status) {
+      case "ATIVA":
+      case "ATIVO":
+      case "ACTIVE":
+        return { label: "Ativo", color: "#22C55E" };
+      case "EM_TREINAMENTO":
+      case "TRAINING":
+        return { label: "Em treinamento", color: "#EAB308" };
+      case "INATIVA":
+      case "INATIVO":
+      case "INACTIVE":
+        return { label: "Desativado", color: "#EF4444" };
+      default:
+        return { label: status, color: "#6B7280" };
+    }
+  })();
 
   return (
     <div className="card flex items-center gap-4 p-4">
-      <AssistantAvatar
-        src={agent?.avatar || buildGamifiedAvatarDataUri(franchise.name)}
-        alt={agent?.name ?? franchise.agentName ?? franchise.name}
-        fallbackLabel={franchise.name}
-        className="h-12 w-12 shrink-0"
-      />
+      <div className="relative shrink-0">
+        <AssistantAvatar
+          src={agent?.avatar || getMultiAvatarUrl(franchise.name)}
+          alt={agent?.name ?? franchise.agentName ?? franchise.name}
+          fallbackLabel={franchise.name}
+          className="h-12 w-12"
+        />
+        <div
+          className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2"
+          style={{ backgroundColor: statusConfig.color, borderColor: "var(--color-bg-primary)" }}
+        />
+      </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="font-semibold truncate" style={{ color: "var(--color-text-primary)" }}>
             {agent?.name ?? franchise.agentName ?? franchise.name}
           </p>
-          <StatusBadge status={isActive ? "ATIVA" : status === "INATIVA" ? "INATIVA" : status} />
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusConfig.color }} />
+            <span className="text-xs font-medium" style={{ color: statusConfig.color }}>{statusConfig.label}</span>
+          </div>
         </div>
         <p className="text-sm truncate" style={{ color: "var(--color-text-secondary)" }}>
           {franchise.name} — {franchise.city}/{franchise.state}
@@ -152,21 +190,48 @@ function AgentListItem({ franchise, agent, onRefresh }: { franchise: FranchiseSu
 function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: FranchiseSummary; agent?: AgentSummary; isSuperAdmin: boolean }) {
   const status = statusFor(franchise);
   const agentCount = agent ? 1 : 0;
+  const statusConfig = (() => {
+    switch (status) {
+      case "ATIVA":
+      case "ATIVO":
+      case "ACTIVE":
+        return { label: "Ativo", color: "#22C55E" };
+      case "EM_TREINAMENTO":
+      case "TRAINING":
+        return { label: "Em treinamento", color: "#EAB308" };
+      case "INATIVA":
+      case "INATIVO":
+      case "INACTIVE":
+        return { label: "Desativado", color: "#EF4444" };
+      default:
+        return { label: status, color: "#6B7280" };
+    }
+  })();
 
   return (
     <article className="card-interactive group">
       <div className="flex items-start justify-between gap-4">
         <div className="flex gap-3">
-          {agent?.avatar ? (
-            <img src={agent.avatar} alt={agent.name} className="h-12 w-12 rounded-2xl object-cover ring-1" style={{ borderColor: "var(--color-border)" }} />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400 transition-transform duration-200 group-hover:scale-110">
-              <Building2 size={22} />
-            </div>
-          )}
+          <div className="relative">
+            {agent?.avatar ? (
+              <img src={agent.avatar} alt={agent.name} className="h-12 w-12 rounded-2xl object-cover ring-1" style={{ borderColor: "var(--color-border)" }} />
+            ) : (
+              <img src={getMultiAvatarUrl(franchise.name)} alt={franchise.name} className="h-12 w-12 rounded-2xl object-cover ring-1" style={{ borderColor: "var(--color-border)" }} />
+            )}
+            <div
+              className="absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full border-2"
+              style={{ backgroundColor: statusConfig.color, borderColor: "var(--color-bg-primary)" }}
+            />
+          </div>
           <div>
             <h2 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{franchise.name}</h2>
-            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{franchise.city} / {franchise.state}</p>
+            <div className="flex items-center gap-2 mt-1">
+              <div className="flex items-center gap-1.5">
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusConfig.color }} />
+                <span className="text-xs font-medium" style={{ color: statusConfig.color }}>{statusConfig.label}</span>
+              </div>
+              <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>{franchise.city} / {franchise.state}</span>
+            </div>
           </div>
         </div>
         <StatusBadge status={status} />
@@ -177,7 +242,15 @@ function FranchiseCard({ franchise, agent, isSuperAdmin }: { franchise: Franchis
           <Bot size={16} className="text-brand-600 dark:text-brand-400" />
           Agente
         </div>
-        <p className="mt-1">{agent?.name ?? franchise.agentName ?? "Nao configurado"}</p>
+        <div className="mt-1 flex items-center gap-2">
+          <span>{agent?.name ?? franchise.agentName ?? "Nao configurado"}</span>
+          {agent && (
+            <div className="flex items-center gap-1">
+              <div className="h-2 w-2 rounded-full" style={{ backgroundColor: statusConfig.color }} />
+              <span className="text-xs" style={{ color: statusConfig.color }}>{statusConfig.label}</span>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between">

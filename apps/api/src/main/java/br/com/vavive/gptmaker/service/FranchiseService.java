@@ -44,6 +44,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -52,6 +54,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class FranchiseService {
+    private static final Logger log = LoggerFactory.getLogger(FranchiseService.class);
     private final FranchiseRepository franchiseRepository;
     private final FranchiseSetupRepository franchiseSetupRepository;
     private final GptMakerAgentRepository agentRepository;
@@ -447,7 +450,9 @@ public class FranchiseService {
         requireCriticalAgentConfirmation(franchise, request.agentName(), request.confirmCriticalChange());
 
         String context = vaviveDefaultContextService.buildForFranchise(franchise);
-        String behavior = resolveBehavior(context, request.jobDescription());
+        String behavior = (request.behavior() != null && !request.behavior().isBlank())
+            ? request.behavior()
+            : resolveBehavior(context, request.jobDescription());
         String jobDescription = mergeJobDescription(context, request.jobDescription());
 
         GptMakerCreateAgentResponse createdAgent;
@@ -478,7 +483,6 @@ public class FranchiseService {
         franchiseRepository.save(franchise);
 
         GptMakerAgent localAgent = syncProvisionedAgent(franchise, createdAgent, request.communicationType());
-        createInitialLocalTraining(localAgent, context);
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -736,7 +740,7 @@ public class FranchiseService {
     }
 
     private FranchiseGptMakerConnectionResponse toGptMakerConnectionResponse(Franchise franchise) {
-        String status = franchise.resolvedStatus();
+        String status = resolveAgentConnectionStatus(franchise);
         return new FranchiseGptMakerConnectionResponse(
             franchise.getId(),
             franchise.getName(),
@@ -747,6 +751,30 @@ public class FranchiseService {
             status,
             franchise.getGptMakerLastSyncAt()
         );
+    }
+
+    private String resolveAgentConnectionStatus(Franchise franchise) {
+        if (franchise.getAgentId() != null && !franchise.getAgentId().isBlank()) {
+            return agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                .map(agent -> mapLocalAgentStatusToFranchiseStatus(agent.getStatus()))
+                .orElseGet(() -> nonBlank(franchise.getStatus(), franchise.resolvedStatus()));
+        }
+        return nonBlank(franchise.getStatus(), franchise.resolvedStatus());
+    }
+
+    private String mapLocalAgentStatusToFranchiseStatus(String status) {
+        if (status == null || status.isBlank()) {
+            return "ATIVA";
+        }
+        return switch (status.toUpperCase()) {
+            case "INATIVO", "INATIVA", "INACTIVE" -> "INATIVA";
+            case "EM_TREINAMENTO", "TRAINING", "TREINAMENTO" -> "EM_TREINAMENTO";
+            default -> "ATIVA";
+        };
+    }
+
+    private String nonBlank(String value, String fallback) {
+        return value != null && !value.isBlank() ? value : fallback;
     }
 
     private String defaultToneOfVoice(Franchise franchise) {
@@ -893,6 +921,32 @@ public class FranchiseService {
         }
         try {
             return gptMakerClient.updateAgentWebhooks(franchise.getAgentId(), webhooks);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateAgent(UUID franchiseId, Object request) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        try {
+            var result = gptMakerClient.updateAgent(franchise.getAgentId(), request);
+            // Update local agent name if provided
+            if (request instanceof java.util.Map<?, ?> map) {
+                Object name = map.get("name");
+                if (name instanceof String nameStr && !nameStr.isBlank()) {
+                    franchise.setAgentName(nameStr);
+                    franchiseRepository.save(franchise);
+                    agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                        .ifPresent(agent -> {
+                            agent.setName(nameStr);
+                            agentRepository.save(agent);
+                        });
+                }
+            }
+            return result;
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }
@@ -1103,7 +1157,6 @@ public class FranchiseService {
             var result = gptMakerClient.activateAgent(franchise.getAgentId());
             franchise.setStatus("ATIVA");
             franchiseRepository.save(franchise);
-            // Also update local agent status
             agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
                 .ifPresent(agent -> {
                     agent.setStatus("ATIVO");
@@ -1124,13 +1177,58 @@ public class FranchiseService {
             var result = gptMakerClient.inactivateAgent(franchise.getAgentId());
             franchise.setStatus("INATIVA");
             franchiseRepository.save(franchise);
-            // Also update local agent status
             agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
                 .ifPresent(agent -> {
                     agent.setStatus("INATIVO");
                     agentRepository.save(agent);
                 });
             return result;
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    public Object updateAgentStatus(UUID franchiseId, Object request) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
+        }
+        if (!(request instanceof java.util.Map<?, ?> map)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Payload invalido para atualizacao de status.");
+        }
+
+        Object statusValue = map.get("status");
+        if (!(statusValue instanceof String status) || status.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Campo status e obrigatorio.");
+        }
+
+        String normalizedStatus = status.trim().toUpperCase();
+        return switch (normalizedStatus) {
+            case "ATIVA", "ACTIVE" -> activateAgent(franchiseId);
+            case "INATIVA", "INACTIVE" -> inactivateAgent(franchiseId);
+            case "TRAINING", "EM_TREINAMENTO", "TREINAMENTO" -> updateAgentTrainingStatus(franchise);
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de agente invalido: " + status);
+        };
+    }
+
+    private Object updateAgentTrainingStatus(Franchise franchise) {
+        try {
+            var result = gptMakerClient.updateAgentStatus(franchise.getAgentId(), "TRAINING");
+            franchise.setStatus("EM_TREINAMENTO");
+            franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+            franchiseRepository.save(franchise);
+            agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                .ifPresent(agent -> {
+                    agent.setStatus("EM_TREINAMENTO");
+                    agentRepository.save(agent);
+                });
+            return java.util.Map.of(
+                "status", "EM_TREINAMENTO",
+                "agentId", franchise.getAgentId(),
+                "agentName", franchise.getAgentName(),
+                "syncedAt", franchise.getGptMakerLastSyncAt(),
+                "result", result
+            );
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }
@@ -1163,6 +1261,110 @@ public class FranchiseService {
         franchise.setStatus("SEM_AGENTE");
         franchiseRepository.save(franchise);
         return java.util.Map.of("success", true);
+    }
+
+    public Object syncAgentStatus(UUID franchiseId) {
+        Franchise franchise = requireFranchise(franchiseId);
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            return java.util.Map.of(
+                "status", "SEM_AGENTE",
+                "agentId", (String) null,
+                "agentName", (String) null
+            );
+        }
+        try {
+            // Fetch agent details from GPTMaker
+            var agentDetails = gptMakerClient.getAgent(franchise.getAgentId());
+            String gptMakerName = agentDetails.has("name") ? agentDetails.get("name").asText(null) : null;
+            String gptMakerStatus = agentDetails.has("status") ? agentDetails.get("status").asText(null) : null;
+            Boolean gptMakerActive = agentDetails.has("active") ? agentDetails.get("active").asBoolean(false) : null;
+
+            log.info("GPTMaker agent sync: franchiseId={}, agentId={}, name={}, status={}, active={}",
+                franchiseId, franchise.getAgentId(), gptMakerName, gptMakerStatus, gptMakerActive);
+
+            // Determine status from GPTMaker response
+            String newStatus;
+            if (gptMakerStatus != null) {
+                newStatus = mapGptMakerStatus(gptMakerStatus);
+            } else if (gptMakerActive != null && !gptMakerActive) {
+                newStatus = "INATIVA";
+            } else if ("INATIVA".equalsIgnoreCase(franchise.getStatus()) || "INATIVO".equalsIgnoreCase(franchise.getStatus())) {
+                newStatus = "INATIVA";
+            } else if ("EM_TREINAMENTO".equalsIgnoreCase(franchise.getStatus()) || "TRAINING".equalsIgnoreCase(franchise.getStatus())) {
+                newStatus = "EM_TREINAMENTO";
+            } else {
+                // GPTMaker doesn't return status field - try settings endpoint as proxy
+                try {
+                    gptMakerClient.getAgentSettings(franchise.getAgentId());
+                    newStatus = "ATIVA";
+                    log.info("GPTMaker agent settings fetched successfully - agent is ACTIVE");
+                } catch (Exception settingsEx) {
+                    // If settings fail with 403/404, agent might be inactive
+                    log.warn("GPTMaker agent settings failed: {} - marking as INATIVA", settingsEx.getMessage());
+                    newStatus = "INATIVA";
+                }
+            }
+
+            // Update local state
+            GptMakerAgent localAgent = agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                .orElse(null);
+            if (localAgent != null && gptMakerName != null && !gptMakerName.isBlank()) {
+                localAgent.setName(gptMakerName);
+                localAgent.setStatus(mapStatusToLocal(newStatus));
+                agentRepository.save(localAgent);
+            }
+            if (gptMakerName != null && !gptMakerName.isBlank()) {
+                franchise.setAgentName(gptMakerName);
+            }
+            franchise.setStatus(newStatus);
+            franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+            franchiseRepository.save(franchise);
+
+            return java.util.Map.of(
+                "status", newStatus,
+                "agentId", franchise.getAgentId(),
+                "agentName", franchise.getAgentName(),
+                "syncedAt", franchise.getGptMakerLastSyncAt()
+            );
+        } catch (GptMakerIntegrationException exception) {
+            if (exception.getHttpStatus() != null && exception.getHttpStatus() == 404) {
+                log.info("GPTMaker agent not found for franchise {}: marking as INATIVA", franchiseId);
+                franchise.setStatus("INATIVA");
+                franchiseRepository.save(franchise);
+                agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), franchise.getAgentId())
+                    .ifPresent(agent -> {
+                        agent.setStatus("INATIVO");
+                        agentRepository.save(agent);
+                    });
+                return java.util.Map.of(
+                    "status", "INATIVA",
+                    "agentId", franchise.getAgentId(),
+                    "agentName", franchise.getAgentName(),
+                    "message", "Agente nao encontrado no GPTMaker."
+                );
+            }
+            throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
+        }
+    }
+
+    private String mapGptMakerStatus(String gptMakerStatus) {
+        if (gptMakerStatus == null) return "ATIVA";
+        return switch (gptMakerStatus.toUpperCase()) {
+            case "ACTIVE", "ATIVO", "ONLINE" -> "ATIVA";
+            case "INACTIVE", "INATIVO", "OFFLINE" -> "INATIVA";
+            case "TRAINING", "TREINAMENTO", "LEARNING" -> "EM_TREINAMENTO";
+            default -> "ATIVA";
+        };
+    }
+
+    private String mapStatusToLocal(String status) {
+        if (status == null) return "ATIVO";
+        return switch (status) {
+            case "ATIVA" -> "ATIVO";
+            case "INATIVA" -> "INATIVO";
+            case "EM_TREINAMENTO" -> "EM_TREINAMENTO";
+            default -> "ATIVO";
+        };
     }
 
     private Franchise requireFranchise(UUID id) {

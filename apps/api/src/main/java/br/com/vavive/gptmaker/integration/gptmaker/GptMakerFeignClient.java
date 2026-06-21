@@ -52,6 +52,12 @@ public interface GptMakerFeignClient {
     @DeleteMapping("/v2/agent/{agentId}")
     ResponseEntity<String> deleteAgent(@PathVariable String agentId);
 
+    @PutMapping("/v2/agent/{agentId}")
+    ResponseEntity<String> updateAgent(@PathVariable String agentId, @RequestBody Object request);
+
+    @PutMapping("/assistants/{assistantId}")
+    ResponseEntity<String> updateAssistant(@PathVariable String assistantId, @RequestBody Object request);
+
     @GetMapping("/v2/agent/{agentId}/settings")
     ResponseEntity<String> getAgentSettings(@PathVariable String agentId);
 
