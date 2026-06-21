@@ -1,7 +1,6 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { AssistantAvatar, buildAssistantAvatarDataUri, buildGamifiedAvatarDataUri } from "@/components/AssistantAvatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { FormWizard, type WizardStep } from "@/components/FormWizard";
 import { PageHeader } from "@/components/PageHeader";
@@ -27,14 +26,6 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import clsx from "clsx";
 
-const avatarOptions = [
-  { value: "random-gamified", label: "Aleatorio", description: "Avatar gamificado aleatorio" },
-  { value: buildAssistantAvatarDataUri("#EEF2FF", "#4F46E5", "AT"), label: "Atendimento", description: "Tom profissional" },
-  { value: buildAssistantAvatarDataUri("#ECFDF5", "#047857", "CO"), label: "Comercial", description: "Tom energetico" },
-  { value: buildAssistantAvatarDataUri("#FFF7ED", "#C2410C", "SU"), label: "Suporte", description: "Tom acolhedor" },
-  { value: "", label: "Sem avatar", description: "Usar icone padrao" },
-];
-
 const communicationOptions = [
   { value: "FORMAL", label: "Formal", description: "Linguagem profissional e respeitosa", icon: "👔" },
   { value: "NORMAL", label: "Normal", description: "Equilibrio entre formal e casual", icon: "💬" },
@@ -47,7 +38,7 @@ const objectiveOptions = [
   { value: "PERSONAL", label: "Uso pessoal", description: "Escolha esta opcao caso seja um agente para uso pessoal.", icon: "🤝" },
 ];
 
-type Mode = "default" | "edit" | "skip";
+type Mode = "default" | "edit";
 
 function StandardBanner({
   label,
@@ -68,7 +59,7 @@ function StandardBanner({
     <div
       className="rounded-xl border p-4"
       style={{
-        borderColor: mode === "default" ? "var(--color-brand-500)" : mode === "skip" ? "var(--color-border)" : "var(--color-brand-200)",
+        borderColor: mode === "default" ? "var(--color-brand-500)" : "var(--color-brand-200)",
         background: mode === "default" ? "var(--color-brand-50)" : "var(--color-bg-primary)",
       }}
     >
@@ -98,7 +89,7 @@ function StandardBanner({
       )}
 
       <div className="flex gap-2">
-        {(["default", "edit", "skip"] as Mode[]).map((m) => (
+        {(["default", "edit"] as Mode[]).map((m) => (
           <button
             key={m}
             type="button"
@@ -106,15 +97,11 @@ function StandardBanner({
             className={clsx(
               "px-3 py-1.5 text-xs font-medium rounded-lg transition",
               mode === m
-                ? m === "skip"
-                  ? "bg-gray-600 text-white"
-                  : "bg-brand-600 text-white"
-                : m === "skip"
-                  ? "bg-white text-gray-600 border border-gray-200 hover:bg-gray-50"
-                  : "bg-white text-brand-600 border border-brand-200 hover:bg-brand-50"
+                ? "bg-brand-600 text-white"
+                : "bg-white text-brand-600 border border-brand-200 hover:bg-brand-50"
             )}
           >
-            {m === "default" ? "Usar padrao" : m === "edit" ? "Editar" : "Nao usar"}
+            {m === "default" ? "Usar padrao" : "Editar"}
           </button>
         ))}
       </div>
@@ -136,7 +123,6 @@ export default function AgentWizardPage() {
 
   // Passo 1: Perfil
   const [agentName, setAgentName] = useState("");
-  const [selectedAvatar, setSelectedAvatar] = useState("");
   const [communicationType, setCommunicationType] = useState<"FORMAL" | "NORMAL" | "RELAXED">("NORMAL");
   const [behavior, setBehavior] = useState("");
   const [profileMode, setProfileMode] = useState<Mode>("default");
@@ -275,10 +261,10 @@ export default function AgentWizardPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const resolvedCommunication = profileMode !== "skip" ? communicationType : "NORMAL";
-      const resolvedObjective = workMode !== "skip" ? objectiveType : "SALE";
-      const resolvedBehavior = profileMode !== "skip" ? behavior : "";
-      const resolvedDescription = workMode !== "skip" ? jobDescription : "";
+      const resolvedCommunication = communicationType;
+      const resolvedObjective = objectiveType;
+      const resolvedBehavior = behavior;
+      const resolvedDescription = jobDescription;
 
       const response = await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
@@ -295,14 +281,14 @@ export default function AgentWizardPage() {
       setConnection(response);
 
       // Send trainings
-      if (trainingsMode !== "skip" && trainings.length > 0 && params.id) {
+      if (trainings.length > 0 && params.id) {
         await Promise.allSettled(
           trainings.map((t) => createGptMakerTraining(params.id, t as unknown as Record<string, unknown>))
         );
       }
 
       // Send intentions
-      if (intentionsMode !== "skip" && intentions.length > 0 && params.id) {
+      if (intentions.length > 0 && params.id) {
         await Promise.allSettled(
           intentions.map((i) => createGptMakerIntention(params.id, i as unknown as Record<string, unknown>))
         );
@@ -315,7 +301,7 @@ export default function AgentWizardPage() {
     } finally {
       setIsSaving(false);
     }
-  }, [params?.id, connection, agentName, selectedAvatar, communicationType, objectiveType, behavior, productName, jobSite, jobDescription, franchise, hasAgent, router, trainings, intentions, profileMode, workMode, trainingsMode, intentionsMode, showSuccess, showError]);
+  }, [params?.id, connection, agentName, communicationType, objectiveType, behavior, productName, jobSite, jobDescription, franchise, hasAgent, router, trainings, intentions, profileMode, workMode, trainingsMode, intentionsMode, showSuccess, showError]);
 
   const hasStandardProfile = configuration?.blocks.some((b) => b.mode === "STANDARD" && b.payload) ?? false;
   const standardRoleBlock = configuration?.blocks.find((b) => b.blockType === "ROLE");
@@ -405,28 +391,18 @@ export default function AgentWizardPage() {
             />
           )}
 
-          {profileMode !== "skip" && (
-            <>
-              <OptionCards label="Comunicacao" description="Como o assistente se comunica" value={communicationType}
-                onChange={(v) => setCommunicationType(v as typeof communicationType)} options={communicationOptions}
-                disabled={profileMode === "default"}
-              />
-              <div className="relative">
-                <RichTextarea label="Comportamento" placeholder="Descreva como o agente deve se comportar durante a conversa..." value={behavior} onChange={setBehavior} rows={5} disabled={profileMode === "default"} />
-                {profileMode === "default" && behavior && (
-                  <div className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                    Texto definido pelo SUPER_ADMIN. Clique em "Editar" para personalizar.
-                  </div>
-                )}
+          <OptionCards label="Comunicacao" description="Como o assistente se comunica" value={communicationType}
+            onChange={(v) => setCommunicationType(v as typeof communicationType)} options={communicationOptions}
+            disabled={profileMode === "default"}
+          />
+          <div className="relative">
+            <RichTextarea label="Comportamento" placeholder="Descreva como o agente deve se comportar durante a conversa..." value={behavior} onChange={setBehavior} rows={5} disabled={profileMode === "default"} />
+            {profileMode === "default" && behavior && (
+              <div className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                Texto definido pelo SUPER_ADMIN. Clique em "Editar" para personalizar.
               </div>
-            </>
-          )}
-
-          {profileMode === "skip" && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 text-center">
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Perfil nao sera configurado. Voce pode configurar depois.</p>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       ),
     },
@@ -455,23 +431,13 @@ export default function AgentWizardPage() {
             />
           )}
 
-          {workMode !== "skip" && (
-            <>
-              <OptionCards label="Finalidade" description="Qual o foco principal do assistente" value={objectiveType}
-                onChange={(v) => setObjectiveType(v as typeof objectiveType)} options={objectiveOptions}
-                disabled={workMode === "default"}
-              />
-              <Field label="Vende o produto" placeholder="Ex: Matriz" value={productName} onChange={setProductName} disabled={workMode === "default"} />
-              <Field label="Site oficial (opcional)" placeholder="https://vavive.com.br" value={jobSite} onChange={setJobSite} disabled={workMode === "default"} />
-              <RichTextarea label="Descreva um pouco sobre sua franquia" placeholder="Fale sobre os servicos, diferenciais, regiao de atendimento..." value={jobDescription} onChange={setJobDescription} rows={4} disabled={workMode === "default"} />
-            </>
-          )}
-
-          {workMode === "skip" && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 text-center">
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Configuracao de trabalho nao sera aplicada.</p>
-            </div>
-          )}
+          <OptionCards label="Finalidade" description="Qual o foco principal do assistente" value={objectiveType}
+            onChange={(v) => setObjectiveType(v as typeof objectiveType)} options={objectiveOptions}
+            disabled={workMode === "default"}
+          />
+          <Field label="Vende o produto" placeholder="Ex: Matriz" value={productName} onChange={setProductName} disabled={workMode === "default"} />
+          <Field label="Site oficial (opcional)" placeholder="https://vavive.com.br" value={jobSite} onChange={setJobSite} disabled={workMode === "default"} />
+          <RichTextarea label="Descreva um pouco sobre sua franquia" placeholder="Fale sobre os servicos, diferenciais, regiao de atendimento..." value={jobDescription} onChange={setJobDescription} rows={4} disabled={workMode === "default"} />
         </div>
       ),
     },
@@ -502,20 +468,10 @@ export default function AgentWizardPage() {
             />
           )}
 
-          {trainingsMode !== "skip" && (
-            <>
-              {trainingsMode === "default" && trainingsCount > 0 && (
-                <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estes treinamentos serao aplicados ao assistente.</p>
-              )}
-              <TrainingEditor items={trainings} onChange={setTrainings} disabled={trainingsMode === "default"} />
-            </>
+          {trainingsMode === "default" && trainingsCount > 0 && (
+            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estes treinamentos serao aplicados ao assistente.</p>
           )}
-
-          {trainingsMode === "skip" && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 text-center">
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Treinamentos nao serao aplicados. Voce pode adicionar depois.</p>
-            </div>
-          )}
+          <TrainingEditor items={trainings} onChange={setTrainings} disabled={trainingsMode === "default"} />
         </div>
       ),
     },
@@ -547,59 +503,51 @@ export default function AgentWizardPage() {
             />
           )}
 
-          {intentionsMode !== "skip" && (
-            <>
-              {intentionsMode === "default" && intentionsCount > 0 && (
-                <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estas intencoes serao aplicadas ao assistente.</p>
-              )}
+          <>
+            {intentionsMode === "default" && intentionsCount > 0 && (
+              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estas intencoes serao aplicadas ao assistente.</p>
+            )}
 
-              {intentions.length > 0 && (
-                <div className="space-y-3">
-                  {intentions.map((intent, i) => (
-                    <div key={i} className="card p-4 flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{intent.description}</p>
-                        {intent.instructions && <p className="text-sm mt-1 line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{intent.instructions}</p>}
-                        <div className="flex gap-2 mt-2">
-                          <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.type}</span>
-                          {intent.type === "WEBHOOK" && <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.httpMethod}</span>}
-                        </div>
+            {intentions.length > 0 && (
+              <div className="space-y-3">
+                {intentions.map((intent, i) => (
+                  <div key={i} className="card p-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{intent.description}</p>
+                      {intent.instructions && <p className="text-sm mt-1 line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{intent.instructions}</p>}
+                      <div className="flex gap-2 mt-2">
+                        <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.type}</span>
+                        {intent.type === "WEBHOOK" && <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.httpMethod}</span>}
                       </div>
-                      {intentionsMode === "edit" && (
-                        <button type="button" onClick={() => setIntentions((prev) => prev.filter((_, idx) => idx !== i))} className="text-sm text-red-500 hover:text-red-700 shrink-0">
-                          <X size={16} />
-                        </button>
-                      )}
                     </div>
-                  ))}
-                </div>
-              )}
+                    {intentionsMode === "edit" && (
+                      <button type="button" onClick={() => setIntentions((prev) => prev.filter((_, idx) => idx !== i))} className="text-sm text-red-500 hover:text-red-700 shrink-0">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {intentionsMode === "edit" && !showIntentionWizard && (
-                <button type="button" onClick={() => setShowIntentionWizard(true)} className="btn-secondary">
-                  <Plus size={16} /> Cadastrar intencao
-                </button>
-              )}
+            {intentionsMode === "edit" && !showIntentionWizard && (
+              <button type="button" onClick={() => setShowIntentionWizard(true)} className="btn-secondary">
+                <Plus size={16} /> Cadastrar intencao
+              </button>
+            )}
 
-              {intentionsMode === "edit" && showIntentionWizard && (
-                <div className="card p-6">
-                  <IntentionWizard
-                    onSave={(data) => {
-                      setIntentions((prev) => [...prev, data]);
-                      setShowIntentionWizard(false);
-                    }}
-                    onCancel={() => setShowIntentionWizard(false)}
-                  />
-                </div>
-              )}
-            </>
-          )}
-
-          {intentionsMode === "skip" && (
-            <div className="rounded-xl bg-gray-50 dark:bg-gray-900/50 p-4 text-center">
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Intencoes nao serao aplicadas. Voce pode adicionar depois.</p>
-            </div>
-          )}
+            {intentionsMode === "edit" && showIntentionWizard && (
+              <div className="card p-6">
+                <IntentionWizard
+                  onSave={(data) => {
+                    setIntentions((prev) => [...prev, data]);
+                    setShowIntentionWizard(false);
+                  }}
+                  onCancel={() => setShowIntentionWizard(false)}
+                />
+              </div>
+            )}
+          </>
         </div>
       ),
     },
@@ -632,18 +580,20 @@ export default function AgentWizardPage() {
             <div className="flex items-center gap-3 mb-3">
               <User size={18} className="text-brand-500" />
               <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Perfil</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", profileMode === "default" ? "bg-brand-100 text-brand-700" : profileMode === "skip" ? "bg-gray-100 text-gray-600" : "bg-amber-100 text-amber-700")}>
-                {profileMode === "default" ? "Padrao" : profileMode === "skip" ? "Ignorado" : "Customizado"}
+              <span className={clsx("text-xs px-2 py-0.5 rounded-full", profileMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+                {profileMode === "default" ? "Padrao" : "Customizado"}
               </span>
             </div>
             <div className="flex items-center gap-3">
-              <AssistantAvatar src={selectedAvatar === "random-gamified" ? buildGamifiedAvatarDataUri(agentName || "bot") : selectedAvatar || undefined} alt={agentName} fallbackLabel={agentName} className="h-10 w-10" />
+              <div className="h-10 w-10 rounded-2xl bg-brand-100 flex items-center justify-center">
+                <Bot size={20} className="text-brand-600" />
+              </div>
               <div>
                 <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{agentName}</p>
                 <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>{communicationOptions.find(c => c.value === communicationType)?.label}</p>
               </div>
             </div>
-            {profileMode !== "skip" && behavior && (
+            {behavior && (
               <p className="mt-2 text-xs line-clamp-2" style={{ color: "var(--color-text-tertiary)" }}>{behavior}</p>
             )}
           </div>
@@ -652,29 +602,25 @@ export default function AgentWizardPage() {
             <div className="flex items-center gap-3 mb-3">
               <Briefcase size={18} className="text-brand-500" />
               <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Trabalho</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", workMode === "default" ? "bg-brand-100 text-brand-700" : workMode === "skip" ? "bg-gray-100 text-gray-600" : "bg-amber-100 text-amber-700")}>
-                {workMode === "default" ? "Padrao" : workMode === "skip" ? "Ignorado" : "Customizado"}
+              <span className={clsx("text-xs px-2 py-0.5 rounded-full", workMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+                {workMode === "default" ? "Padrao" : "Customizado"}
               </span>
             </div>
-            {workMode !== "skip" ? (
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div><p style={{ color: "var(--color-text-tertiary)" }}>Finalidade</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{objectiveOptions.find(o => o.value === objectiveType)?.label}</p></div>
-                <div><p style={{ color: "var(--color-text-tertiary)" }}>Produto</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{productName || franchise?.name || "-"}</p></div>
-              </div>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Configuracao de trabalho ignorada.</p>
-            )}
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><p style={{ color: "var(--color-text-tertiary)" }}>Finalidade</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{objectiveOptions.find(o => o.value === objectiveType)?.label}</p></div>
+              <div><p style={{ color: "var(--color-text-tertiary)" }}>Produto</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{productName || franchise?.name || "-"}</p></div>
+            </div>
           </div>
 
           <div className="card p-4">
             <div className="flex items-center gap-3 mb-3">
               <BookOpen size={18} className="text-brand-500" />
               <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Treinamentos</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", trainingsMode === "default" ? "bg-brand-100 text-brand-700" : trainingsMode === "skip" ? "bg-gray-100 text-gray-600" : "bg-amber-100 text-amber-700")}>
-                {trainingsMode === "default" ? "Padrao" : trainingsMode === "skip" ? "Ignorado" : "Customizado"}
+              <span className={clsx("text-xs px-2 py-0.5 rounded-full", trainingsMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+                {trainingsMode === "default" ? "Padrao" : "Customizado"}
               </span>
             </div>
-            {trainingsMode !== "skip" && trainings.length > 0 ? (
+            {trainings.length > 0 ? (
               <ul className="space-y-1">
                 {trainings.slice(0, 5).map((t, i) => (
                   <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
@@ -684,7 +630,7 @@ export default function AgentWizardPage() {
                 {trainings.length > 5 && <li className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>...e mais {trainings.length - 5}</li>}
               </ul>
             ) : (
-              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>{trainingsMode === "skip" ? "Ignorados" : "Nenhum"}</p>
+              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhum</p>
             )}
           </div>
 
@@ -692,11 +638,11 @@ export default function AgentWizardPage() {
             <div className="flex items-center gap-3 mb-3">
               <Target size={18} className="text-brand-500" />
               <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Intencoes</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", intentionsMode === "default" ? "bg-brand-100 text-brand-700" : intentionsMode === "skip" ? "bg-gray-100 text-gray-600" : "bg-amber-100 text-amber-700")}>
-                {intentionsMode === "default" ? "Padrao" : intentionsMode === "skip" ? "Ignorado" : "Customizado"}
+              <span className={clsx("text-xs px-2 py-0.5 rounded-full", intentionsMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
+                {intentionsMode === "default" ? "Padrao" : "Customizado"}
               </span>
             </div>
-            {intentionsMode !== "skip" && intentions.length > 0 ? (
+            {intentions.length > 0 ? (
               <ul className="space-y-1">
                 {intentions.slice(0, 5).map((intent, i) => (
                   <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>• {intent.description}</li>
@@ -704,7 +650,7 @@ export default function AgentWizardPage() {
                 {intentions.length > 5 && <li className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>...e mais {intentions.length - 5}</li>}
               </ul>
             ) : (
-              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>{intentionsMode === "skip" ? "Ignoradas" : "Nenhuma"}</p>
+              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhuma</p>
             )}
           </div>
 

@@ -42,7 +42,10 @@ function hashCode(str: string): number {
 
 function getMultiAvatarUrl(seed: string): string {
   const hash = hashCode(seed);
-  return `https://api.multiavatar.com/${hash}.svg`;
+  // Use DiceBear API which supports CORS and generates cartoon-style avatars
+  const styles = ["adventurer", "adventurer-neutral", "avataaars", "big-ears", "bottts", "fun-emoji", "lorelei", "micah", "miniavs", "notionists", "open-peeps", "personas", "pixel-art"];
+  const style = styles[hash % styles.length];
+  return `https://api.dicebear.com/7.x/${style}/svg?seed=${hash}`;
 }
 
 function AgentMenu({ onEdit, onToggleStatus, onRemove, isActive }: { onEdit: () => void; onToggleStatus: () => void; onRemove: () => void; isActive: boolean }) {
