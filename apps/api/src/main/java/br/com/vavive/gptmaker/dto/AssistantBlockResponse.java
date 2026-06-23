@@ -1,7 +1,5 @@
 package br.com.vavive.gptmaker.dto;
 
-import com.fasterxml.jackson.databind.JsonNode;
-
 public record AssistantBlockResponse(
     String blockType,
     String title,
@@ -10,7 +8,7 @@ public record AssistantBlockResponse(
     boolean locked,
     boolean inherited,
     int standardVersion,
-    JsonNode payload,
+    Object payload,
     boolean editable,
     String syncStatus,
     String syncMessage

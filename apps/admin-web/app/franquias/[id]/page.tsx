@@ -328,8 +328,12 @@ export default function FranchiseDetailPage() {
                 </div>
               </div>
               <div className="mt-5 flex flex-wrap gap-3">
-                <Link href="/setup-guiado" className="btn-primary">Abrir workbench</Link>
-                <Link href={`/franquias/${franchise?.id}/agente`} className="btn-secondary">Revisar assistente</Link>
+                <Link href={`/franquias/${franchise?.id}/agente${connection?.agentId ? "" : "/novo"}`} className="btn-primary">
+                  {connection?.agentId ? "Revisar assistente" : "Criar assistente"}
+                </Link>
+                {connection?.agentId ? (
+                  <Link href={`/franquias/${franchise?.id}/agente/configuracao`} className="btn-secondary">Configurar assistente</Link>
+                ) : null}
               </div>
             </div>
 

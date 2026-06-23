@@ -2,9 +2,9 @@
 
 import { SelectField, ToggleField } from "@/components/FriendlyForm";
 import { Save } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
-const MODEL_OPTIONS = [
+export const MODEL_OPTIONS = [
   { value: "GPT_5", label: "GPT-5" },
   { value: "GPT_5_MINI", label: "GPT-5 Mini" },
   { value: "GPT_4_O", label: "GPT-4o" },
@@ -16,7 +16,7 @@ const MODEL_OPTIONS = [
   { value: "SABIA_3", label: "Sabia 3" },
 ];
 
-const TIMEZONE_OPTIONS = [
+export const TIMEZONE_OPTIONS = [
   { value: "America/Sao_Paulo", label: "(GMT-03:00) Sao Paulo" },
   { value: "America/Manaus", label: "(GMT-04:00) Manaus" },
   { value: "America/Belem", label: "(GMT-03:00) Belem" },
@@ -26,7 +26,7 @@ const TIMEZONE_OPTIONS = [
   { value: "America/Campo_Grande", label: "(GMT-04:00) Campo Grande" },
 ];
 
-const GROUPING_OPTIONS = [
+export const GROUPING_OPTIONS = [
   { value: "NO_GROUP", label: "Nao agrupar" },
   { value: "FIVE_SEC", label: "5 segundos" },
   { value: "TEN_SEC", label: "10 segundos" },
@@ -34,7 +34,7 @@ const GROUPING_OPTIONS = [
   { value: "ONE_MINUTE", label: "1 minuto" },
 ];
 
-const MAX_MESSAGES_OPTIONS = [
+export const MAX_MESSAGES_OPTIONS = [
   { value: "null", label: "Sem limite" },
   { value: "20", label: "20 interacoes" },
   { value: "50", label: "50 interacoes" },
@@ -44,7 +44,7 @@ const MAX_MESSAGES_OPTIONS = [
   { value: "1000", label: "1000 interacoes" },
 ];
 
-const LIMIT_ACTION_OPTIONS = [
+export const LIMIT_ACTION_OPTIONS = [
   { value: "TEMP_BLOCK_30S", label: "Bloquear 30s" },
   { value: "TEMP_BLOCK_5M", label: "Bloquear 5min" },
   { value: "TEMP_BLOCK_10M", label: "Bloquear 10min" },
@@ -58,13 +58,23 @@ type ConversationSettingsProps = {
   settings: Record<string, unknown>;
   onSave: (settings: Record<string, unknown>) => Promise<void>;
   isSaving: boolean;
+  onChange?: (settings: Record<string, unknown>) => void;
+  showSaveButton?: boolean;
 };
 
-export function ConversationSettings({ settings, onSave, isSaving }: ConversationSettingsProps) {
+export function ConversationSettings({ settings, onSave, isSaving, onChange, showSaveButton = true }: ConversationSettingsProps) {
   const [draft, setDraft] = useState<Record<string, unknown>>(settings);
 
+  useEffect(() => {
+    setDraft(settings);
+  }, [settings]);
+
   function updateField(key: string, value: unknown) {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value };
+      onChange?.(next);
+      return next;
+    });
   }
 
   async function handleSave() {
@@ -162,12 +172,14 @@ export function ConversationSettings({ settings, onSave, isSaving }: Conversatio
         </div>
       </div>
 
-      <div className="flex justify-end pt-2">
-        <button type="button" onClick={handleSave} disabled={isSaving} className="btn-primary">
-          <Save size={16} />
-          {isSaving ? "Salvando..." : "Salvar configuracoes"}
-        </button>
-      </div>
+      {showSaveButton ? (
+        <div className="flex justify-end pt-2">
+          <button type="button" onClick={handleSave} disabled={isSaving} className="btn-primary">
+            <Save size={16} />
+            {isSaving ? "Salvando..." : "Salvar configuracoes"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

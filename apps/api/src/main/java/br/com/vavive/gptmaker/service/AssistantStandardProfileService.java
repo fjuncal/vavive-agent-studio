@@ -78,11 +78,11 @@ public class AssistantStandardProfileService {
         this.objectMapper = objectMapper;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AssistantStandardProfileResponse getActiveProfile() {
         currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode acessar padroes do Assistente Vavive.");
         AssistantStandardProfile profile = ensureActiveProfile();
-        List<AssistantBlockResponse> blocks = resolveProfileBlocks(profile).entrySet().stream()
+        List<AssistantBlockResponse> blocks = resolveProfileBlocks(profile, true).entrySet().stream()
             .sorted(Map.Entry.comparingByKey())
             .map(entry -> toResponse(entry.getKey(), entry.getValue(), AssistantBlockMode.STANDARD, true, true, profile.getVersion(), true))
             .toList();
@@ -116,7 +116,7 @@ public class AssistantStandardProfileService {
         block.setVersion(profile.getVersion());
         profileRepository.save(profile);
         blockRepository.save(block);
-        return getActiveProfile();
+        return buildProfileResponse(profile, true);
     }
 
     @Transactional(readOnly = true)
@@ -159,11 +159,11 @@ public class AssistantStandardProfileService {
         return getActiveProfile();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public FranchiseAssistantConfigurationResponse getFranchiseConfiguration(UUID franchiseId) {
         Franchise franchise = requireAccessibleFranchise(franchiseId);
         AssistantStandardProfile profile = ensureActiveProfile();
-        Map<AssistantBlockType, JsonNode> standardBlocks = resolveProfileBlocks(profile);
+        Map<AssistantBlockType, JsonNode> standardBlocks = resolveProfileBlocks(profile, false);
         Map<AssistantBlockType, FranchiseAssistantBlockConfig> configs = new EnumMap<>(AssistantBlockType.class);
         configRepository.findByFranchiseOrderByBlockTypeAsc(franchise).forEach(config -> configs.put(config.getBlockType(), config));
         List<AssistantBlockResponse> blocks = Arrays.stream(AssistantBlockType.values())
@@ -195,7 +195,7 @@ public class AssistantStandardProfileService {
         AssistantStandardProfile profile = ensureActiveProfile();
         AssistantBlockType type = parseBlockType(blockType);
         assertEditableForFranchise(type);
-        JsonNode payload = preparePayload(type, enrichFranchiseBlock(franchise, type, resolveProfileBlocks(profile).getOrDefault(type, defaultPayload(type))));
+        JsonNode payload = preparePayload(type, enrichFranchiseBlock(franchise, type, resolveProfileBlocks(profile, false).getOrDefault(type, defaultPayload(type))));
         FranchiseAssistantBlockConfig config = configRepository.findByFranchiseAndBlockType(franchise, type)
             .orElseGet(() -> new FranchiseAssistantBlockConfig(franchise, type, AssistantBlockMode.CUSTOM));
         config.setMode(AssistantBlockMode.CUSTOM);
@@ -257,10 +257,34 @@ public class AssistantStandardProfileService {
         return profile;
     }
 
-    private Map<AssistantBlockType, JsonNode> resolveProfileBlocks(AssistantStandardProfile profile) {
+    private AssistantStandardProfileResponse buildProfileResponse(AssistantStandardProfile profile, boolean persistMissingBlocks) {
+        List<AssistantBlockResponse> blocks = resolveProfileBlocks(profile, persistMissingBlocks).entrySet().stream()
+            .sorted(Map.Entry.comparingByKey())
+            .map(entry -> toResponse(entry.getKey(), entry.getValue(), AssistantBlockMode.STANDARD, true, true, profile.getVersion(), true))
+            .toList();
+        return new AssistantStandardProfileResponse(
+            profile.getId(),
+            profile.getName(),
+            profile.isActive(),
+            profile.getVersion(),
+            profile.getUpdatedAt(),
+            blocks
+        );
+    }
+
+    private Map<AssistantBlockType, JsonNode> resolveProfileBlocks(AssistantStandardProfile profile, boolean persistMissingBlocks) {
         Map<AssistantBlockType, JsonNode> blocks = new EnumMap<>(AssistantBlockType.class);
         blockRepository.findByProfileOrderByBlockTypeAsc(profile).forEach(block -> blocks.put(block.getBlockType(), readJson(block.getPayloadJson(), block.getBlockType())));
-        Arrays.stream(AssistantBlockType.values()).forEach(type -> blocks.putIfAbsent(type, defaultPayload(type)));
+        Arrays.stream(AssistantBlockType.values()).forEach(type -> {
+            if (blocks.containsKey(type)) {
+                return;
+            }
+            JsonNode payload = defaultPayload(type);
+            blocks.put(type, payload);
+            if (persistMissingBlocks) {
+                blockRepository.save(new AssistantStandardBlock(profile, type, writeJson(payload), profile.getVersion()));
+            }
+        });
         return blocks;
     }
 
@@ -425,7 +449,7 @@ public class AssistantStandardProfileService {
             locked,
             inherited,
             standardVersion,
-            payload,
+            objectMapper.convertValue(payload, Object.class),
             editable,
             syncStatusFor(type),
             syncMessageFor(type)

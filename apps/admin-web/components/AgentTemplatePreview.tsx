@@ -121,7 +121,7 @@ export function AgentTemplatePreview({ blocks, className = "" }: AgentTemplatePr
             {intentionItems.slice(0, 3).map((item: Record<string, unknown>, i: number) => (
               <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
                 <span className="font-medium">{(item.name as string) || (item.description as string) || "Intencao"}</span>
-                {item.instructions && <span className="ml-1">— {((item.instructions as string) || "").slice(0, 60)}</span>}
+                {typeof item.instructions === "string" && item.instructions ? <span className="ml-1">- {item.instructions.slice(0, 60)}</span> : null}
               </li>
             ))}
             {intentionItems.length > 3 && <li className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>...e mais {intentionItems.length - 3}</li>}

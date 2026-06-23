@@ -2,7 +2,7 @@
 
 import { Field } from "@/components/FormSection";
 import { Save, Webhook } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const WEBHOOK_EVENTS = [
   { key: "onNewMessage", label: "Nova mensagem", description: "Quando uma nova mensagem chega em um chat" },
@@ -19,9 +19,19 @@ type WebhooksSettingsProps = {
   webhooks: Record<string, unknown>;
   onSave: (webhooks: Record<string, unknown>) => Promise<void>;
   isSaving: boolean;
+  onChange?: (webhooks: Record<string, unknown>) => void;
+  showSaveButton?: boolean;
 };
 
-export function WebhooksSettings({ webhooks, onSave, isSaving }: WebhooksSettingsProps) {
+function normalizeWebhooks(webhooks: Record<string, unknown>) {
+  const initial: Record<string, string> = {};
+  for (const event of WEBHOOK_EVENTS) {
+    initial[event.key] = typeof webhooks[event.key] === "string" ? (webhooks[event.key] as string) : "";
+  }
+  return initial;
+}
+
+export function WebhooksSettings({ webhooks, onSave, isSaving, onChange, showSaveButton = true }: WebhooksSettingsProps) {
   const [draft, setDraft] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
     for (const event of WEBHOOK_EVENTS) {
@@ -30,8 +40,16 @@ export function WebhooksSettings({ webhooks, onSave, isSaving }: WebhooksSetting
     return initial;
   });
 
+  useEffect(() => {
+    setDraft(normalizeWebhooks(webhooks));
+  }, [webhooks]);
+
   function updateField(key: string, value: string) {
-    setDraft((prev) => ({ ...prev, [key]: value }));
+    setDraft((prev) => {
+      const next = { ...prev, [key]: value };
+      onChange?.(Object.fromEntries(Object.entries(next).map(([itemKey, itemValue]) => [itemKey, itemValue.trim() || null])));
+      return next;
+    });
   }
 
   async function handleSave() {
@@ -70,12 +88,14 @@ export function WebhooksSettings({ webhooks, onSave, isSaving }: WebhooksSetting
         ))}
       </div>
 
-      <div className="flex justify-end pt-2">
-        <button type="button" onClick={handleSave} disabled={isSaving} className="btn-primary">
-          <Save size={16} />
-          {isSaving ? "Salvando..." : "Salvar webhooks"}
-        </button>
-      </div>
+      {showSaveButton ? (
+        <div className="flex justify-end pt-2">
+          <button type="button" onClick={handleSave} disabled={isSaving} className="btn-primary">
+            <Save size={16} />
+            {isSaving ? "Salvando..." : "Salvar webhooks"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

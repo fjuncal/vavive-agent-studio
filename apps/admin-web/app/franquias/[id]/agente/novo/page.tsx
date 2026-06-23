@@ -1,109 +1,176 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
-import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { FormWizard, type WizardStep } from "@/components/FormWizard";
-import { PageHeader } from "@/components/PageHeader";
-import { ToggleField, OptionCards, RichTextarea } from "@/components/FriendlyForm";
+import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
-import { TrainingEditor, type TrainingItem } from "@/components/TrainingEditor";
+import { IdleActionsSettings } from "@/components/IdleActionsSettings";
 import { IntentionWizard, type IntentionData } from "@/components/IntentionWizard";
+import { OptionCards, RichTextarea, ToggleField } from "@/components/FriendlyForm";
+import { PageHeader } from "@/components/PageHeader";
+import { TabConfig, type TabItem } from "@/components/TabConfig";
+import { TrainingEditor, type TrainingItem } from "@/components/TrainingEditor";
+import { TransferRulesSettings } from "@/components/TransferRulesSettings";
 import { useToast } from "@/components/Toast";
+import { WebhooksSettings } from "@/components/WebhooksSettings";
 import {
+  createGptMakerIntention,
+  createGptMakerTraining,
+  createIdleAction,
+  createTransferRule,
+  getFranchiseAssistantConfiguration,
   getFranchiseById,
   getFranchiseGptMakerConnection,
-  getFranchiseDefaultContext,
-  getFranchiseAssistantConfiguration,
   provisionFranchiseGptMakerAgent,
-  createGptMakerTraining,
-  createGptMakerIntention,
+  updateAgentSettings,
+  updateAgentWebhooks,
   type FranchiseAssistantConfiguration,
   type FranchiseGptMakerConnection,
-  type FranchiseSummary,
+  type FranchiseSummary
 } from "@/lib/api";
-import { Bot, User, Briefcase, BookOpen, Target, Settings, CheckCircle2, Plus, X, Sparkles } from "lucide-react";
+import { BookOpen, Bot, Briefcase, CheckCircle2, Plus, Settings, Sparkles, Target, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState, useCallback } from "react";
-import clsx from "clsx";
+import { useCallback, useEffect, useState } from "react";
 
 const communicationOptions = [
-  { value: "FORMAL", label: "Formal", description: "Linguagem profissional e respeitosa", icon: "👔" },
-  { value: "NORMAL", label: "Normal", description: "Equilibrio entre formal e casual", icon: "💬" },
-  { value: "RELAXED", label: "Descontraida", description: "Linguagem casual e amigavel", icon: "😊" },
+  { value: "FORMAL", label: "Formal", description: "Mais institucional" },
+  { value: "NORMAL", label: "Normal", description: "Equilibrado" },
+  { value: "RELAXED", label: "Relaxado", description: "Mais proximo e leve" }
 ];
 
 const objectiveOptions = [
-  { value: "SUPPORT", label: "Suporte", description: "Use essa opcao sempre que o objetivo do seu agente for prestar suporte.", icon: "🛠️" },
-  { value: "SALE", label: "Vendas", description: "Use sempre que quiser criar um agente no setor de vendas.", icon: "🎯" },
-  { value: "PERSONAL", label: "Uso pessoal", description: "Escolha esta opcao caso seja um agente para uso pessoal.", icon: "🤝" },
+  { value: "SALE", label: "Vendas", description: "Conduzir fechamento" },
+  { value: "SUPPORT", label: "Suporte", description: "Resolver duvidas" },
+  { value: "PERSONAL", label: "Atendimento geral", description: "Fluxo amplo da unidade" }
 ];
 
-type Mode = "default" | "edit";
+type IdleActionDraft = {
+  id?: string;
+  type?: string;
+  instructions?: string | null;
+  seconds?: number;
+  allowAllHours?: boolean;
+};
 
-function StandardBanner({
-  label,
-  summary,
-  preview,
-  mode,
-  onModeChange,
-}: {
-  label: string;
-  summary: string;
-  preview?: React.ReactNode;
-  mode: Mode;
-  onModeChange: (m: Mode) => void;
-}) {
-  const [expanded, setExpanded] = useState(false);
+type TransferRuleDraft = {
+  id?: string;
+  instructions?: string;
+  returnOnFinish?: boolean;
+  type?: string;
+  agentId?: string | null;
+  userId?: string | null;
+};
 
+function asObject(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function asItems(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object") : [];
+}
+
+function getBlock(configuration: FranchiseAssistantConfiguration | null, blockType: string) {
+  return configuration?.blocks.find((block) => block.blockType === blockType) ?? null;
+}
+
+function defaultSettings(payload: Record<string, unknown>) {
+  return {
+    prefferModel: payload.prefferModel ?? "GPT_4_O",
+    timezone: payload.timezone ?? "America/Sao_Paulo",
+    enabledHumanTransfer: Boolean(payload.enabledHumanTransfer),
+    enabledReminder: Boolean(payload.enabledReminder),
+    splitMessages: Boolean(payload.splitMessages),
+    enabledEmoji: Boolean(payload.enabledEmoji),
+    signMessages: Boolean(payload.signMessages),
+    limitSubjects: Boolean(payload.limitSubjects),
+    knowledgeByFunction: Boolean(payload.knowledgeByFunction),
+    messageGroupingTime: payload.messageGroupingTime ?? "NO_GROUP",
+    maxDailyMessages: payload.maxDailyMessages ?? null,
+    maxDailyMessagesLimitAction: payload.maxDailyMessagesLimitAction ?? "TRANSFER"
+  };
+}
+
+function mapTrainingItems(payload: Record<string, unknown>): TrainingItem[] {
+  return asItems(payload.items).map((item): TrainingItem => {
+    const type = typeof item.type === "string" ? item.type : "TEXT";
+    if (type === "WEBSITE") {
+      return {
+        type: "WEBSITE",
+        website: String(item.website ?? item.content ?? ""),
+        trainingSubPages: item.trainingSubPages === "ACTIVE" ? "ACTIVE" : "DISABLED",
+        trainingInterval: String(item.trainingInterval ?? "ONE_WEEK")
+      };
+    }
+    if (type === "VIDEO") {
+      return { type: "VIDEO", video: String(item.video ?? item.content ?? "") };
+    }
+    if (type === "DOCUMENT") {
+      return {
+        type: "DOCUMENT",
+        documentUrl: String(item.documentUrl ?? item.content ?? ""),
+        documentName: String(item.documentName ?? item.title ?? "documento.pdf"),
+        documentMimetype: String(item.documentMimetype ?? "application/pdf")
+      };
+    }
+    return { type: "TEXT", text: String(item.text ?? item.content ?? "") };
+  });
+}
+
+function mapIntentions(payload: Record<string, unknown>): IntentionData[] {
+  return asItems(payload.items).map((item) => ({
+    description: String(item.description ?? item.name ?? ""),
+    instructions: String(item.instructions ?? ""),
+    details: String(item.details ?? ""),
+    type: item.type === "INSTRUCTIONS" ? "INSTRUCTIONS" : "WEBHOOK",
+    httpMethod: ["GET", "POST", "PUT", "DELETE", "PATCH"].includes(String(item.httpMethod))
+      ? String(item.httpMethod) as IntentionData["httpMethod"]
+      : "POST",
+    url: String(item.url ?? ""),
+    headers: Array.isArray(item.headers) ? item.headers as IntentionData["headers"] : [],
+    params: Array.isArray(item.params) ? item.params as IntentionData["params"] : [],
+    requestBody: String(item.requestBody ?? ""),
+    fields: Array.isArray(item.fields) ? item.fields as IntentionData["fields"] : [],
+    variables: Array.isArray(item.variables) ? item.variables as IntentionData["variables"] : [],
+    autoGenerateParams: Boolean(item.autoGenerateParams),
+    autoGenerateBody: Boolean(item.autoGenerateBody)
+  }));
+}
+
+function trainingPayload(item: TrainingItem) {
+  if (item.type === "TEXT") return { type: "TEXT", text: item.text };
+  return item as unknown as Record<string, unknown>;
+}
+
+function slugify(value: string, fallback: string) {
+  const slug = value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "");
+  return slug || fallback;
+}
+
+function intentionPayload(intention: IntentionData, index: number) {
+  const description = intention.description.trim() || `Intencao ${index + 1}`;
+  return {
+    ...intention,
+    name: slugify(description, `intencao-${index + 1}`),
+    description,
+    instructions: intention.instructions.trim() || "Usar quando o pedido do cliente corresponder a esta intencao."
+  };
+}
+
+function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div
-      className="rounded-xl border p-4"
-      style={{
-        borderColor: mode === "default" ? "var(--color-brand-500)" : "var(--color-brand-200)",
-        background: mode === "default" ? "var(--color-brand-50)" : "var(--color-bg-primary)",
-      }}
-    >
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <Sparkles size={16} className="text-brand-500 shrink-0" />
-            <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{label}</p>
-          </div>
-          <p className="text-xs mt-1" style={{ color: "var(--color-text-secondary)" }}>{summary}</p>
+    <div className="card p-4">
+      <div className="flex items-center gap-3">
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">
+          {icon}
         </div>
-        {preview && mode === "default" && (
-          <button
-            type="button"
-            onClick={() => setExpanded(!expanded)}
-            className="text-xs text-brand-600 hover:text-brand-700 shrink-0 ml-2"
-          >
-            {expanded ? "Ocultar" : "Ver conteudo"}
-          </button>
-        )}
-      </div>
-
-      {preview && mode === "default" && expanded && (
-        <div className="mb-3 rounded-lg p-3 text-sm" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>
-          {preview}
+        <div className="min-w-0">
+          <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>{label}</p>
+          <p className="mt-1 truncate text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{value}</p>
         </div>
-      )}
-
-      <div className="flex gap-2">
-        {(["default", "edit"] as Mode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            onClick={() => onModeChange(m)}
-            className={clsx(
-              "px-3 py-1.5 text-xs font-medium rounded-lg transition",
-              mode === m
-                ? "bg-brand-600 text-white"
-                : "bg-white text-brand-600 border border-brand-200 hover:bg-brand-50"
-            )}
-          >
-            {m === "default" ? "Usar padrao" : "Editar"}
-          </button>
-        ))}
       </div>
     </div>
   );
@@ -116,37 +183,25 @@ export default function AgentWizardPage() {
   const [franchise, setFranchise] = useState<FranchiseSummary | null>(null);
   const [connection, setConnection] = useState<FranchiseGptMakerConnection | null>(null);
   const [configuration, setConfiguration] = useState<FranchiseAssistantConfiguration | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [confirmAction, setConfirmAction] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showIntentionWizard, setShowIntentionWizard] = useState(false);
 
-  // Passo 1: Perfil
   const [agentName, setAgentName] = useState("");
   const [communicationType, setCommunicationType] = useState<"FORMAL" | "NORMAL" | "RELAXED">("NORMAL");
-  const [behavior, setBehavior] = useState("");
-  const [profileMode, setProfileMode] = useState<Mode>("default");
-
-  // Passo 2: Trabalho
   const [objectiveType, setObjectiveType] = useState<"SUPPORT" | "SALE" | "PERSONAL">("SALE");
-  const [productName, setProductName] = useState("");
+  const [jobName, setJobName] = useState("");
   const [jobSite, setJobSite] = useState("");
   const [jobDescription, setJobDescription] = useState("");
-  const [workMode, setWorkMode] = useState<Mode>("default");
-
-  // Passo 3: Treinamentos
+  const [behavior, setBehavior] = useState("");
+  const [baseDescription, setBaseDescription] = useState("");
   const [trainings, setTrainings] = useState<TrainingItem[]>([]);
-  const [trainingsMode, setTrainingsMode] = useState<Mode>("default");
-
-  // Passo 4: Intencoes
   const [intentions, setIntentions] = useState<IntentionData[]>([]);
-  const [showIntentionWizard, setShowIntentionWizard] = useState(false);
-  const [intentionsMode, setIntentionsMode] = useState<Mode>("default");
-
-  // Passo 5: Configuracoes
-  const [useEmojis, setUseEmojis] = useState(true);
-  const [signMessages, setSignMessages] = useState(true);
-  const [limitSubjects, setLimitSubjects] = useState(false);
+  const [settings, setSettings] = useState<Record<string, unknown>>(defaultSettings({}));
+  const [idleActions, setIdleActions] = useState<IdleActionDraft[]>([]);
+  const [transferRules, setTransferRules] = useState<TransferRuleDraft[]>([]);
+  const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
 
   useEffect(() => {
     if (!params?.id) return;
@@ -154,91 +209,51 @@ export default function AgentWizardPage() {
     Promise.all([
       getFranchiseById(params.id),
       getFranchiseGptMakerConnection(params.id),
-      getFranchiseDefaultContext(params.id),
-      getFranchiseAssistantConfiguration(params.id),
+      getFranchiseAssistantConfiguration(params.id)
     ])
-      .then(([franchiseData, connectionData, contextData, assistantConfiguration]) => {
+      .then(([franchiseData, connectionData, configurationData]) => {
         setFranchise(franchiseData);
         setConnection(connectionData);
-        setConfiguration(assistantConfiguration);
-        setAgentName(connectionData.agentName ?? `Assistente Vavive - ${franchiseData.name}`);
+        setConfiguration(configurationData);
 
-        if (assistantConfiguration?.blocks) {
-          const roleBlock = assistantConfiguration.blocks.find((b) => b.blockType === "ROLE");
-          const behaviorBlock = assistantConfiguration.blocks.find((b) => b.blockType === "BEHAVIOR");
-          const trainingsBlock = assistantConfiguration.blocks.find((b) => b.blockType === "TRAININGS");
-          const intentionsBlock = assistantConfiguration.blocks.find((b) => b.blockType === "INTENTIONS");
+        const rolePayload = asObject(getBlock(configurationData, "ROLE")?.payload);
+        const behaviorPayload = asObject(getBlock(configurationData, "BEHAVIOR")?.payload);
+        const basePayload = asObject(getBlock(configurationData, "BASE_DESCRIPTION")?.payload);
+        const trainingsPayload = asObject(getBlock(configurationData, "TRAININGS")?.payload);
+        const intentionsPayload = asObject(getBlock(configurationData, "INTENTIONS")?.payload);
+        const settingsPayload = asObject(getBlock(configurationData, "AGENT_SETTINGS")?.payload);
+        const idleActionsPayload = asObject(getBlock(configurationData, "IDLE_ACTIONS")?.payload);
+        const transferRulesPayload = asObject(getBlock(configurationData, "TRANSFER_RULES")?.payload);
 
-          // Pre-fill profile from ROLE + BEHAVIOR
-          if (roleBlock?.payload) {
-            const p = roleBlock.payload as Record<string, unknown>;
-            if (p.communicationType && ["FORMAL", "NORMAL", "RELAXED"].includes(p.communicationType as string)) {
-              setCommunicationType(p.communicationType as "FORMAL" | "NORMAL" | "RELAXED");
-            }
-          }
-          if (behaviorBlock?.payload) {
-            const p = behaviorBlock.payload as Record<string, unknown>;
-            if (typeof p.instruction === "string" && p.instruction.trim()) {
-              setBehavior(p.instruction);
-            }
-          }
-
-          // Pre-fill work from ROLE
-          if (roleBlock?.payload) {
-            const p = roleBlock.payload as Record<string, unknown>;
-            if (p.type && ["SALE", "SUPPORT", "PERSONAL"].includes(p.type as string)) {
-              setObjectiveType(p.type as "SUPPORT" | "SALE" | "PERSONAL");
-            }
-            if (typeof p.jobName === "string" && p.jobName.trim()) setProductName(p.jobName);
-            if (typeof p.jobSite === "string") setJobSite(p.jobSite);
-            if (typeof p.description === "string") setJobDescription(p.description);
-          }
-
-          // Pre-fill trainings
-          if (trainingsBlock?.payload) {
-            const p = trainingsBlock.payload as Record<string, unknown>;
-            if (Array.isArray(p.items) && p.items.length > 0) {
-              setTrainings(p.items.map((item: Record<string, unknown>) => ({
-                type: "TEXT" as const,
-                text: (item.content as string) || (item.text as string) || "",
-              })));
-              setTrainingsMode("default");
-            } else {
-              setTrainingsMode("edit");
-            }
-          } else {
-            setTrainingsMode("edit");
-          }
-
-          // Pre-fill intentions
-          if (intentionsBlock?.payload) {
-            const p = intentionsBlock.payload as Record<string, unknown>;
-            if (Array.isArray(p.items) && p.items.length > 0) {
-              setIntentions(p.items.map((item: Record<string, unknown>) => ({
-                description: (item.name as string) || (item.description as string) || "",
-                instructions: (item.instructions as string) || "",
-                details: (item.details as string) || "",
-                type: (item.type as IntentionData["type"]) || "WEBHOOK",
-                httpMethod: (item.httpMethod as IntentionData["httpMethod"]) || "POST",
-                url: (item.url as string) || "",
-                headers: (item.headers as IntentionData["headers"]) || [],
-                params: (item.params as IntentionData["params"]) || [],
-                requestBody: (item.requestBody as string) || "",
-                fields: (item.fields as IntentionData["fields"]) || [],
-                variables: (item.variables as IntentionData["variables"]) || [],
-                autoGenerateParams: (item.autoGenerateParams as boolean) ?? false,
-                autoGenerateBody: (item.autoGenerateBody as boolean) ?? false,
-              })));
-              setIntentionsMode("default");
-            } else {
-              setIntentionsMode("edit");
-            }
-          } else {
-            setIntentionsMode("edit");
-          }
-        }
+        setAgentName(String(rolePayload.assistantName ?? connectionData.agentName ?? `Assistente Vavive - ${franchiseData.name}`));
+        setCommunicationType(rolePayload.communicationType === "FORMAL" || rolePayload.communicationType === "RELAXED" ? rolePayload.communicationType : "NORMAL");
+        setObjectiveType(rolePayload.type === "SUPPORT" || rolePayload.type === "PERSONAL" ? rolePayload.type : "SALE");
+        setJobName(String(rolePayload.jobName ?? franchiseData.name ?? "Vavive"));
+        setJobSite(String(rolePayload.jobSite ?? "https://vavive.com.br"));
+        setJobDescription(String(rolePayload.description ?? ""));
+        setBehavior(String(behaviorPayload.instruction ?? ""));
+        setBaseDescription(String(basePayload.text ?? ""));
+        setTrainings(mapTrainingItems(trainingsPayload));
+        setIntentions(mapIntentions(intentionsPayload));
+        setSettings(defaultSettings(settingsPayload));
+        setWebhooks(asObject(settingsPayload.webhooks));
+        setIdleActions(asItems(idleActionsPayload.items).map((item, index) => ({
+          id: String(item.id ?? `idle-${index}`),
+          type: String(item.type ?? "FINISH_INTERACTION"),
+          instructions: typeof item.instructions === "string" ? item.instructions : null,
+          seconds: Number(item.seconds ?? 600),
+          allowAllHours: item.allowAllHours !== false
+        })));
+        setTransferRules(asItems(transferRulesPayload.items).map((item, index) => ({
+          id: String(item.id ?? `transfer-${index}`),
+          type: String(item.type ?? "HUMAN"),
+          instructions: String(item.instructions ?? ""),
+          returnOnFinish: item.returnOnFinish !== false,
+          agentId: typeof item.agentId === "string" ? item.agentId : null,
+          userId: typeof item.userId === "string" ? item.userId : null
+        })));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : "Erro ao carregar dados."))
+      .catch((requestError) => setError(requestError instanceof Error ? requestError.message : "Erro ao carregar dados."))
       .finally(() => setIsLoading(false));
   }, [params?.id]);
 
@@ -246,8 +261,8 @@ export default function AgentWizardPage() {
     if (error) showError(error);
   }, [error, showError]);
 
-  const hasAgent = !!connection?.agentId;
-  const hasWorkspace = !!connection?.workspaceId;
+  const hasWorkspace = Boolean(connection?.workspaceId);
+  const hasAgent = Boolean(connection?.agentId);
 
   const handleProvisionAgent = useCallback(async () => {
     if (!params?.id || !connection?.workspaceId) {
@@ -261,59 +276,235 @@ export default function AgentWizardPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const resolvedCommunication = communicationType;
-      const resolvedObjective = objectiveType;
-      const resolvedBehavior = behavior;
-      const resolvedDescription = jobDescription;
-
-      const response = await provisionFranchiseGptMakerAgent(params.id, {
+      await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
         workspaceName: connection.workspaceName ?? undefined,
-        agentName,
-        communicationType: resolvedCommunication,
-        type: resolvedObjective,
-        jobName: productName || franchise?.name || "Vavive",
-        jobSite: jobSite || "https://vavive.com.br",
-        jobDescription: resolvedDescription,
-        behavior: resolvedBehavior,
-        confirmCriticalChange: hasAgent,
+        agentName: agentName.trim(),
+        communicationType,
+        type: objectiveType,
+        jobName: jobName.trim() || franchise?.name || "Vavive",
+        jobSite: jobSite.trim() || "https://vavive.com.br",
+        jobDescription: [jobDescription, baseDescription].filter(Boolean).join("\n\n"),
+        behavior,
+        confirmCriticalChange: hasAgent
       });
-      setConnection(response);
 
-      // Send trainings
-      if (trainings.length > 0 && params.id) {
-        await Promise.allSettled(
-          trainings.map((t) => createGptMakerTraining(params.id, t as unknown as Record<string, unknown>))
-        );
-      }
-
-      // Send intentions
-      if (intentions.length > 0 && params.id) {
-        await Promise.allSettled(
-          intentions.map((i) => createGptMakerIntention(params.id, i as unknown as Record<string, unknown>))
-        );
-      }
+      await Promise.allSettled([
+        updateAgentSettings(params.id, settings),
+        updateAgentWebhooks(params.id, webhooks),
+        ...trainings.map((training) => createGptMakerTraining(params.id, trainingPayload(training))),
+        ...intentions.map((intention, index) => createGptMakerIntention(params.id, intentionPayload(intention, index))),
+        ...idleActions.map(({ id, ...payload }) => createIdleAction(params.id, payload)),
+        ...transferRules.map(({ id, ...payload }) => createTransferRule(params.id, payload))
+      ]);
 
       showSuccess("Assistente criado com sucesso.");
       router.push(`/franquias/${params.id}/agente/configuracao`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao criar assistente.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Erro ao criar assistente.");
     } finally {
       setIsSaving(false);
     }
-  }, [params?.id, connection, agentName, communicationType, objectiveType, behavior, productName, jobSite, jobDescription, franchise, hasAgent, router, trainings, intentions, profileMode, workMode, trainingsMode, intentionsMode, showSuccess, showError]);
+  }, [
+    agentName,
+    baseDescription,
+    behavior,
+    communicationType,
+    connection,
+    franchise?.name,
+    hasAgent,
+    idleActions,
+    intentions,
+    jobDescription,
+    jobName,
+    jobSite,
+    objectiveType,
+    params?.id,
+    router,
+    settings,
+    showSuccess,
+    trainings,
+    transferRules,
+    webhooks
+  ]);
 
-  const hasStandardProfile = configuration?.blocks.some((b) => b.mode === "STANDARD" && b.payload) ?? false;
-  const standardRoleBlock = configuration?.blocks.find((b) => b.blockType === "ROLE");
-  const standardBehaviorBlock = configuration?.blocks.find((b) => b.blockType === "BEHAVIOR");
-  const standardTrainingsBlock = configuration?.blocks.find((b) => b.blockType === "TRAININGS");
-  const standardIntentionsBlock = configuration?.blocks.find((b) => b.blockType === "INTENTIONS");
+  const tabs: TabItem[] = [
+    {
+      id: "profile",
+      label: "Perfil",
+      icon: <Bot size={16} />,
+      content: (
+        <div className="space-y-6">
+          <div className="rounded-xl border border-brand-100 bg-brand-50 p-4 dark:border-brand-800 dark:bg-brand-900/20">
+            <p className="text-sm font-medium text-brand-700 dark:text-brand-300">Preenchido com o pre-setup da matriz.</p>
+            <p className="mt-1 text-xs text-brand-600 dark:text-brand-400">Edite qualquer campo antes de criar se esta unidade precisar fugir do padrao.</p>
+          </div>
+          <Field label="Nome do assistente" value={agentName} onChange={setAgentName} required />
+          <OptionCards
+            label="Comunicacao"
+            description="Como o assistente se comunica"
+            value={communicationType}
+            onChange={(value) => setCommunicationType(value as typeof communicationType)}
+            options={communicationOptions}
+          />
+          <OptionCards
+            label="Objetivo"
+            value={objectiveType}
+            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
+            options={objectiveOptions}
+          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Field label="Produto ou nome do negocio" value={jobName} onChange={setJobName} />
+            <Field label="Site oficial" value={jobSite} onChange={setJobSite} />
+          </div>
+          <RichTextarea label="Descricao da operacao" value={jobDescription} onChange={setJobDescription} rows={4} />
+        </div>
+      )
+    },
+    {
+      id: "personality",
+      label: "Personalidade",
+      icon: <Sparkles size={16} />,
+      content: (
+        <div className="space-y-6">
+          <RichTextarea label="Comportamento" value={behavior} onChange={setBehavior} rows={6} />
+          <RichTextarea label="Descricao base" value={baseDescription} onChange={setBaseDescription} rows={5} />
+          <div className="grid gap-3 md:grid-cols-2">
+            <ToggleField label="Usar emojis" checked={Boolean(settings.enabledEmoji)} onChange={(value) => setSettings((current) => ({ ...current, enabledEmoji: value }))} />
+            <ToggleField label="Assinar mensagens" checked={Boolean(settings.signMessages)} onChange={(value) => setSettings((current) => ({ ...current, signMessages: value }))} />
+            <ToggleField label="Limitar assuntos" checked={Boolean(settings.limitSubjects)} onChange={(value) => setSettings((current) => ({ ...current, limitSubjects: value }))} />
+          </div>
+        </div>
+      )
+    },
+    {
+      id: "trainings",
+      label: "Treinamentos",
+      icon: <BookOpen size={16} />,
+      badge: String(trainings.length),
+      content: <TrainingEditor items={trainings} onChange={setTrainings} />
+    },
+    {
+      id: "intentions",
+      label: "Intencoes",
+      icon: <Target size={16} />,
+      badge: String(intentions.length),
+      content: (
+        <div className="space-y-6">
+          {intentions.length > 0 ? (
+            <div className="space-y-3">
+              {intentions.map((intent, index) => (
+                <div key={`${intent.description}-${index}`} className="card p-4 flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{intent.description || `Intencao ${index + 1}`}</p>
+                    {intent.instructions ? <p className="mt-1 text-sm line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{intent.instructions}</p> : null}
+                  </div>
+                  <button type="button" onClick={() => setIntentions((current) => current.filter((_, itemIndex) => itemIndex !== index))} className="text-sm text-rose-500 hover:text-rose-700">
+                    <X size={16} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="card p-6 text-center">
+              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhuma intencao configurada.</p>
+            </div>
+          )}
+
+          {!showIntentionWizard ? (
+            <button type="button" onClick={() => setShowIntentionWizard(true)} className="btn-primary">
+              <Plus size={16} />
+              Adicionar intencao
+            </button>
+          ) : (
+            <div className="card p-6">
+              <IntentionWizard
+                onSave={(data) => {
+                  setIntentions((current) => [...current, data]);
+                  setShowIntentionWizard(false);
+                }}
+                onCancel={() => setShowIntentionWizard(false)}
+              />
+            </div>
+          )}
+        </div>
+      )
+    },
+    {
+      id: "settings",
+      label: "Configuracoes",
+      icon: <Settings size={16} />,
+      content: (
+        <TabConfig
+          tabs={[
+            {
+              id: "conversation",
+              label: "Conversa",
+              content: (
+                <ConversationSettings
+                  settings={settings}
+                  onChange={setSettings}
+                  onSave={async () => undefined}
+                  isSaving={isSaving}
+                  showSaveButton={false}
+                />
+              )
+            },
+            {
+              id: "idle-actions",
+              label: "Acoes de Inatividade",
+              badge: String(idleActions.length),
+              content: (
+                <IdleActionsSettings
+                  actions={idleActions}
+                  onCreate={async (payload) => setIdleActions((current) => [...current, { id: crypto.randomUUID(), ...payload }])}
+                  onUpdate={async (actionId, payload) => setIdleActions((current) => current.map((item) => item.id === actionId ? { ...item, ...payload } : item))}
+                  onDelete={async (actionId) => setIdleActions((current) => current.filter((item) => item.id !== actionId))}
+                  isSaving={isSaving}
+                />
+              )
+            },
+            {
+              id: "webhooks",
+              label: "Webhooks",
+              content: (
+                <WebhooksSettings
+                  webhooks={webhooks}
+                  onChange={setWebhooks}
+                  onSave={async () => undefined}
+                  isSaving={isSaving}
+                  showSaveButton={false}
+                />
+              )
+            },
+            {
+              id: "transfer-rules",
+              label: "Regras de Transferencia",
+              badge: String(transferRules.length),
+              content: (
+                <TransferRulesSettings
+                  rules={transferRules}
+                  onCreate={async (payload) => setTransferRules((current) => [...current, { id: crypto.randomUUID(), ...payload }])}
+                  onUpdate={async (ruleId, payload) => setTransferRules((current) => current.map((item) => item.id === ruleId ? { ...item, ...payload } : item))}
+                  onDelete={async (ruleId) => setTransferRules((current) => current.filter((item) => item.id !== ruleId))}
+                  isSaving={isSaving}
+                />
+              )
+            }
+          ]}
+          defaultTab="conversation"
+        />
+      )
+    }
+  ];
 
   if (isLoading) {
     return (
       <AppShell>
         <PageHeader eyebrow="Assistente" title="Criar Assistente" />
-        <section className="card p-6"><p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando...</p></section>
+        <section className="card p-6">
+          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando...</p>
+        </section>
       </AppShell>
     );
   }
@@ -323,7 +514,7 @@ export default function AgentWizardPage() {
       <AppShell>
         <PageHeader eyebrow="Assistente" title="Criar Assistente" />
         <section className="card p-6">
-          <p className="rounded-2xl bg-amber-50 dark:bg-amber-950/50 p-4 text-sm text-amber-800 dark:text-amber-300">
+          <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
             Vincule um workspace na tela da franquia antes de criar o assistente.
           </p>
         </section>
@@ -340,366 +531,43 @@ export default function AgentWizardPage() {
             <CheckCircle2 size={24} className="text-green-500" />
             <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>Assistente ja configurado: {connection?.agentName}</p>
           </div>
-          <p className="text-sm mb-4" style={{ color: "var(--color-text-secondary)" }}>Para reconfigurar, acesse a tela de configuracao do agente.</p>
-          <button type="button" onClick={() => router.push(`/franquias/${params?.id}/agente/configuracao`)} className="btn-primary">Ir para configuracao</button>
+          <button type="button" onClick={() => router.push(`/franquias/${params?.id}/agente/configuracao`)} className="btn-primary">
+            Ir para configuracao
+          </button>
         </section>
       </AppShell>
     );
   }
 
-  const profileSummary = standardRoleBlock?.payload
-    ? `Comunicacao: ${(standardRoleBlock.payload as Record<string, unknown>).communicationType ?? "NORMAL"} | Comportamento pre-definido`
-    : "Nenhum padrao definido";
-
-  const workSummary = standardRoleBlock?.payload
-    ? `Objetivo: ${(standardRoleBlock.payload as Record<string, unknown>).type ?? "SALE"} | ${(standardRoleBlock.payload as Record<string, unknown>).jobSite ?? "Sem site"}`
-    : "Nenhum padrao definido";
-
-  const trainingsCount = trainings.length;
-  const trainingsSummary = trainingsCount > 0
-    ? `${trainingsCount} treinamento(s): ${trainings.slice(0, 3).map(t => t.type === "TEXT" ? t.text.slice(0, 30) : t.type).join(", ")}${trainingsCount > 3 ? "..." : ""}`
-    : "Nenhum treinamento padrao";
-
-  const intentionsCount = intentions.length;
-  const intentionsSummary = intentionsCount > 0
-    ? `${intentionsCount} intencao(oes): ${intentions.slice(0, 3).map(i => i.description).join(", ")}${intentionsCount > 3 ? "..." : ""}`
-    : "Nenhuma intencao padrao";
-
-  const steps: WizardStep[] = [
-    // Passo 1: Perfil
-    {
-      id: "profile",
-      title: "Perfil do Agente",
-      description: "Nome, comunicacao e comportamento",
-      isValid: agentName.trim().length > 0,
-      content: (
-        <div className="space-y-6">
-          <Field label="Nome do assistente" placeholder="Ex: Assistente Vavive - Unidade Centro" value={agentName} onChange={setAgentName} required hint="Este nome sera exibido para os clientes" />
-
-          {hasStandardProfile && (
-            <StandardBanner
-              label="Configuracao de perfil definida pelo SUPER_ADMIN"
-              summary={profileSummary}
-              preview={
-                <div className="space-y-2">
-                  <p><span className="font-medium">Comunicacao:</span> {communicationOptions.find(c => c.value === communicationType)?.label ?? communicationType}</p>
-                  {behavior && <p><span className="font-medium">Comportamento:</span> {behavior.slice(0, 200)}{behavior.length > 200 ? "..." : ""}</p>}
-                </div>
-              }
-              mode={profileMode}
-              onModeChange={setProfileMode}
-            />
-          )}
-
-          <OptionCards label="Comunicacao" description="Como o assistente se comunica" value={communicationType}
-            onChange={(v) => setCommunicationType(v as typeof communicationType)} options={communicationOptions}
-            disabled={profileMode === "default"}
-          />
-          <div className="relative">
-            <RichTextarea label="Comportamento" placeholder="Descreva como o agente deve se comportar durante a conversa..." value={behavior} onChange={setBehavior} rows={5} disabled={profileMode === "default"} />
-            {profileMode === "default" && behavior && (
-              <div className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                Texto definido pelo SUPER_ADMIN. Clique em "Editar" para personalizar.
-              </div>
-            )}
-          </div>
-        </div>
-      ),
-    },
-    // Passo 2: Trabalho
-    {
-      id: "work",
-      title: "Trabalho",
-      description: "Finalidade, produto e descricao",
-      isValid: true,
-      content: (
-        <div className="space-y-6">
-          {hasStandardProfile && (
-            <StandardBanner
-              label="Configuracao de trabalho definida pelo SUPER_ADMIN"
-              summary={workSummary}
-              preview={
-                <div className="space-y-2">
-                  <p><span className="font-medium">Finalidade:</span> {objectiveOptions.find(o => o.value === objectiveType)?.label ?? objectiveType}</p>
-                  {productName && <p><span className="font-medium">Produto:</span> {productName}</p>}
-                  {jobSite && <p><span className="font-medium">Site:</span> {jobSite}</p>}
-                  {jobDescription && <p><span className="font-medium">Descricao:</span> {jobDescription.slice(0, 200)}{jobDescription.length > 200 ? "..." : ""}</p>}
-                </div>
-              }
-              mode={workMode}
-              onModeChange={setWorkMode}
-            />
-          )}
-
-          <OptionCards label="Finalidade" description="Qual o foco principal do assistente" value={objectiveType}
-            onChange={(v) => setObjectiveType(v as typeof objectiveType)} options={objectiveOptions}
-            disabled={workMode === "default"}
-          />
-          <Field label="Vende o produto" placeholder="Ex: Matriz" value={productName} onChange={setProductName} disabled={workMode === "default"} />
-          <Field label="Site oficial (opcional)" placeholder="https://vavive.com.br" value={jobSite} onChange={setJobSite} disabled={workMode === "default"} />
-          <RichTextarea label="Descreva um pouco sobre sua franquia" placeholder="Fale sobre os servicos, diferenciais, regiao de atendimento..." value={jobDescription} onChange={setJobDescription} rows={4} disabled={workMode === "default"} />
-        </div>
-      ),
-    },
-    // Passo 3: Treinamentos
-    {
-      id: "trainings",
-      title: "Treinamentos",
-      description: "Conhecimento do assistente",
-      isValid: true,
-      content: (
-        <div className="space-y-6">
-          {hasStandardProfile && trainingsCount > 0 && (
-            <StandardBanner
-              label="Treinamentos definidos pelo SUPER_ADMIN"
-              summary={trainingsSummary}
-              preview={
-                <ul className="space-y-1">
-                  {trainings.slice(0, 5).map((t, i) => (
-                    <li key={i} className="text-sm">
-                      <span className="font-medium">[{t.type}]</span> {t.type === "TEXT" ? (t as { type: "TEXT"; text: string }).text.slice(0, 100) : t.type === "WEBSITE" ? (t as { type: "WEBSITE"; website: string }).website : t.type}
-                    </li>
-                  ))}
-                  {trainings.length > 5 && <li className="text-xs">...e mais {trainings.length - 5}</li>}
-                </ul>
-              }
-              mode={trainingsMode}
-              onModeChange={setTrainingsMode}
-            />
-          )}
-
-          {trainingsMode === "default" && trainingsCount > 0 && (
-            <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estes treinamentos serao aplicados ao assistente.</p>
-          )}
-          <TrainingEditor items={trainings} onChange={setTrainings} disabled={trainingsMode === "default"} />
-        </div>
-      ),
-    },
-    // Passo 4: Intencoes
-    {
-      id: "intentions",
-      title: "Intencoes",
-      description: "O que o assistente deve fazer",
-      isValid: true,
-      content: (
-        <div className="space-y-6">
-          {hasStandardProfile && intentionsCount > 0 && (
-            <StandardBanner
-              label="Intencoes definidas pelo SUPER_ADMIN"
-              summary={intentionsSummary}
-              preview={
-                <ul className="space-y-1">
-                  {intentions.slice(0, 5).map((intent, i) => (
-                    <li key={i} className="text-sm">
-                      <span className="font-medium">{intent.description}</span>
-                      {intent.instructions && <span className="ml-1">— {intent.instructions.slice(0, 80)}{intent.instructions.length > 80 ? "..." : ""}</span>}
-                    </li>
-                  ))}
-                  {intentions.length > 5 && <li className="text-xs">...e mais {intentions.length - 5}</li>}
-                </ul>
-              }
-              mode={intentionsMode}
-              onModeChange={setIntentionsMode}
-            />
-          )}
-
-          <>
-            {intentionsMode === "default" && intentionsCount > 0 && (
-              <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Estas intencoes serao aplicadas ao assistente.</p>
-            )}
-
-            {intentions.length > 0 && (
-              <div className="space-y-3">
-                {intentions.map((intent, i) => (
-                  <div key={i} className="card p-4 flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-medium truncate" style={{ color: "var(--color-text-primary)" }}>{intent.description}</p>
-                      {intent.instructions && <p className="text-sm mt-1 line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{intent.instructions}</p>}
-                      <div className="flex gap-2 mt-2">
-                        <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.type}</span>
-                        {intent.type === "WEBHOOK" && <span className="rounded-full bg-gray-100 dark:bg-gray-800 px-2 py-0.5 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{intent.httpMethod}</span>}
-                      </div>
-                    </div>
-                    {intentionsMode === "edit" && (
-                      <button type="button" onClick={() => setIntentions((prev) => prev.filter((_, idx) => idx !== i))} className="text-sm text-red-500 hover:text-red-700 shrink-0">
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {intentionsMode === "edit" && !showIntentionWizard && (
-              <button type="button" onClick={() => setShowIntentionWizard(true)} className="btn-secondary">
-                <Plus size={16} /> Cadastrar intencao
-              </button>
-            )}
-
-            {intentionsMode === "edit" && showIntentionWizard && (
-              <div className="card p-6">
-                <IntentionWizard
-                  onSave={(data) => {
-                    setIntentions((prev) => [...prev, data]);
-                    setShowIntentionWizard(false);
-                  }}
-                  onCancel={() => setShowIntentionWizard(false)}
-                />
-              </div>
-            )}
-          </>
-        </div>
-      ),
-    },
-    // Passo 5: Configuracoes
-    {
-      id: "settings",
-      title: "Configuracoes",
-      description: "Comportamento adicional",
-      isValid: true,
-      content: (
-        <div className="space-y-6">
-          <div className="space-y-3">
-            <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Comportamento</p>
-            <ToggleField label="Usar emojis" description="Assistente pode usar emojis nas mensagens" checked={useEmojis} onChange={setUseEmojis} />
-            <ToggleField label="Assinar mensagens" description="Adicionar nome do assistente no final" checked={signMessages} onChange={setSignMessages} />
-            <ToggleField label="Limitar assuntos" description="Responder apenas sobre o escopo definido" checked={limitSubjects} onChange={setLimitSubjects} />
-          </div>
-        </div>
-      ),
-    },
-    // Revisao
-    {
-      id: "review",
-      title: "Revisar & Criar",
-      description: "Confirme os dados",
-      isValid: agentName.trim().length > 0,
-      content: (
-        <div className="space-y-6">
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <User size={18} className="text-brand-500" />
-              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Perfil</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", profileMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
-                {profileMode === "default" ? "Padrao" : "Customizado"}
-              </span>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-2xl bg-brand-100 flex items-center justify-center">
-                <Bot size={20} className="text-brand-600" />
-              </div>
-              <div>
-                <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{agentName}</p>
-                <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>{communicationOptions.find(c => c.value === communicationType)?.label}</p>
-              </div>
-            </div>
-            {behavior && (
-              <p className="mt-2 text-xs line-clamp-2" style={{ color: "var(--color-text-tertiary)" }}>{behavior}</p>
-            )}
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Briefcase size={18} className="text-brand-500" />
-              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Trabalho</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", workMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
-                {workMode === "default" ? "Padrao" : "Customizado"}
-              </span>
-            </div>
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div><p style={{ color: "var(--color-text-tertiary)" }}>Finalidade</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{objectiveOptions.find(o => o.value === objectiveType)?.label}</p></div>
-              <div><p style={{ color: "var(--color-text-tertiary)" }}>Produto</p><p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{productName || franchise?.name || "-"}</p></div>
-            </div>
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <BookOpen size={18} className="text-brand-500" />
-              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Treinamentos</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", trainingsMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
-                {trainingsMode === "default" ? "Padrao" : "Customizado"}
-              </span>
-            </div>
-            {trainings.length > 0 ? (
-              <ul className="space-y-1">
-                {trainings.slice(0, 5).map((t, i) => (
-                  <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                    • [{t.type}] {t.type === "TEXT" ? (t as { type: "TEXT"; text: string }).text.slice(0, 60) : t.type === "WEBSITE" ? (t as { type: "WEBSITE"; website: string }).website : t.type}
-                  </li>
-                ))}
-                {trainings.length > 5 && <li className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>...e mais {trainings.length - 5}</li>}
-              </ul>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhum</p>
-            )}
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Target size={18} className="text-brand-500" />
-              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Intencoes</h3>
-              <span className={clsx("text-xs px-2 py-0.5 rounded-full", intentionsMode === "default" ? "bg-brand-100 text-brand-700" : "bg-amber-100 text-amber-700")}>
-                {intentionsMode === "default" ? "Padrao" : "Customizado"}
-              </span>
-            </div>
-            {intentions.length > 0 ? (
-              <ul className="space-y-1">
-                {intentions.slice(0, 5).map((intent, i) => (
-                  <li key={i} className="text-sm" style={{ color: "var(--color-text-secondary)" }}>• {intent.description}</li>
-                ))}
-                {intentions.length > 5 && <li className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>...e mais {intentions.length - 5}</li>}
-              </ul>
-            ) : (
-              <p className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Nenhuma</p>
-            )}
-          </div>
-
-          <div className="card p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <Settings size={18} className="text-brand-500" />
-              <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Configuracoes</h3>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {useEmojis && <span className="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-xs">Emojis</span>}
-              {signMessages && <span className="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-xs">Assinar</span>}
-              {limitSubjects && <span className="rounded-full bg-brand-100 text-brand-700 px-2 py-0.5 text-xs">Limitar assuntos</span>}
-              {!useEmojis && !signMessages && !limitSubjects && <span className="text-sm" style={{ color: "var(--color-text-tertiary)" }}>Padrao</span>}
-            </div>
-          </div>
-        </div>
-      ),
-    },
-  ];
-
   return (
     <AppShell>
-      <PageHeader eyebrow="Assistente" title={`Criar Assistente - ${franchise?.name ?? ""}`} description="Configure o assistente da franquia em 6 passos." />
-
-      {error && (
-        <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300 mb-4">{error}</p>
-      )}
-
-      <FormWizard
-        steps={steps}
-        onComplete={() => {
-          if (hasAgent) {
-            setConfirmAction(true);
-          } else {
-            handleProvisionAgent();
-          }
-        }}
-        submitLabel={hasAgent ? "Reconfigurar" : "Criar Assistente"}
-        isSubmitting={isSaving}
+      <PageHeader
+        eyebrow="Assistente"
+        title={`Criar Assistente - ${franchise?.name ?? ""}`}
+        description="Revise o pre-setup herdado da matriz, ajuste o que precisar e crie o agente."
       />
 
-      <ConfirmDialog
-        isOpen={confirmAction}
-        title="Reconfigurar assistente"
-        description="Esta acao substitui a configuracao atual do assistente."
-        confirmLabel="Reconfigurar"
-        onCancel={() => setConfirmAction(false)}
-        onConfirm={() => { setConfirmAction(false); handleProvisionAgent(); }}
-      />
+      {error ? (
+        <p className="mb-4 rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-950/50 dark:text-rose-300">{error}</p>
+      ) : null}
+
+      <div className="mb-6 grid gap-4 md:grid-cols-4">
+        <SummaryCard icon={<Bot size={18} />} label="Agente" value={agentName || "Sem nome"} />
+        <SummaryCard icon={<Briefcase size={18} />} label="Objetivo" value={objectiveOptions.find((item) => item.value === objectiveType)?.label ?? objectiveType} />
+        <SummaryCard icon={<BookOpen size={18} />} label="Treinamentos" value={String(trainings.length)} />
+        <SummaryCard icon={<Target size={18} />} label="Intencoes" value={String(intentions.length)} />
+      </div>
+
+      <section className="card p-6">
+        <TabConfig tabs={tabs} defaultTab="profile" />
+      </section>
+
+      <div className="mt-6 flex justify-end">
+        <button type="button" onClick={() => void handleProvisionAgent()} disabled={isSaving || !agentName.trim()} className="btn-primary">
+          <CheckCircle2 size={16} />
+          {isSaving ? "Criando..." : "Criar Assistente"}
+        </button>
+      </div>
     </AppShell>
   );
 }

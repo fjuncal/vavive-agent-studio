@@ -9,7 +9,6 @@ import {
   MessageSquareText,
   PlusCircle,
   Radio,
-  Route,
   Sparkles,
   UsersRound
 } from "lucide-react";
@@ -23,8 +22,7 @@ const nav = [
   { href: "/agentes", label: "Assistentes", icon: Bot },
   { href: "/canais", label: "Canais", icon: Radio },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
-  { href: "/leads", label: "Leads", icon: UsersRound },
-  { href: "/setup-guiado", label: "Workbench do assistente", icon: Route }
+  { href: "/leads", label: "Leads", icon: UsersRound }
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
@@ -39,9 +37,6 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
     }
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/conversas") {
       return { ...item, label: "Atendimentos" };
-    }
-    if (user?.role === "ADMIN_FRANQUIA" && item.href === "/setup-guiado") {
-      return { ...item, label: "Meu assistente" };
     }
     return item;
   });
@@ -99,16 +94,16 @@ export function Sidebar({ onClose }: { onClose?: () => void }) {
         <div className="absolute top-0 right-0 w-24 h-24 bg-brand-500/10 rounded-full -translate-y-8 translate-x-8" />
         <div className="relative">
           <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-white/12">
-            <Route size={18} />
+            <Bot size={18} />
           </div>
           <p className="text-sm font-semibold">Assistente Vavive</p>
           <p className="mt-1 text-xs leading-5 text-white/60">Organize blocos, treino e operacao da unidade.</p>
           <Link
-            href="/setup-guiado"
+            href="/agentes"
             onClick={onClose}
             className="mt-4 inline-flex rounded-lg bg-white px-3 py-2 text-xs font-semibold text-ink hover:bg-white/90 transition-colors dark:bg-brand-600 dark:text-white"
           >
-            Continuar
+            Ver assistentes
           </Link>
         </div>
       </div>
