@@ -5,7 +5,7 @@ import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
 import { IdleActionsSettings } from "@/components/IdleActionsSettings";
 import { IntentionWizard, type IntentionData } from "@/components/IntentionWizard";
-import { OptionCards, RichTextarea, ToggleField } from "@/components/FriendlyForm";
+import { OptionCards, RichTextarea } from "@/components/FriendlyForm";
 import { PageHeader } from "@/components/PageHeader";
 import { TabConfig, type TabItem } from "@/components/TabConfig";
 import { TrainingEditor, type TrainingItem } from "@/components/TrainingEditor";
@@ -27,7 +27,7 @@ import {
   type FranchiseGptMakerConnection,
   type FranchiseSummary
 } from "@/lib/api";
-import { BookOpen, Bot, Briefcase, CheckCircle2, Plus, Settings, Sparkles, Target, X } from "lucide-react";
+import { BookOpen, Bot, Briefcase, CheckCircle2, Plus, Settings, Target, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -202,6 +202,7 @@ export default function AgentWizardPage() {
   const [idleActions, setIdleActions] = useState<IdleActionDraft[]>([]);
   const [transferRules, setTransferRules] = useState<TransferRuleDraft[]>([]);
   const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
+  const productNameLabel = jobName.trim() || "o produto";
 
   useEffect(() => {
     if (!params?.id) return;
@@ -347,33 +348,30 @@ export default function AgentWizardPage() {
             onChange={(value) => setCommunicationType(value as typeof communicationType)}
             options={communicationOptions}
           />
-          <OptionCards
-            label="Objetivo"
-            value={objectiveType}
-            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
-            options={objectiveOptions}
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Produto ou nome do negocio" value={jobName} onChange={setJobName} />
-            <Field label="Site oficial" value={jobSite} onChange={setJobSite} />
-          </div>
-          <RichTextarea label="Descricao da operacao" value={jobDescription} onChange={setJobDescription} rows={4} />
+          <RichTextarea label="Comportamento" value={behavior} onChange={setBehavior} rows={6} />
         </div>
       )
     },
     {
-      id: "personality",
-      label: "Personalidade",
-      icon: <Sparkles size={16} />,
+      id: "work",
+      label: "Trabalho",
+      icon: <Briefcase size={16} />,
       content: (
         <div className="space-y-6">
-          <RichTextarea label="Comportamento" value={behavior} onChange={setBehavior} rows={6} />
-          <RichTextarea label="Descricao base" value={baseDescription} onChange={setBaseDescription} rows={5} />
-          <div className="grid gap-3 md:grid-cols-2">
-            <ToggleField label="Usar emojis" checked={Boolean(settings.enabledEmoji)} onChange={(value) => setSettings((current) => ({ ...current, enabledEmoji: value }))} />
-            <ToggleField label="Assinar mensagens" checked={Boolean(settings.signMessages)} onChange={(value) => setSettings((current) => ({ ...current, signMessages: value }))} />
-            <ToggleField label="Limitar assuntos" checked={Boolean(settings.limitSubjects)} onChange={(value) => setSettings((current) => ({ ...current, limitSubjects: value }))} />
-          </div>
+          <OptionCards
+            label="Finalidade"
+            value={objectiveType}
+            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
+            options={objectiveOptions}
+          />
+          <Field label="Vende o produto" value={jobName} onChange={setJobName} />
+          <Field label="Site oficial (opcional)" value={jobSite} onChange={setJobSite} />
+          <RichTextarea
+            label={`Descreve um pouco sobre ${productNameLabel}`}
+            value={jobDescription}
+            onChange={setJobDescription}
+            rows={5}
+          />
         </div>
       )
     },

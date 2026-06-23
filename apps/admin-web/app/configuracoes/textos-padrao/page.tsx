@@ -2,7 +2,7 @@
 
 import { AppShell } from "@/components/AppShell";
 import { ConversationSettings } from "@/components/ConversationSettings";
-import { ToggleField, OptionCards, RichTextarea } from "@/components/FriendlyForm";
+import { OptionCards, RichTextarea } from "@/components/FriendlyForm";
 import { Field } from "@/components/FormSection";
 import { IdleActionsSettings } from "@/components/IdleActionsSettings";
 import { IntentionWizard, type IntentionData } from "@/components/IntentionWizard";
@@ -17,7 +17,7 @@ import {
   updateAssistantStandardBlock,
   type AssistantStandardProfile
 } from "@/lib/api";
-import { BookOpen, Bot, Briefcase, CheckCircle2, Plus, Settings, Sparkles, Target, X } from "lucide-react";
+import { BookOpen, Bot, Briefcase, CheckCircle2, Plus, Settings, Target, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 const communicationOptions = [
@@ -201,6 +201,7 @@ export default function DefaultAgentTextsPage() {
   const [idleActions, setIdleActions] = useState<IdleActionPreset[]>([]);
   const [transferRules, setTransferRules] = useState<TransferRulePreset[]>([]);
   const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
+  const productNameLabel = jobName.trim() || "o produto";
 
   useEffect(() => {
     setIsLoading(true);
@@ -329,27 +330,6 @@ export default function DefaultAgentTextsPage() {
             onChange={(value) => setCommunicationType(value as typeof communicationType)}
             options={communicationOptions}
           />
-          <OptionCards
-            label="Objetivo"
-            description="Finalidade principal herdada pelo franqueado"
-            value={objectiveType}
-            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
-            options={objectiveOptions}
-          />
-          <div className="grid gap-4 md:grid-cols-2">
-            <Field label="Produto ou nome do negocio" value={jobName} onChange={setJobName} />
-            <Field label="Site oficial" value={jobSite} onChange={setJobSite} />
-          </div>
-          <RichTextarea label="Descricao padrao da operacao" value={jobDescription} onChange={setJobDescription} rows={4} />
-        </div>
-      )
-    },
-    {
-      id: "personality",
-      label: "Personalidade",
-      icon: <Sparkles size={16} />,
-      content: (
-        <div className="space-y-6">
           <RichTextarea
             label="Comportamento"
             placeholder="Descreva como o agente deve se comportar durante a conversa..."
@@ -357,18 +337,30 @@ export default function DefaultAgentTextsPage() {
             onChange={setBehavior}
             rows={6}
           />
+        </div>
+      )
+    },
+    {
+      id: "work",
+      label: "Trabalho",
+      icon: <Briefcase size={16} />,
+      content: (
+        <div className="space-y-6">
+          <OptionCards
+            label="Finalidade"
+            description="Finalidade principal herdada pelo franqueado"
+            value={objectiveType}
+            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
+            options={objectiveOptions}
+          />
+          <Field label="Vende o produto" value={jobName} onChange={setJobName} />
+          <Field label="Site oficial (opcional)" value={jobSite} onChange={setJobSite} />
           <RichTextarea
-            label="Descricao base"
-            placeholder="Contexto base usado para orientar o assistente..."
-            value={baseDescription}
-            onChange={setBaseDescription}
+            label={`Descreve um pouco sobre ${productNameLabel}`}
+            value={jobDescription}
+            onChange={setJobDescription}
             rows={5}
           />
-          <div className="grid gap-3 md:grid-cols-2">
-            <ToggleField label="Usar emojis" checked={Boolean(settings.enabledEmoji)} onChange={(value) => setSettings((current) => ({ ...current, enabledEmoji: value }))} />
-            <ToggleField label="Assinar mensagens" checked={Boolean(settings.signMessages)} onChange={(value) => setSettings((current) => ({ ...current, signMessages: value }))} />
-            <ToggleField label="Limitar assuntos" checked={Boolean(settings.limitSubjects)} onChange={(value) => setSettings((current) => ({ ...current, limitSubjects: value }))} />
-          </div>
         </div>
       )
     },

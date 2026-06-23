@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
 import { IdleActionsSettings } from "@/components/IdleActionsSettings";
-import { OptionCards, RichTextarea, SelectField, ToggleField } from "@/components/FriendlyForm";
+import { OptionCards, RichTextarea } from "@/components/FriendlyForm";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusDropdown } from "@/components/StatusDropdown";
 import { TabConfig, type TabItem } from "@/components/TabConfig";
@@ -46,7 +46,7 @@ import {
   type GptMakerIntention,
   type AgentSyncStatus,
 } from "@/lib/api";
-import { BookOpen, Bot, Plus, Save, Settings, Sparkles, Target } from "lucide-react";
+import { BookOpen, Bot, Briefcase, Plus, Save, Settings, Target } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -86,9 +86,9 @@ function resolveProfileDraft(
     communicationType,
     objectiveType,
     behavior,
-    useEmojis: Boolean(settings.enabledEmoji ?? settings.useEmojis),
-    signMessages: Boolean(settings.signMessages),
-    limitSubjects: Boolean(settings.limitSubjects)
+    jobName: typeof rolePayload.jobName === "string" ? rolePayload.jobName : franchise?.name ?? "",
+    jobSite: typeof rolePayload.jobSite === "string" ? rolePayload.jobSite : "",
+    jobDescription: typeof rolePayload.description === "string" ? rolePayload.description : ""
   };
 }
 
@@ -146,9 +146,9 @@ export default function AgentConfigPage() {
   const [communicationType, setCommunicationType] = useState<"FORMAL" | "NORMAL" | "RELAXED">("NORMAL");
   const [objectiveType, setObjectiveType] = useState<"SUPPORT" | "SALE" | "PERSONAL">("SALE");
   const [behavior, setBehavior] = useState("");
-  const [useEmojis, setUseEmojis] = useState(false);
-  const [signMessages, setSignMessages] = useState(false);
-  const [limitSubjects, setLimitSubjects] = useState(false);
+  const [jobName, setJobName] = useState("");
+  const [jobSite, setJobSite] = useState("");
+  const [jobDescription, setJobDescription] = useState("");
 
   const [newTrainingTitle, setNewTrainingTitle] = useState("");
   const [newTrainingContent, setNewTrainingContent] = useState("");
@@ -167,9 +167,9 @@ export default function AgentConfigPage() {
     setCommunicationType(draft.communicationType);
     setObjectiveType(draft.objectiveType);
     setBehavior(draft.behavior);
-    setUseEmojis(draft.useEmojis);
-    setSignMessages(draft.signMessages);
-    setLimitSubjects(draft.limitSubjects);
+    setJobName(draft.jobName);
+    setJobSite(draft.jobSite);
+    setJobDescription(draft.jobDescription);
   }, []);
 
   useEffect(() => {
@@ -259,20 +259,15 @@ export default function AgentConfigPage() {
         : {
             agentName,
             communicationType,
-            objectiveType,
             behavior
           };
 
-      // Use updateAgent instead of provisionAgent to avoid creating a new agent
       await updateGptMakerAgent(params.id, {
         name: profileDraft.agentName,
         communicationType: profileDraft.communicationType,
-        type: profileDraft.objectiveType,
-        behavior: profileDraft.behavior,
-        jobName: franchise?.name ?? "Assistente Vavive"
+        behavior: profileDraft.behavior
       });
 
-      // Update local state
       setConnection((prev) => prev ? { ...prev, agentName: profileDraft.agentName } : null);
       if (useStandardPersonality) {
         applyProfileDraft(configuration, settings, connection, franchise);
@@ -298,6 +293,28 @@ export default function AgentConfigPage() {
     showSuccess,
     useStandardPersonality
   ]);
+
+  const handleSaveWork = useCallback(async () => {
+    if (!params?.id) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      await updateGptMakerAgent(params.id, {
+        type: objectiveType,
+        jobName: jobName.trim() || franchise?.name || "Assistente Vavive",
+        jobSite: jobSite.trim(),
+        jobDescription: jobDescription.trim()
+      });
+      showSuccess("Dados de trabalho salvos com sucesso.");
+    } catch (requestError) {
+      showError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar os dados de trabalho.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [franchise?.name, jobDescription, jobName, jobSite, objectiveType, params?.id, showError, showSuccess]);
+
+  const productNameLabel = jobName.trim() || "o produto";
 
   const handleSaveSettings = useCallback(async () => {
     if (!params?.id) {
@@ -378,7 +395,6 @@ export default function AgentConfigPage() {
             onChange={(value) => setCommunicationType(value as typeof communicationType)}
             options={communicationOptions}
           />
-          <OptionCards label="Objetivo" value={objectiveType} onChange={(value) => setObjectiveType(value as typeof objectiveType)} options={objectiveOptions} />
           <RichTextarea
             label="Comportamento"
             placeholder="Descreva como o agente deve se comportar durante a conversa..."
@@ -427,29 +443,30 @@ export default function AgentConfigPage() {
       )
     },
     {
-      id: "personality",
-      label: "Personalidade",
-      icon: <Sparkles size={16} />,
+      id: "work",
+      label: "Trabalho",
+      icon: <Briefcase size={16} />,
       content: (
         <div className="space-y-6">
-          <BlockNotice
-            title="Personalidade"
-            active={Boolean(useStandardPersonality)}
-            onCustomize={() => void refreshBlockMode("BEHAVIOR", "CUSTOM")}
-            onRestore={() => void refreshBlockMode("BEHAVIOR", "STANDARD")}
-          />
           <OptionCards
-            label="Tom de voz"
-            value={communicationType}
-            onChange={(value) => setCommunicationType(value as typeof communicationType)}
-            options={communicationOptions}
-            disabled={Boolean(useStandardPersonality)}
+            label="Finalidade"
+            value={objectiveType}
+            onChange={(value) => setObjectiveType(value as typeof objectiveType)}
+            options={objectiveOptions}
           />
-          <div className="space-y-3">
-            <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Comportamento</p>
-            <ToggleField label="Usar emojis" checked={useEmojis} onChange={setUseEmojis} disabled={Boolean(useStandardPersonality)} />
-            <ToggleField label="Assinar mensagens" checked={signMessages} onChange={setSignMessages} disabled={Boolean(useStandardPersonality)} />
-            <ToggleField label="Limitar assuntos" checked={limitSubjects} onChange={setLimitSubjects} disabled={Boolean(useStandardPersonality)} />
+          <Field label="Vende o produto" value={jobName} onChange={setJobName} />
+          <Field label="Site oficial (opcional)" value={jobSite} onChange={setJobSite} />
+          <RichTextarea
+            label={`Descreve um pouco sobre ${productNameLabel}`}
+            value={jobDescription}
+            onChange={setJobDescription}
+            rows={5}
+          />
+          <div className="flex justify-end">
+            <button type="button" onClick={handleSaveWork} disabled={isSaving} className="btn-primary">
+              <Save size={16} />
+              {isSaving ? "Salvando..." : "Salvar trabalho"}
+            </button>
           </div>
         </div>
       )
