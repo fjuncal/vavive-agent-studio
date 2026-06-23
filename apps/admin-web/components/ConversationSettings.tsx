@@ -2,7 +2,7 @@
 
 import { SelectField, ToggleField } from "@/components/FriendlyForm";
 import { Save } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const MODEL_OPTIONS = [
   { value: "GPT_5", label: "GPT-5" },
@@ -64,17 +64,23 @@ type ConversationSettingsProps = {
 
 export function ConversationSettings({ settings, onSave, isSaving, onChange, showSaveButton = true }: ConversationSettingsProps) {
   const [draft, setDraft] = useState<Record<string, unknown>>(settings);
+  const syncingFromPropsRef = useRef(false);
 
   useEffect(() => {
+    syncingFromPropsRef.current = true;
     setDraft(settings);
   }, [settings]);
 
+  useEffect(() => {
+    if (syncingFromPropsRef.current) {
+      syncingFromPropsRef.current = false;
+      return;
+    }
+    onChange?.(draft);
+  }, [draft, onChange]);
+
   function updateField(key: string, value: unknown) {
-    setDraft((prev) => {
-      const next = { ...prev, [key]: value };
-      onChange?.(next);
-      return next;
-    });
+    setDraft((prev) => ({ ...prev, [key]: value }));
   }
 
   async function handleSave() {

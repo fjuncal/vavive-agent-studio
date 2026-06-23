@@ -273,6 +273,11 @@ class AssistantStandardProfilePersistenceIntegrationTest {
         staleCustomTraining.setStandardVersionApplied(1);
         blockConfigRepository.save(staleCustomTraining);
 
+        FranchiseAssistantBlockConfig staleCustomIntention = new FranchiseAssistantBlockConfig(franchise, AssistantBlockType.INTENTIONS, AssistantBlockMode.CUSTOM);
+        staleCustomIntention.setCustomPayloadJson("{\"items\":[]}");
+        staleCustomIntention.setStandardVersionApplied(1);
+        blockConfigRepository.save(staleCustomIntention);
+
         mockMvc.perform(get("/franchises/{id}/assistant-configuration", franchise.getId())
                 .header("Authorization", bearerToken("admin@vavive.com")))
             .andExpect(status().isOk())
