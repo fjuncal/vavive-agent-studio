@@ -163,14 +163,15 @@ public class AssistantStandardProfileService {
     public FranchiseAssistantConfigurationResponse getFranchiseConfiguration(UUID franchiseId) {
         Franchise franchise = requireAccessibleFranchise(franchiseId);
         AssistantStandardProfile profile = ensureActiveProfile();
-        Map<AssistantBlockType, JsonNode> standardBlocks = resolveProfileBlocks(profile, false);
+        Map<AssistantBlockType, JsonNode> standardBlocks = resolveProfileBlocks(profile, true);
         Map<AssistantBlockType, FranchiseAssistantBlockConfig> configs = new EnumMap<>(AssistantBlockType.class);
         configRepository.findByFranchiseOrderByBlockTypeAsc(franchise).forEach(config -> configs.put(config.getBlockType(), config));
+        boolean agentConfigured = franchise.getAgentId() != null && !franchise.getAgentId().isBlank();
         List<AssistantBlockResponse> blocks = Arrays.stream(AssistantBlockType.values())
             .sorted(Comparator.naturalOrder())
             .map(type -> {
                 FranchiseAssistantBlockConfig config = configs.get(type);
-                boolean custom = config != null && config.getMode() == AssistantBlockMode.CUSTOM;
+                boolean custom = agentConfigured && config != null && config.getMode() == AssistantBlockMode.CUSTOM;
                 JsonNode payload = custom
                     ? readJson(config.getCustomPayloadJson(), type)
                     : enrichFranchiseBlock(franchise, type, standardBlocks.getOrDefault(type, defaultPayload(type)));
@@ -195,7 +196,7 @@ public class AssistantStandardProfileService {
         AssistantStandardProfile profile = ensureActiveProfile();
         AssistantBlockType type = parseBlockType(blockType);
         assertEditableForFranchise(type);
-        JsonNode payload = preparePayload(type, enrichFranchiseBlock(franchise, type, resolveProfileBlocks(profile, false).getOrDefault(type, defaultPayload(type))));
+        JsonNode payload = preparePayload(type, enrichFranchiseBlock(franchise, type, resolveProfileBlocks(profile, true).getOrDefault(type, defaultPayload(type))));
         FranchiseAssistantBlockConfig config = configRepository.findByFranchiseAndBlockType(franchise, type)
             .orElseGet(() -> new FranchiseAssistantBlockConfig(franchise, type, AssistantBlockMode.CUSTOM));
         config.setMode(AssistantBlockMode.CUSTOM);
@@ -274,7 +275,10 @@ public class AssistantStandardProfileService {
 
     private Map<AssistantBlockType, JsonNode> resolveProfileBlocks(AssistantStandardProfile profile, boolean persistMissingBlocks) {
         Map<AssistantBlockType, JsonNode> blocks = new EnumMap<>(AssistantBlockType.class);
-        blockRepository.findByProfileOrderByBlockTypeAsc(profile).forEach(block -> blocks.put(block.getBlockType(), readJson(block.getPayloadJson(), block.getBlockType())));
+        blockRepository.findByProfileOrderByBlockTypeAsc(profile).forEach(block -> {
+            JsonNode payload = readJson(block.getPayloadJson(), block.getBlockType());
+            blocks.put(block.getBlockType(), payload);
+        });
         Arrays.stream(AssistantBlockType.values()).forEach(type -> {
             if (blocks.containsKey(type)) {
                 return;
@@ -370,8 +374,13 @@ public class AssistantStandardProfileService {
         switch (type) {
             case BEHAVIOR -> objectNode.put("franchiseName", franchise.getName());
             case ROLE -> {
-                objectNode.put("jobName", franchise.getName());
-                objectNode.put("assistantName", franchise.getAgentName() == null || franchise.getAgentName().isBlank() ? "Assistente Vavive" : franchise.getAgentName());
+                objectNode.put("franchiseName", franchise.getName());
+                if (!hasText(objectNode, "assistantName")) {
+                    objectNode.put("assistantName", franchise.getAgentName() == null || franchise.getAgentName().isBlank() ? "Assistente Vavive" : franchise.getAgentName());
+                }
+                if (!hasText(objectNode, "jobName")) {
+                    objectNode.put("jobName", franchise.getName());
+                }
             }
             case BASE_DESCRIPTION -> {
                 if (setup != null) {
@@ -612,6 +621,11 @@ public class AssistantStandardProfileService {
         if (value == null || !value.isBoolean()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Campo '" + field + "' deve ser booleano.");
         }
+    }
+
+    private boolean hasText(ObjectNode objectNode, String field) {
+        JsonNode value = objectNode.get(field);
+        return value != null && value.isTextual() && !value.asText().isBlank();
     }
 
     private String nullToEmpty(String value) {

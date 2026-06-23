@@ -1,12 +1,15 @@
 package br.com.vavive.gptmaker;
 
 import br.com.vavive.gptmaker.domain.entity.AssistantStandardBlock;
+import br.com.vavive.gptmaker.domain.entity.FranchiseAssistantBlockConfig;
 import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.User;
+import br.com.vavive.gptmaker.domain.enums.AssistantBlockMode;
 import br.com.vavive.gptmaker.domain.enums.AssistantBlockType;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.repository.AssistantStandardBlockRepository;
 import br.com.vavive.gptmaker.repository.AssistantStandardProfileRepository;
+import br.com.vavive.gptmaker.repository.FranchiseAssistantBlockConfigRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.UserRepository;
 import br.com.vavive.gptmaker.security.JwtService;
@@ -53,6 +56,9 @@ class AssistantStandardProfilePersistenceIntegrationTest {
 
     @Autowired
     private AssistantStandardBlockRepository blockRepository;
+
+    @Autowired
+    private FranchiseAssistantBlockConfigRepository blockConfigRepository;
 
     @Autowired
     private FranchiseRepository franchiseRepository;
@@ -122,6 +128,48 @@ class AssistantStandardProfilePersistenceIntegrationTest {
             ));
         }
 
+        mockMvc.perform(post("/assistant-standards/profile/blocks/ROLE")
+                .header("Authorization", bearerToken("admin@vavive.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "assistantName": "Assistente Padrao Matriz",
+                        "jobName": "Consultor Vavive Matriz",
+                        "communicationType": "FORMAL",
+                        "type": "SUPPORT",
+                        "jobSite": "https://matriz.example.com",
+                        "description": "Descricao de perfil definida pela matriz"
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/assistant-standards/profile/blocks/BEHAVIOR")
+                .header("Authorization", bearerToken("admin@vavive.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "instruction": "Comportamento padrao completo da matriz",
+                        "summary": "Resumo matriz"
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/assistant-standards/profile/blocks/BASE_DESCRIPTION")
+                .header("Authorization", bearerToken("admin@vavive.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "text": "Descricao base completa da matriz"
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk());
+
         mockMvc.perform(post("/assistant-standards/profile/blocks/TRAININGS")
                 .header("Authorization", bearerToken("admin@vavive.com"))
                 .contentType(MediaType.APPLICATION_JSON)
@@ -184,21 +232,73 @@ class AssistantStandardProfilePersistenceIntegrationTest {
                     """))
             .andExpect(status().isOk());
 
+        mockMvc.perform(post("/assistant-standards/profile/blocks/IDLE_ACTIONS")
+                .header("Authorization", bearerToken("admin@vavive.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "items": [
+                          {
+                            "type": "FINISH_INTERACTION",
+                            "seconds": 900,
+                            "instructions": "Encerrar com mensagem padrao da matriz"
+                          }
+                        ]
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        mockMvc.perform(post("/assistant-standards/profile/blocks/TRANSFER_RULES")
+                .header("Authorization", bearerToken("admin@vavive.com"))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                      "payload": {
+                        "items": [
+                          {
+                            "type": "HUMAN",
+                            "instructions": "Transferir para humano conforme regra da matriz",
+                            "returnOnFinish": true
+                          }
+                        ]
+                      }
+                    }
+                    """))
+            .andExpect(status().isOk());
+
+        FranchiseAssistantBlockConfig staleCustomTraining = new FranchiseAssistantBlockConfig(franchise, AssistantBlockType.TRAININGS, AssistantBlockMode.CUSTOM);
+        staleCustomTraining.setCustomPayloadJson("{\"items\":[]}");
+        staleCustomTraining.setStandardVersionApplied(1);
+        blockConfigRepository.save(staleCustomTraining);
+
         mockMvc.perform(get("/franchises/{id}/assistant-configuration", franchise.getId())
                 .header("Authorization", bearerToken("admin@vavive.com")))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='ROLE')].payload.assistantName").value("Assistente Padrao Matriz"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='ROLE')].payload.jobName").value("Consultor Vavive Matriz"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='ROLE')].payload.communicationType").value("FORMAL"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='ROLE')].payload.type").value("SUPPORT"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='BEHAVIOR')].payload.instruction").value("Comportamento padrao completo da matriz"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='BASE_DESCRIPTION')].payload.text").value("Descricao base completa da matriz"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].payload.items[0].text").value("Script padrao da matriz"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='INTENTIONS')].payload.items[0].description").value("Agendar visita"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.prefferModel").value("GPT_5"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.enabledEmoji").value(true))
-            .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.webhooks.onNewMessage").value("https://example.com/webhook"));
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.webhooks.onNewMessage").value("https://example.com/webhook"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='IDLE_ACTIONS')].payload.items[0].instructions").value("Encerrar com mensagem padrao da matriz"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRANSFER_RULES')].payload.items[0].instructions").value("Transferir para humano conforme regra da matriz"));
 
         mockMvc.perform(get("/franchises/{id}/assistant-configuration", franchise.getId())
                 .header("Authorization", bearerToken("franquia@vavive.com")))
             .andExpect(status().isOk())
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='ROLE')].payload.assistantName").value("Assistente Padrao Matriz"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='TRAININGS')].payload.items[0].text").value("Script padrao da matriz"))
             .andExpect(jsonPath("$.blocks[?(@.blockType=='INTENTIONS')].payload.items[0].description").value("Agendar visita"))
-            .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.prefferModel").value("GPT_5"));
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='AGENT_SETTINGS')].payload.prefferModel").value("GPT_5"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='IDLE_ACTIONS')].payload.items[0].instructions").value("Encerrar com mensagem padrao da matriz"))
+            .andExpect(jsonPath("$.blocks[?(@.blockType=='TRANSFER_RULES')].payload.items[0].instructions").value("Transferir para humano conforme regra da matriz"));
     }
 
     private String bearerToken(String email) {
