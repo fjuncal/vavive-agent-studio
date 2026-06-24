@@ -98,7 +98,7 @@ public class ChannelService {
             snapshot.setLastSyncedAt(LocalDateTime.now());
             FranchiseChannelSnapshot saved = channelRepository.save(snapshot);
             try {
-                channelConfigurationService.applyStandardConfig(saved);
+                channelConfigurationService.applyStandardConfig(saved, normalizedType);
             } catch (Exception exception) {
                 saved.setLastSyncError("Canal criado, mas a configuracao padrao nao foi aplicada: " + exception.getMessage());
                 channelRepository.save(saved);
@@ -184,10 +184,12 @@ public class ChannelService {
                 snapshot.setLastSyncedAt(now);
                 channelRepository.save(snapshot);
             }
-            channelRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).stream()
-                .filter(snapshot -> snapshot.getExternalChannelId() != null && !snapshot.getExternalChannelId().isBlank())
-                .filter(snapshot -> !remoteIds.contains(snapshot.getExternalChannelId()))
-                .forEach(channelRepository::delete);
+            if (!remoteIds.isEmpty()) {
+                channelRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).stream()
+                    .filter(snapshot -> snapshot.getExternalChannelId() != null && !snapshot.getExternalChannelId().isBlank())
+                    .filter(snapshot -> !remoteIds.contains(snapshot.getExternalChannelId()))
+                    .forEach(channelRepository::delete);
+            }
         } catch (GptMakerIntegrationException exception) {
             channelRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).forEach(snapshot -> {
                 snapshot.setLastSyncError(exception.getMessage());

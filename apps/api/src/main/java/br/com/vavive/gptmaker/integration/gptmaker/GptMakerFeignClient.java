@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 
 @FeignClient(
     name = "gptMakerFeignClient",
@@ -137,10 +138,26 @@ public interface GptMakerFeignClient {
     ResponseEntity<String> deleteChannel(@PathVariable String channelId);
 
     @GetMapping("/v2/workspace/{workspaceId}/chats")
-    ResponseEntity<String> listChats(@PathVariable String workspaceId);
+    ResponseEntity<String> listChats(
+        @PathVariable String workspaceId,
+        @RequestParam(required = false) String agentId,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer pageSize,
+        @RequestParam(required = false) String query
+    );
 
     @GetMapping("/v2/chat/{chatId}/messages")
-    ResponseEntity<String> listChatMessages(@PathVariable String chatId);
+    ResponseEntity<String> listChatMessages(
+        @PathVariable String chatId,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer pageSize
+    );
+
+    @DeleteMapping("/v2/chat/{chatId}")
+    GptMakerSimpleSuccessResponse deleteChat(@PathVariable String chatId);
+
+    @DeleteMapping("/v2/chat/{chatId}/messages")
+    GptMakerSimpleSuccessResponse deleteChatMessages(@PathVariable String chatId);
 
     @PutMapping("/v2/chat/{chatId}/start-human")
     GptMakerStartHumanResponse startHuman(@PathVariable String chatId);
@@ -150,6 +167,41 @@ public interface GptMakerFeignClient {
 
     @PostMapping("/v2/chat/{chatId}/send-message")
     GptMakerSimpleSuccessResponse sendChatMessage(@PathVariable String chatId, @RequestBody GptMakerSendChatMessageRequest request);
+
+    @PutMapping("/v2/chat/{chatId}/message/{messageId}")
+    GptMakerSimpleSuccessResponse editChatMessage(
+        @PathVariable String chatId,
+        @PathVariable String messageId,
+        @RequestBody Object request
+    );
+
+    @DeleteMapping("/v2/chat/{chatId}/message/{messageId}")
+    GptMakerSimpleSuccessResponse deleteChatMessage(
+        @PathVariable String chatId,
+        @PathVariable String messageId
+    );
+
+    @GetMapping("/v2/workspace/{workspaceId}/search")
+    ResponseEntity<String> searchContacts(
+        @PathVariable String workspaceId,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer pageSize
+    );
+
+    @GetMapping("/v2/workspace/{workspaceId}/contact/{contactId}")
+    ResponseEntity<String> getContact(
+        @PathVariable String workspaceId,
+        @PathVariable String contactId
+    );
+
+    @PutMapping("/v2/contact/{contactId}/update")
+    ResponseEntity<String> updateContact(
+        @PathVariable String contactId,
+        @RequestBody Object request
+    );
+
+    @DeleteMapping("/v2/contact/{contactId}/delete")
+    ResponseEntity<String> deleteContact(@PathVariable String contactId);
 
     @GetMapping("/v2/transfer-rules/agent/{agentId}")
     ResponseEntity<String> listTransferRules(@PathVariable String agentId);

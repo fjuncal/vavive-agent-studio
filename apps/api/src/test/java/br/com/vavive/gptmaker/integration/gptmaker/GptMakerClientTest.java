@@ -487,13 +487,23 @@ class GptMakerClientTest {
         }
 
         @Override
-        public ResponseEntity<String> listChats(String workspaceId) {
+        public ResponseEntity<String> listChats(String workspaceId, String agentId, Integer page, Integer pageSize, String query) {
             return ResponseEntity.ok("[]");
         }
 
         @Override
-        public ResponseEntity<String> listChatMessages(String chatId) {
+        public ResponseEntity<String> listChatMessages(String chatId, Integer page, Integer pageSize) {
             return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse deleteChat(String chatId) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse deleteChatMessages(String chatId) {
+            return new GptMakerSimpleSuccessResponse(true);
         }
 
         @Override
@@ -509,6 +519,36 @@ class GptMakerClientTest {
         @Override
         public GptMakerSimpleSuccessResponse sendChatMessage(String chatId, GptMakerSendChatMessageRequest request) {
             return new GptMakerSimpleSuccessResponse(true);
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse editChatMessage(String chatId, String messageId, Object request) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+
+        @Override
+        public GptMakerSimpleSuccessResponse deleteChatMessage(String chatId, String messageId) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+
+        @Override
+        public ResponseEntity<String> searchContacts(String workspaceId, Integer page, Integer pageSize) {
+            return ResponseEntity.ok("[]");
+        }
+
+        @Override
+        public ResponseEntity<String> getContact(String workspaceId, String contactId) {
+            return ResponseEntity.ok("{\"id\":\"" + contactId + "\",\"name\":\"Contato\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateContact(String contactId, Object request) {
+            return ResponseEntity.ok("{\"id\":\"" + contactId + "\",\"name\":\"Contato\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> deleteContact(String contactId) {
+            return ResponseEntity.noContent().build();
         }
 
         @Override

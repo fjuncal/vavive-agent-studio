@@ -482,7 +482,7 @@ public class FranchiseService {
         refreshStatus(franchise);
         franchiseRepository.save(franchise);
 
-        GptMakerAgent localAgent = syncProvisionedAgent(franchise, createdAgent, request.communicationType());
+        syncProvisionedAgent(franchise, createdAgent, request.communicationType(), context);
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -624,7 +624,7 @@ public class FranchiseService {
         agentRepository.save(agent);
     }
 
-    private GptMakerAgent syncProvisionedAgent(Franchise franchise, GptMakerCreateAgentResponse createdAgent, String communicationType) {
+    private GptMakerAgent syncProvisionedAgent(Franchise franchise, GptMakerCreateAgentResponse createdAgent, String communicationType, String context) {
         GptMakerAgent agent = agentRepository.findFirstByFranchiseIdAndExternalId(franchise.getId(), createdAgent.id())
             .or(() -> agentRepository.findFirstByFranchiseIdAndName(franchise.getId(), franchise.getAgentName()))
             .or(() -> agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchise.getId()))
@@ -640,7 +640,11 @@ public class FranchiseService {
         agent.setAvatar(createdAgent.avatar());
         agent.setStatus("ATIVO");
         agent.setToneOfVoice(resolveToneOfVoice(communicationType, franchise));
-        return agentRepository.save(agent);
+        GptMakerAgent saved = agentRepository.save(agent);
+        if (trainingRepository.findByAgentIdOrderByCreatedAtDesc(saved.getId()).isEmpty()) {
+            createInitialLocalTraining(saved, context);
+        }
+        return saved;
     }
 
     private void createInitialLocalTraining(GptMakerAgent agent, String context) {

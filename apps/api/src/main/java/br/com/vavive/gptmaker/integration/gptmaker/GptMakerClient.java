@@ -7,6 +7,7 @@ import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateTrainingReq
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerAgentResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerChannelResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerChatResponse;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerContactResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationMessageResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationResponse;
@@ -335,6 +336,85 @@ public class GptMakerClient {
         }
     }
 
+    public GptMakerSimpleSuccessResponse editChatMessage(String chatId, String messageId, String message) {
+        String endpoint = "/v2/chat/%s/message/%s".formatted(chatId == null ? "" : chatId, messageId == null ? "" : messageId);
+        validateChatMessageOperation(chatId, messageId, endpoint);
+        if (message == null || message.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_MESSAGE", "Novo conteudo da mensagem nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            return feignClient.editChatMessage(chatId, messageId, java.util.Map.of("message", message));
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel editar a mensagem agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel editar a mensagem no GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerSimpleSuccessResponse deleteChatMessage(String chatId, String messageId) {
+        String endpoint = "/v2/chat/%s/message/%s".formatted(chatId == null ? "" : chatId, messageId == null ? "" : messageId);
+        validateChatMessageOperation(chatId, messageId, endpoint);
+        if (properties.mockEnabled()) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            return feignClient.deleteChatMessage(chatId, messageId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel deletar a mensagem agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel deletar a mensagem no GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerSimpleSuccessResponse deleteChatMessages(String chatId) {
+        String endpoint = "/v2/chat/%s/messages".formatted(chatId == null ? "" : chatId);
+        if (chatId == null || chatId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            return feignClient.deleteChatMessages(chatId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel limpar mensagens do chat agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel limpar mensagens do chat no GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerSimpleSuccessResponse deleteChat(String chatId) {
+        String endpoint = "/v2/chat/%s".formatted(chatId == null ? "" : chatId);
+        if (chatId == null || chatId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerSimpleSuccessResponse(true);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            return feignClient.deleteChat(chatId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel deletar o chat agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel deletar o chat no GPTMaker.", endpoint);
+        }
+    }
+
     public List<GptMakerChannelResponse> listWorkspaceChannels(String workspaceId) {
         String endpoint = "/v2/workspace/%s/channels".formatted(workspaceId == null ? "" : workspaceId);
         if (workspaceId == null || workspaceId.isBlank()) {
@@ -503,7 +583,7 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
-            ResponseEntity<String> response = feignClient.listChats(workspaceId);
+            ResponseEntity<String> response = feignClient.listChats(workspaceId, null, null, null, null);
             JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
             return parseChats(payload, endpoint);
         } catch (RetryableException exception) {
@@ -525,13 +605,103 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
-            ResponseEntity<String> response = feignClient.listChatMessages(chatId);
+            ResponseEntity<String> response = feignClient.listChatMessages(chatId, null, null);
             JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
             return parseConversationMessages(payload, endpoint);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar mensagens do chat agora.", sanitize(exception.getMessage()), null, endpoint, null);
         } catch (FeignException exception) {
             throw toIntegrationException(exception, "Nao foi possivel listar as mensagens do chat.", endpoint);
+        }
+    }
+
+    public List<GptMakerContactResponse> searchContacts(String workspaceId, Integer page, Integer pageSize) {
+        String endpoint = "/v2/workspace/%s/search".formatted(workspaceId == null ? "" : workspaceId);
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return List.of();
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.searchContacts(workspaceId, page, pageSize);
+            JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+            return parseContacts(payload, endpoint);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel buscar contatos do GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel buscar contatos do GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerContactResponse getContact(String workspaceId, String contactId) {
+        String endpoint = "/v2/workspace/%s/contact/%s".formatted(workspaceId == null ? "" : workspaceId, contactId == null ? "" : contactId);
+        if (workspaceId == null || workspaceId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (contactId == null || contactId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CONTACT", "Contato GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return new GptMakerContactResponse(contactId, "Contato mock", null, null, null, null, null, null, null, null);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.getContact(workspaceId, contactId);
+            JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+            return parseContact(extractSingleItemNode(payload), endpoint);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel buscar o contato agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel buscar o contato no GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerContactResponse updateContact(String contactId, Object request) {
+        String endpoint = "/v2/contact/%s/update".formatted(contactId == null ? "" : contactId);
+        if (contactId == null || contactId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CONTACT", "Contato GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            JsonNode payload = objectMapper.valueToTree(request == null ? java.util.Map.of() : request);
+            return parseContact(payload, endpoint);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.updateContact(contactId, request);
+            JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+            return parseContact(extractSingleItemNode(payload), endpoint);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel atualizar o contato agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel atualizar o contato no GPTMaker.", endpoint);
+        }
+    }
+
+    public void deleteContact(String contactId) {
+        String endpoint = "/v2/contact/%s/delete".formatted(contactId == null ? "" : contactId);
+        if (contactId == null || contactId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CONTACT", "Contato GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return;
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            feignClient.deleteContact(contactId);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel deletar o contato agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel deletar o contato no GPTMaker.", endpoint);
         }
     }
 
@@ -1044,6 +1214,46 @@ public class GptMakerClient {
         return items;
     }
 
+    private List<GptMakerContactResponse> parseContacts(JsonNode payload, String endpoint) {
+        JsonNode itemsNode = extractItemsNode(payload);
+        if (itemsNode == null || itemsNode.isNull()) {
+            return List.of();
+        }
+        if (itemsNode.isObject()) {
+            return List.of(parseContact(itemsNode, endpoint));
+        }
+        if (!itemsNode.isArray()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para contatos.", sanitize(itemsNode.toString()), null, endpoint, sanitize(itemsNode.toString()));
+        }
+
+        List<GptMakerContactResponse> items = new ArrayList<>();
+        for (JsonNode itemNode : itemsNode) {
+            if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+                continue;
+            }
+            items.add(parseContact(itemNode, endpoint));
+        }
+        return items;
+    }
+
+    private GptMakerContactResponse parseContact(JsonNode itemNode, String endpoint) {
+        if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
+            throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para contato.", itemNode == null ? null : sanitize(itemNode.toString()), null, endpoint, itemNode == null ? null : sanitize(itemNode.toString()));
+        }
+        return new GptMakerContactResponse(
+            textValue(itemNode, "id"),
+            textValue(itemNode, "name"),
+            longValue(itemNode, "birthday"),
+            textValue(itemNode, "gender"),
+            textValue(itemNode, "picture"),
+            textValue(itemNode, "phone"),
+            textValue(itemNode, "email"),
+            textValue(itemNode, "jobTitle"),
+            textValue(itemNode, "recipient"),
+            itemNode.get("customFieldValues")
+        );
+    }
+
     private JsonNode extractItemsNode(JsonNode payload) {
         if (payload == null || payload.isNull()) {
             return null;
@@ -1060,6 +1270,15 @@ public class GptMakerClient {
             }
         }
         return payload;
+    }
+
+    private void validateChatMessageOperation(String chatId, String messageId, String endpoint) {
+        if (chatId == null || chatId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (messageId == null || messageId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_MESSAGE", "Mensagem GPTMaker nao informada.", null, null, endpoint, null);
+        }
     }
 
     private JsonNode extractSingleItemNode(JsonNode payload) {

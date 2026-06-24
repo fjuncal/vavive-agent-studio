@@ -443,6 +443,31 @@ export type ChannelConfiguration = {
   standard: boolean;
 };
 
+export type GptMakerContact = {
+  id: string;
+  name?: string | null;
+  birthday?: number | null;
+  gender?: string | null;
+  picture?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  jobTitle?: string | null;
+  recipient?: string | null;
+  customFieldValues?: unknown;
+};
+
+export type UpdateContactPayload = {
+  name?: string;
+  birthday?: number | null;
+  gender?: string;
+  picture?: string;
+  phone?: string;
+  email?: string;
+  jobTitle?: string;
+  recipient?: string;
+  customFieldValues?: unknown;
+};
+
 export type ConversationExample = {
   id: string;
   title: string;
@@ -795,6 +820,31 @@ export function sendConversationManualMessage(id: string, payload: ConversationM
   });
 }
 
+export function editConversationMessage(id: string, messageId: string, message: string) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/messages/${messageId}`, {
+    method: "PUT",
+    body: JSON.stringify({ message })
+  });
+}
+
+export function deleteConversationMessage(id: string, messageId: string) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/messages/${messageId}`, {
+    method: "DELETE"
+  });
+}
+
+export function deleteConversationMessages(id: string) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}/messages`, {
+    method: "DELETE"
+  });
+}
+
+export function deleteConversation(id: string) {
+  return apiFetch<ConversationActionResult>(`/conversations/${id}`, {
+    method: "DELETE"
+  });
+}
+
 export function completeConversation(id: string, payload: ConversationCompletePayload) {
   return apiFetch<ConversationActionResult>(`/conversations/${id}/complete`, {
     method: "POST",
@@ -1072,6 +1122,31 @@ export function updateFranchiseChannelConfig(franchiseId: string, channelId: str
   return apiFetch<ChannelConfiguration>(`/franchises/${franchiseId}/channels/${channelId}/config`, {
     method: "POST",
     body: JSON.stringify({ payload })
+  });
+}
+
+export function getContacts(filters: { page?: number; pageSize?: number } = {}) {
+  const params = new URLSearchParams();
+  if (filters.page) params.set("page", String(filters.page));
+  if (filters.pageSize) params.set("pageSize", String(filters.pageSize));
+  const suffix = params.toString() ? `?${params.toString()}` : "";
+  return apiFetch<GptMakerContact[]>(`/contacts${suffix}`);
+}
+
+export function getContact(contactId: string) {
+  return apiFetch<GptMakerContact>(`/contacts/${contactId}`);
+}
+
+export function updateContact(contactId: string, payload: UpdateContactPayload) {
+  return apiFetch<GptMakerContact>(`/contacts/${contactId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteContact(contactId: string) {
+  return apiFetch<void>(`/contacts/${contactId}`, {
+    method: "DELETE"
   });
 }
 

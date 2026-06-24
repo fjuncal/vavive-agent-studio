@@ -16,6 +16,7 @@ import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
 import br.com.vavive.gptmaker.dto.StartHumanTakeoverResponse;
+import br.com.vavive.gptmaker.dto.UpdateChatMessageRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
@@ -256,6 +257,60 @@ public class ConversationService {
     }
 
     @Transactional
+    public ConversationActionResponse editMessage(UUID conversationId, String messageId, UpdateChatMessageRequest request) {
+        ConversationSession session = requireConversationWithChat(conversationId, "editar mensagem");
+        try {
+            var response = gptMakerClient.editChatMessage(session.getChatId(), messageId, request == null ? null : request.message());
+            session.setLastSyncedAt(LocalDateTime.now());
+            conversationSessionRepository.save(session);
+            return new ConversationActionResponse(session.getId(), response.success(), session.getOperationalStatus(), response.success() ? "Mensagem editada com sucesso." : "Nao foi possivel editar a mensagem.", LocalDateTime.now());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
+    }
+
+    @Transactional
+    public ConversationActionResponse deleteMessage(UUID conversationId, String messageId) {
+        ConversationSession session = requireConversationWithChat(conversationId, "deletar mensagem");
+        try {
+            var response = gptMakerClient.deleteChatMessage(session.getChatId(), messageId);
+            session.setLastSyncedAt(LocalDateTime.now());
+            conversationSessionRepository.save(session);
+            return new ConversationActionResponse(session.getId(), response.success(), session.getOperationalStatus(), response.success() ? "Mensagem deletada com sucesso." : "Nao foi possivel deletar a mensagem.", LocalDateTime.now());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
+    }
+
+    @Transactional
+    public ConversationActionResponse deleteMessages(UUID conversationId) {
+        ConversationSession session = requireConversationWithChat(conversationId, "limpar mensagens");
+        try {
+            var response = gptMakerClient.deleteChatMessages(session.getChatId());
+            session.setLastResponse(null);
+            session.setLastSyncedAt(LocalDateTime.now());
+            conversationSessionRepository.save(session);
+            return new ConversationActionResponse(session.getId(), response.success(), session.getOperationalStatus(), response.success() ? "Mensagens removidas com sucesso." : "Nao foi possivel remover as mensagens.", LocalDateTime.now());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
+    }
+
+    @Transactional
+    public ConversationActionResponse deleteConversation(UUID conversationId) {
+        ConversationSession session = requireConversationWithChat(conversationId, "deletar chat");
+        try {
+            var response = gptMakerClient.deleteChat(session.getChatId());
+            UUID id = session.getId();
+            String status = session.getOperationalStatus();
+            conversationSessionRepository.delete(session);
+            return new ConversationActionResponse(id, response.success(), status, response.success() ? "Chat deletado com sucesso." : "Nao foi possivel deletar o chat.", LocalDateTime.now());
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
+    }
+
+    @Transactional
     public ConversationActionResponse completeConversation(UUID conversationId, ConversationCompleteRequest request) {
         ConversationSession session = requireAccessibleConversation(conversationId);
         if (isClosed(session)) {
@@ -406,6 +461,14 @@ public class ConversationService {
         Franchise franchise = currentUserService.requireFranchise(user);
         return conversationSessionRepository.findByIdAndFranchiseId(conversationId, franchise.getId())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN_FRANQUIA so pode acessar conversas da propria franquia."));
+    }
+
+    private ConversationSession requireConversationWithChat(UUID conversationId, String action) {
+        ConversationSession session = requireAccessibleConversation(conversationId);
+        if (session.getChatId() == null || session.getChatId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta conversa ainda nao possui um chat GPTMaker pronto para " + action + ".");
+        }
+        return session;
     }
 
     private ConversationSummaryResponse toSummary(ConversationSession session) {

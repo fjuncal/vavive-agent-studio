@@ -77,22 +77,22 @@ public class ChannelConfigurationService {
         Franchise franchise = requireAccessibleFranchise(franchiseId);
         FranchiseChannelSnapshot snapshot = requireChannel(franchise, channelId);
         String channelType = normalizeChannelType(snapshot.getChannelType());
+        JsonNode cachedPayload = normalizePayload(channelType, readJson(snapshot.getConfigPayloadJson(), channelType));
         JsonNode payload;
         if (snapshot.getExternalChannelId() != null && !snapshot.getExternalChannelId().isBlank()) {
             try {
-                payload = normalizePayload(channelType, gptMakerClient.getChannelConfig(snapshot.getExternalChannelId()));
+                payload = chooseEffectivePayload(channelType, gptMakerClient.getChannelConfig(snapshot.getExternalChannelId()), cachedPayload);
                 snapshot.setConfigPayloadJson(writeJson(payload));
                 snapshot.setConfigUpdatedAt(LocalDateTime.now());
                 snapshot.setLastSyncError(null);
                 channelRepository.save(snapshot);
             } catch (GptMakerIntegrationException exception) {
-                JsonNode cached = readJson(snapshot.getConfigPayloadJson(), channelType);
-                payload = normalizePayload(channelType, cached);
+                payload = cachedPayload;
                 snapshot.setLastSyncError(exception.getMessage());
                 channelRepository.save(snapshot);
             }
         } else {
-            payload = normalizePayload(channelType, readJson(snapshot.getConfigPayloadJson(), channelType));
+            payload = cachedPayload;
         }
         return new ChannelConfigurationResponse(channelType, objectMapper.convertValue(payload, Object.class), snapshot.getConfigUpdatedAt(), false);
     }
@@ -107,24 +107,24 @@ public class ChannelConfigurationService {
         String channelType = normalizeChannelType(snapshot.getChannelType());
         JsonNode payload = normalizePayload(channelType, request == null ? null : objectMapper.valueToTree(request.payload()));
         try {
-            JsonNode updated = normalizePayload(channelType, gptMakerClient.updateChannelConfig(snapshot.getExternalChannelId(), payload));
+            JsonNode updated = chooseEffectivePayload(channelType, gptMakerClient.updateChannelConfig(snapshot.getExternalChannelId(), payload), payload);
             snapshot.setConfigPayloadJson(writeJson(updated));
             snapshot.setConfigUpdatedAt(LocalDateTime.now());
             snapshot.setLastSyncError(null);
             channelRepository.save(snapshot);
             return new ChannelConfigurationResponse(channelType, objectMapper.convertValue(updated, Object.class), snapshot.getConfigUpdatedAt(), false);
         } catch (GptMakerIntegrationException exception) {
+            snapshot.setConfigPayloadJson(writeJson(payload));
             snapshot.setLastSyncError(exception.getMessage());
             channelRepository.save(snapshot);
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
     }
 
-    @Transactional
-    public JsonNode applyStandardConfig(FranchiseChannelSnapshot snapshot) {
-        String channelType = normalizeChannelType(snapshot.getChannelType());
+    public JsonNode applyStandardConfig(FranchiseChannelSnapshot snapshot, String requestedChannelType) {
+        String channelType = normalizeChannelType(requestedChannelType);
         JsonNode payload = resolveStandardPayload(channelType);
-        JsonNode updated = normalizePayload(channelType, gptMakerClient.updateChannelConfig(snapshot.getExternalChannelId(), payload));
+        JsonNode updated = chooseEffectivePayload(channelType, gptMakerClient.updateChannelConfig(snapshot.getExternalChannelId(), payload), payload);
         snapshot.setConfigPayloadJson(writeJson(updated));
         snapshot.setConfigUpdatedAt(LocalDateTime.now());
         snapshot.setLastSyncError(null);
@@ -190,6 +190,40 @@ public class ChannelConfigurationService {
         });
         normalized.put("type", normalizeChannelType(channelType));
         return normalized;
+    }
+
+    private JsonNode chooseEffectivePayload(String channelType, JsonNode candidate, JsonNode fallback) {
+        if (hasConfigFields(candidate)) {
+            return normalizePayload(channelType, candidate);
+        }
+        return normalizePayload(channelType, fallback);
+    }
+
+    private boolean hasConfigFields(JsonNode candidate) {
+        if (candidate == null || !candidate.isObject()) {
+            return false;
+        }
+        for (String field : new String[] {
+            "enabledTyping",
+            "autoReadMessages",
+            "audioAction",
+            "startTrigger",
+            "endTrigger",
+            "enableGroupsResponse",
+            "replyGroupsType",
+            "enablePrivateChatResponse",
+            "callRejectAuto",
+            "callRejectMessage",
+            "takeOutsideService",
+            "takeOutsideServiceCommandReturn",
+            "waitingMessageEnabled",
+            "waitingMessageText"
+        }) {
+            if (candidate.has(field)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private JsonNode readJson(String raw, String channelType) {

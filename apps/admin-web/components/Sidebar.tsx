@@ -15,20 +15,22 @@ import {
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import type { LucideIcon } from "lucide-react";
 
-const nav = [
+const nav: Array<{ href: string; label: string; icon: LucideIcon; franchiseOnly?: boolean }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franquias", label: "Franquias", icon: Building2 },
   { href: "/agentes", label: "Assistentes", icon: Bot },
   { href: "/canais", label: "Canais", icon: Radio },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
+  { href: "/contatos", label: "Contatos", icon: UsersRound, franchiseOnly: true },
   { href: "/leads", label: "Leads", icon: UsersRound }
 ];
 
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const baseNav = nav.map((item) => {
+  const baseNav = nav.filter((item) => !item.franchiseOnly || user?.role === "ADMIN_FRANQUIA").map((item) => {
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/franquias") {
       return { ...item, label: "Minha franquia" };
     }

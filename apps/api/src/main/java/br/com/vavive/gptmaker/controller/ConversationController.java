@@ -9,10 +9,12 @@ import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
 import br.com.vavive.gptmaker.dto.StartHumanTakeoverResponse;
+import br.com.vavive.gptmaker.dto.UpdateChatMessageRequest;
 import br.com.vavive.gptmaker.service.ConversationService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -57,6 +59,30 @@ public class ConversationController {
     @PostMapping("/conversations/{id}/messages")
     public ConversationActionResponse sendManualMessage(@PathVariable UUID id, @RequestBody ConversationManualMessageRequest request) {
         return conversationService.sendManualMessage(id, request);
+    }
+
+    @PutMapping("/conversations/{id}/messages/{messageId}")
+    public ConversationActionResponse editMessage(
+        @PathVariable UUID id,
+        @PathVariable String messageId,
+        @RequestBody UpdateChatMessageRequest request
+    ) {
+        return conversationService.editMessage(id, messageId, request);
+    }
+
+    @DeleteMapping("/conversations/{id}/messages/{messageId}")
+    public ConversationActionResponse deleteMessage(@PathVariable UUID id, @PathVariable String messageId) {
+        return conversationService.deleteMessage(id, messageId);
+    }
+
+    @DeleteMapping("/conversations/{id}/messages")
+    public ConversationActionResponse deleteMessages(@PathVariable UUID id) {
+        return conversationService.deleteMessages(id);
+    }
+
+    @DeleteMapping("/conversations/{id}")
+    public ConversationActionResponse deleteConversation(@PathVariable UUID id) {
+        return conversationService.deleteConversation(id);
     }
 
     @PostMapping("/conversations/{id}/complete")
