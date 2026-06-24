@@ -9,8 +9,10 @@ public record FranchiseChannelResponse(
     String name,
     String channelType,
     boolean connected,
+    String agentId,
     String agentName,
     String externalUsername,
+    LocalDateTime configUpdatedAt,
     LocalDateTime lastSyncedAt,
     String lastSyncError
 ) {

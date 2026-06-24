@@ -7,8 +7,8 @@ import br.com.vavive.gptmaker.dto.CreateFullFranchiseRequest;
 import br.com.vavive.gptmaker.dto.CreateFullFranchiseResponse;
 import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
 import br.com.vavive.gptmaker.dto.EditChannelRequest;
-import br.com.vavive.gptmaker.dto.RevertBlockRequest;
 import br.com.vavive.gptmaker.dto.AssistantStandardProfileResponse;
+import br.com.vavive.gptmaker.dto.ChannelConfigurationResponse;
 import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
 import br.com.vavive.gptmaker.dto.FranchiseAssistantConfigurationResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
@@ -19,7 +19,9 @@ import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
+import br.com.vavive.gptmaker.dto.RevertBlockRequest;
 import br.com.vavive.gptmaker.dto.UpdateAssistantBlockRequest;
+import br.com.vavive.gptmaker.dto.UpdateChannelConfigurationRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
@@ -27,6 +29,7 @@ import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.dto.WorkspaceCreditsResponse;
 import br.com.vavive.gptmaker.service.AssistantStandardProfileService;
+import br.com.vavive.gptmaker.service.ChannelConfigurationService;
 import br.com.vavive.gptmaker.service.ChannelService;
 import br.com.vavive.gptmaker.service.FranchiseService;
 import jakarta.validation.Valid;
@@ -46,11 +49,18 @@ import org.springframework.web.bind.annotation.RestController;
 public class FranchiseController {
     private final FranchiseService franchiseService;
     private final ChannelService channelService;
+    private final ChannelConfigurationService channelConfigurationService;
     private final AssistantStandardProfileService assistantStandardProfileService;
 
-    public FranchiseController(FranchiseService franchiseService, ChannelService channelService, AssistantStandardProfileService assistantStandardProfileService) {
+    public FranchiseController(
+        FranchiseService franchiseService,
+        ChannelService channelService,
+        ChannelConfigurationService channelConfigurationService,
+        AssistantStandardProfileService assistantStandardProfileService
+    ) {
         this.franchiseService = franchiseService;
         this.channelService = channelService;
+        this.channelConfigurationService = channelConfigurationService;
         this.assistantStandardProfileService = assistantStandardProfileService;
     }
 
@@ -165,7 +175,7 @@ public class FranchiseController {
     }
 
     @PostMapping("/franchises/{id}/channels")
-    public Object createChannel(@PathVariable UUID id, @Valid @RequestBody CreateChannelRequest request) {
+    public FranchiseChannelResponse createChannel(@PathVariable UUID id, @Valid @RequestBody CreateChannelRequest request) {
         return channelService.create(id, request.name(), request.type());
     }
 
@@ -174,10 +184,23 @@ public class FranchiseController {
         return channelService.getChannelQRCode(id, channelId);
     }
 
+    @GetMapping("/franchises/{id}/channels/{channelId}/config")
+    public ChannelConfigurationResponse getChannelConfig(@PathVariable UUID id, @PathVariable UUID channelId) {
+        return channelConfigurationService.getChannelConfig(id, channelId);
+    }
+
+    @PostMapping("/franchises/{id}/channels/{channelId}/config")
+    public ChannelConfigurationResponse updateChannelConfig(
+        @PathVariable UUID id,
+        @PathVariable UUID channelId,
+        @RequestBody UpdateChannelConfigurationRequest request
+    ) {
+        return channelConfigurationService.updateChannelConfig(id, channelId, request);
+    }
+
     @PutMapping("/franchises/{id}/channels/{channelId}")
-    @ResponseStatus(HttpStatus.NO_CONTENT)
-    public void editChannel(@PathVariable UUID id, @PathVariable UUID channelId, @Valid @RequestBody EditChannelRequest request) {
-        channelService.editChannel(id, channelId, request.name(), request.agentId());
+    public FranchiseChannelResponse editChannel(@PathVariable UUID id, @PathVariable UUID channelId, @Valid @RequestBody EditChannelRequest request) {
+        return channelService.editChannel(id, channelId, request.name(), request.agentId());
     }
 
     @DeleteMapping("/franchises/{id}/channels/{channelId}")
@@ -194,6 +217,19 @@ public class FranchiseController {
     @GetMapping("/assistant-standards/profile")
     public AssistantStandardProfileResponse getAssistantStandardProfile() {
         return assistantStandardProfileService.getActiveProfile();
+    }
+
+    @GetMapping("/channel-standards/{channelType}")
+    public ChannelConfigurationResponse getChannelStandard(@PathVariable String channelType) {
+        return channelConfigurationService.getStandard(channelType);
+    }
+
+    @PostMapping("/channel-standards/{channelType}")
+    public ChannelConfigurationResponse updateChannelStandard(
+        @PathVariable String channelType,
+        @RequestBody UpdateChannelConfigurationRequest request
+    ) {
+        return channelConfigurationService.updateStandard(channelType, request);
     }
 
     @PostMapping("/assistant-standards/profile/blocks/{blockType}")

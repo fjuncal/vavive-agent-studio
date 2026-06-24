@@ -428,10 +428,19 @@ export type FranchiseChannel = {
   name: string;
   channelType: string;
   connected: boolean;
+  agentId?: string | null;
   agentName?: string | null;
   externalUsername?: string | null;
+  configUpdatedAt?: string | null;
   lastSyncedAt?: string | null;
   lastSyncError?: string | null;
+};
+
+export type ChannelConfiguration = {
+  channelType: string;
+  payload: Record<string, unknown>;
+  updatedAt?: string | null;
+  standard: boolean;
 };
 
 export type ConversationExample = {
@@ -1052,5 +1061,27 @@ export function updateFranchiseChannel(franchiseId: string, channelId: string, p
 export function deleteFranchiseChannel(franchiseId: string, channelId: string) {
   return apiFetch<{ success: boolean }>(`/franchises/${franchiseId}/channels/${channelId}`, {
     method: "DELETE"
+  });
+}
+
+export function getFranchiseChannelConfig(franchiseId: string, channelId: string) {
+  return apiFetch<ChannelConfiguration>(`/franchises/${franchiseId}/channels/${channelId}/config`);
+}
+
+export function updateFranchiseChannelConfig(franchiseId: string, channelId: string, payload: Record<string, unknown>) {
+  return apiFetch<ChannelConfiguration>(`/franchises/${franchiseId}/channels/${channelId}/config`, {
+    method: "POST",
+    body: JSON.stringify({ payload })
+  });
+}
+
+export function getChannelStandardConfig(channelType: string) {
+  return apiFetch<ChannelConfiguration>(`/channel-standards/${channelType}`);
+}
+
+export function updateChannelStandardConfig(channelType: string, payload: Record<string, unknown>) {
+  return apiFetch<ChannelConfiguration>(`/channel-standards/${channelType}`, {
+    method: "POST",
+    body: JSON.stringify({ payload })
   });
 }

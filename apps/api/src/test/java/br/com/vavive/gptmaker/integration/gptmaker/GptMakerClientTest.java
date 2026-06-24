@@ -579,6 +579,16 @@ class GptMakerClientTest {
         }
 
         @Override
+        public ResponseEntity<String> getChannelConfig(String channelId) {
+            return ResponseEntity.ok("{\"enabledTyping\":false,\"audioAction\":\"RESPOND\"}");
+        }
+
+        @Override
+        public ResponseEntity<String> updateChannelConfig(String channelId, Object configRequest) {
+            return ResponseEntity.ok("{\"enabledTyping\":false,\"audioAction\":\"RESPOND\"}");
+        }
+
+        @Override
         public ResponseEntity<String> editChannel(String channelId, Object editRequest) {
             return ResponseEntity.ok("{\"success\":true}");
         }

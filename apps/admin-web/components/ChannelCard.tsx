@@ -1,6 +1,7 @@
 "use client";
 
-import { Wifi, WifiOff, MessageCircle, MoreVertical, Trash2, Edit3, QrCode, Link2 } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Wifi, WifiOff, MoreVertical, Trash2, Edit3, QrCode, Link2, Settings2, Unplug } from "lucide-react";
 import clsx from "clsx";
 
 export type ChannelType = "Z_API" | "WHATSAPP" | "INSTAGRAM" | "CLOUD_API" | "TELEGRAM" | "WIDGET" | "MESSENGER" | "MERCADO_LIVRE" | "TWILIO_SMS";
@@ -22,10 +23,15 @@ interface ChannelCardProps {
   name: string;
   type: ChannelType;
   connected: boolean;
+  lastSyncError?: string | null;
+  configUpdatedAt?: string | null;
   agentName?: string | null;
+  agentId?: string | null;
   username?: string | null;
   onConnect?: () => void;
   onEdit?: () => void;
+  onSettings?: () => void;
+  onDetachAgent?: () => void;
   onRemove?: () => void;
 }
 
@@ -33,13 +39,30 @@ export function ChannelCard({
   name,
   type,
   connected,
+  lastSyncError,
+  configUpdatedAt,
   agentName,
+  agentId,
   username,
   onConnect,
   onEdit,
+  onSettings,
+  onDetachAgent,
   onRemove
 }: ChannelCardProps) {
   const config = CHANNEL_CONFIG[type] || CHANNEL_CONFIG.UNKNOWN;
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   return (
     <div className="card p-5 hover:shadow-md transition-shadow">
@@ -72,51 +95,79 @@ export function ChannelCard({
           </div>
         </div>
 
-        {/* Status badge */}
-        <div className={clsx(
-          "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shrink-0",
-          connected
-            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-            : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
-        )}>
-          {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
-          {connected ? "Conectado" : "Desconectado"}
+        <div className="flex items-start gap-2">
+          <div className={clsx(
+            "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium shrink-0",
+            connected
+              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+          )}>
+            {connected ? <Wifi size={12} /> : <WifiOff size={12} />}
+            {connected ? "Conectado" : "Desconectado"}
+          </div>
+
+          <div className="relative" ref={menuRef}>
+            <button
+              type="button"
+              onClick={() => setMenuOpen((current) => !current)}
+              className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 transition hover:bg-gray-100 dark:border-gray-800 dark:hover:bg-gray-800"
+            >
+              <MoreVertical size={16} />
+            </button>
+
+            {menuOpen ? (
+              <div className="absolute right-0 top-11 z-10 w-52 rounded-xl border border-gray-200 bg-white p-1 shadow-lg dark:border-gray-800 dark:bg-gray-900">
+                {onConnect ? (
+                  <MenuButton icon={QrCode} label="Conectar" onClick={() => { setMenuOpen(false); onConnect(); }} />
+                ) : null}
+                {onSettings ? (
+                  <MenuButton icon={Settings2} label="Configuracoes" onClick={() => { setMenuOpen(false); onSettings(); }} />
+                ) : null}
+                {onEdit ? (
+                  <MenuButton icon={Edit3} label="Editar" onClick={() => { setMenuOpen(false); onEdit(); }} />
+                ) : null}
+                {agentId && onDetachAgent ? (
+                  <MenuButton icon={Unplug} label="Remover" onClick={() => { setMenuOpen(false); onDetachAgent(); }} />
+                ) : null}
+                {onRemove ? (
+                  <MenuButton icon={Trash2} label="Excluir" danger onClick={() => { setMenuOpen(false); onRemove(); }} />
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-gray-100 dark:border-gray-800">
-        {!connected && onConnect && (
-          <button
-            type="button"
-            onClick={onConnect}
-            className="btn-primary flex items-center gap-2 text-sm"
-          >
-            <QrCode size={14} />
-            Conectar
-          </button>
-        )}
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className="btn-ghost flex items-center gap-2 text-sm"
-          >
-            <Edit3 size={14} />
-            Editar
-          </button>
-        )}
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="btn-ghost text-red-600 dark:text-red-400 flex items-center gap-2 text-sm ml-auto"
-          >
-            <Trash2 size={14} />
-            Remover
-          </button>
-        )}
+      <div className="mt-4 border-t border-gray-100 pt-4 text-xs dark:border-gray-800" style={{ color: "var(--color-text-tertiary)" }}>
+        {configUpdatedAt ? <p>Configuracao atualizada em {new Date(configUpdatedAt).toLocaleString("pt-BR")}</p> : null}
+        {lastSyncError ? <p className="mt-1 text-amber-600 dark:text-amber-400">{lastSyncError}</p> : null}
       </div>
     </div>
+  );
+}
+
+function MenuButton({
+  icon: Icon,
+  label,
+  danger = false,
+  onClick
+}: {
+  icon: typeof QrCode;
+  label: string;
+  danger?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={clsx(
+        "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm transition hover:bg-gray-100 dark:hover:bg-gray-800",
+        danger ? "text-red-600 dark:text-red-400" : "text-slate-700 dark:text-slate-200"
+      )}
+    >
+      <Icon size={14} />
+      {label}
+    </button>
   );
 }

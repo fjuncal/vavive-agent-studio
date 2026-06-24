@@ -7,6 +7,7 @@ public record GptMakerChannelResponse(
     String agentPicture,
     String agentName,
     String facebookPageId,
+    String type,
     boolean connected,
     String username
 ) {

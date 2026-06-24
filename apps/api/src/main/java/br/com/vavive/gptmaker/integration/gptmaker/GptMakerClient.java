@@ -341,10 +341,7 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
         }
         if (properties.mockEnabled()) {
-            return List.of(
-                new GptMakerChannelResponse("mock-channel-webchat", "Webchat principal", "mock-agent-" + workspaceId + "-01", null, "Assistente Comercial", null, true, "webchat-" + workspaceId),
-                new GptMakerChannelResponse("mock-channel-whatsapp", "WhatsApp comercial", "mock-agent-" + workspaceId + "-01", null, "Assistente Comercial", null, true, "5511999999999")
-            );
+            return List.of();
         }
         if (!properties.tokenConfigured()) {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
@@ -383,22 +380,90 @@ public class GptMakerClient {
         }
     }
 
-    public void editChannel(String channelId, String name, String agentId) {
-        String endpoint = "/v2/channel/%s/edit".formatted(channelId == null ? "" : channelId);
+    public JsonNode getChannelConfig(String channelId) {
+        String endpoint = "/v2/channel/%s/config".formatted(channelId == null ? "" : channelId);
         if (channelId == null || channelId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
         }
         if (properties.mockEnabled()) {
-            return;
+            return objectMapper.createObjectNode()
+                .put("enabledTyping", false)
+                .put("autoReadMessages", false)
+                .put("audioAction", "RESPOND")
+                .put("startTrigger", "ALWAYS")
+                .put("endTrigger", "NEVER")
+                .put("enableGroupsResponse", false)
+                .put("replyGroupsType", "IGNORE")
+                .put("enablePrivateChatResponse", true)
+                .put("callRejectAuto", true)
+                .put("callRejectMessage", "Desculpe, mas este canal nao aceita chamadas telefonicas, apenas comunicacoes por meio de texto.")
+                .put("takeOutsideService", false)
+                .put("takeOutsideServiceCommandReturn", false)
+                .put("waitingMessageEnabled", false)
+                .put("waitingMessageText", "oi");
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.getChannelConfig(channelId);
+            return parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel obter configuracao do canal agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel obter configuracao do canal.", endpoint);
+        }
+    }
+
+    public JsonNode updateChannelConfig(String channelId, JsonNode payload) {
+        String endpoint = "/v2/channel/%s/config".formatted(channelId == null ? "" : channelId);
+        if (channelId == null || channelId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return payload == null ? objectMapper.createObjectNode() : payload;
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.updateChannelConfig(channelId, payload);
+            return parseBody(response.getBody(), endpoint, response.getStatusCode().value());
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel atualizar configuracao do canal agora.", sanitize(exception.getMessage()), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw toIntegrationException(exception, "Nao foi possivel atualizar configuracao do canal.", endpoint);
+        }
+    }
+
+    public JsonNode editChannel(String channelId, String name, String agentId) {
+        String endpoint = "/v2/channel/%s".formatted(channelId == null ? "" : channelId);
+        if (channelId == null || channelId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHANNEL", "Canal GPTMaker nao informado.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            ObjectNode response = objectMapper.createObjectNode();
+            if (name != null) {
+                response.put("name", name);
+            }
+            if (agentId != null) {
+                response.put("agentId", agentId);
+            }
+            return response;
         }
         if (!properties.tokenConfigured()) {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
             var request = new java.util.HashMap<String, String>();
-            if (name != null) request.put("name", name);
-            if (agentId != null) request.put("assistantId", agentId);
-            feignClient.editChannel(channelId, request);
+            if (name != null) {
+                request.put("name", name);
+            }
+            if (agentId != null) {
+                request.put("agentId", agentId);
+            }
+            ResponseEntity<String> response = feignClient.editChannel(channelId, request);
+            return parseBody(response.getBody(), endpoint, response.getStatusCode().value());
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel editar canal no GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
         } catch (FeignException exception) {
@@ -852,6 +917,7 @@ public class GptMakerClient {
                 textValue(itemNode, "agentPicture"),
                 textValue(itemNode, "agentName"),
                 textValue(itemNode, "facebookPageId"),
+                textValue(itemNode, "type"),
                 booleanValue(itemNode, "connected"),
                 firstTextValue(itemNode, "username", "phone", "identifier")
             ));
@@ -1509,26 +1575,29 @@ public class GptMakerClient {
     }
 
     public JsonNode createChannel(String workspaceId, String name, String type) {
+        String endpoint = "/v2/workspace/%s/create-channel".formatted(workspaceId == null ? "" : workspaceId);
         if (workspaceId == null || workspaceId.isBlank()) {
-            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace ID e obrigatorio.");
+            throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace ID e obrigatorio.", null, null, endpoint, null);
         }
         if (properties.mockEnabled()) {
             return objectMapper.createObjectNode()
                 .put("id", "mock-channel-" + System.currentTimeMillis())
                 .put("name", name)
                 .put("type", type)
-                .put("connected", false);
+                .put("connected", false)
+                .putNull("assistantId")
+                .set("workspace", objectMapper.createObjectNode().put("id", workspaceId).put("name", "Mock Workspace"));
         }
         if (!properties.tokenConfigured()) {
-            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
             ResponseEntity<String> response = feignClient.createChannel(workspaceId, new br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateChannelRequest(name, type));
-            return parseResponse(response, "/v2/channel/workspace/" + workspaceId);
+            return parseResponse(response, endpoint);
         } catch (RetryableException exception) {
-            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage(), null, endpoint, null);
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/channel/workspace/" + workspaceId);
+            throw mapFeignException(exception, endpoint);
         }
     }
 

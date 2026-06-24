@@ -34,10 +34,14 @@ public class FranchiseChannelSnapshot {
     @Column(length = 4000)
     private String rawPayload;
 
+    @Column(length = 12000)
+    private String configPayloadJson;
+
     @Column(length = 2000)
     private String lastSyncError;
 
     private LocalDateTime lastSyncedAt;
+    private LocalDateTime configUpdatedAt;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
@@ -148,5 +152,21 @@ public class FranchiseChannelSnapshot {
 
     public void setLastSyncedAt(LocalDateTime lastSyncedAt) {
         this.lastSyncedAt = lastSyncedAt;
+    }
+
+    public String getConfigPayloadJson() {
+        return configPayloadJson;
+    }
+
+    public void setConfigPayloadJson(String configPayloadJson) {
+        this.configPayloadJson = configPayloadJson;
+    }
+
+    public LocalDateTime getConfigUpdatedAt() {
+        return configUpdatedAt;
+    }
+
+    public void setConfigUpdatedAt(LocalDateTime configUpdatedAt) {
+        this.configUpdatedAt = configUpdatedAt;
     }
 }

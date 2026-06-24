@@ -109,7 +109,7 @@ public interface GptMakerFeignClient {
     @GetMapping("/v2/workspace/{workspaceId}/channels")
     ResponseEntity<String> listWorkspaceChannels(@PathVariable String workspaceId);
 
-    @PostMapping("/v2/channel/workspace/{workspaceId}")
+    @PostMapping("/v2/workspace/{workspaceId}/create-channel")
     ResponseEntity<String> createChannel(
         @PathVariable String workspaceId,
         @RequestBody GptMakerCreateChannelRequest request
@@ -118,7 +118,16 @@ public interface GptMakerFeignClient {
     @GetMapping("/v2/channel/{channelId}/qr-code")
     ResponseEntity<String> getChannelQRCode(@PathVariable String channelId);
 
-    @PutMapping("/v2/channel/{channelId}/edit")
+    @GetMapping("/v2/channel/{channelId}/config")
+    ResponseEntity<String> getChannelConfig(@PathVariable String channelId);
+
+    @PutMapping("/v2/channel/{channelId}/config")
+    ResponseEntity<String> updateChannelConfig(
+        @PathVariable String channelId,
+        @RequestBody Object configRequest
+    );
+
+    @PutMapping("/v2/channel/{channelId}")
     ResponseEntity<String> editChannel(
         @PathVariable String channelId,
         @RequestBody Object editRequest
