@@ -506,7 +506,7 @@ export default function FranchiseAgentPage() {
       <DeleteConfirmDialog
         isOpen={confirmAction === "clear-agent"}
         title="Remover assistente"
-        description="Esta acao remove o assistente permanentemente do GPTMaker e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
+        description="Esta acao remove o assistente permanentemente da plataforma e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
         confirmText="remover"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleClearAgent()}

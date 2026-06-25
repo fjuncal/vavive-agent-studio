@@ -456,6 +456,31 @@ export type GptMakerContact = {
   customFieldValues?: unknown;
 };
 
+export type WhatsAppNotificationContact = {
+  id: string;
+  franchiseId: string;
+  franchiseName: string;
+  name: string;
+  phone: string;
+  active: boolean;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+export type WhatsAppNotificationContactPayload = {
+  name: string;
+  phone: string;
+  active?: boolean;
+};
+
+export type NotificationDispatchSummary = {
+  total: number;
+  sent: number;
+  failed: number;
+  dryRun: number;
+  provider: string;
+};
+
 export type UpdateContactPayload = {
   name?: string;
   birthday?: number | null;
@@ -1158,5 +1183,36 @@ export function updateChannelStandardConfig(channelType: string, payload: Record
   return apiFetch<ChannelConfiguration>(`/channel-standards/${channelType}`, {
     method: "POST",
     body: JSON.stringify({ payload })
+  });
+}
+
+export function getWhatsAppNotificationContacts(franchiseId: string) {
+  return apiFetch<WhatsAppNotificationContact[]>(`/api/admin/franchises/${franchiseId}/whatsapp-notification-contacts`);
+}
+
+export function createWhatsAppNotificationContact(franchiseId: string, payload: WhatsAppNotificationContactPayload) {
+  return apiFetch<WhatsAppNotificationContact>(`/api/admin/franchises/${franchiseId}/whatsapp-notification-contacts`, {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateWhatsAppNotificationContact(franchiseId: string, contactId: string, payload: WhatsAppNotificationContactPayload) {
+  return apiFetch<WhatsAppNotificationContact>(`/api/admin/franchises/${franchiseId}/whatsapp-notification-contacts/${contactId}`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function deleteWhatsAppNotificationContact(franchiseId: string, contactId: string) {
+  return apiFetch<void>(`/api/admin/franchises/${franchiseId}/whatsapp-notification-contacts/${contactId}`, {
+    method: "DELETE"
+  });
+}
+
+export function sendWhatsAppNotificationTest(franchiseId: string, message?: string) {
+  return apiFetch<NotificationDispatchSummary>(`/api/admin/franchises/${franchiseId}/whatsapp-notification-contacts/test`, {
+    method: "POST",
+    body: JSON.stringify({ message })
   });
 }

@@ -128,7 +128,7 @@ function AgentMenu({ franchiseId, status, onRefresh }: { franchiseId: string; st
       <DeleteConfirmDialog
         isOpen={confirmAction === "delete"}
         title="Remover agente"
-        description="Esta acao remove o agente permanentemente do GPTMaker e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
+        description="Esta acao remove o agente permanentemente da plataforma e do sistema. Todas as configuracoes, treinamentos e intencoes serao perdidos."
         confirmText="remover"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleAction("delete")}

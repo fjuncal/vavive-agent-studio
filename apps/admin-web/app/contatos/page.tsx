@@ -174,9 +174,9 @@ export default function ContatosPage() {
   return (
     <AppShell>
       <PageHeader
-        eyebrow="GPTMaker"
+        eyebrow="Vavive Agent"
         title="Contatos"
-        description="Contatos sincronizados da workspace GPTMaker da sua franquia."
+        description="Contatos sincronizados do ambiente do agente da sua franquia."
       />
 
       <section className="grid gap-4 lg:grid-cols-[1fr_360px]">

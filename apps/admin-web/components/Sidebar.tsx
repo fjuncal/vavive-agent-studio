@@ -6,6 +6,7 @@ import {
   Building2,
   FileText,
   LayoutDashboard,
+  MessageCircleMore,
   MessageSquareText,
   PlusCircle,
   Radio,
@@ -17,9 +18,10 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import type { LucideIcon } from "lucide-react";
 
-const nav: Array<{ href: string; label: string; icon: LucideIcon; franchiseOnly?: boolean }> = [
+const nav: Array<{ href: string; label: string; icon: LucideIcon; franchiseOnly?: boolean; superAdminOnly?: boolean }> = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/franquias", label: "Franquias", icon: Building2 },
+  { href: "/notificacoes-whatsapp", label: "Notificações WhatsApp", icon: MessageCircleMore, superAdminOnly: true },
   { href: "/agentes", label: "Assistentes", icon: Bot },
   { href: "/canais", label: "Canais", icon: Radio },
   { href: "/conversas", label: "Conversas", icon: MessageSquareText },
@@ -30,7 +32,15 @@ const nav: Array<{ href: string; label: string; icon: LucideIcon; franchiseOnly?
 export function Sidebar({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const { user } = useAuth();
-  const baseNav = nav.filter((item) => !item.franchiseOnly || user?.role === "ADMIN_FRANQUIA").map((item) => {
+  const baseNav = nav.filter((item) => {
+    if (item.franchiseOnly && user?.role !== "ADMIN_FRANQUIA") {
+      return false;
+    }
+    if (item.superAdminOnly && user?.role !== "SUPER_ADMIN") {
+      return false;
+    }
+    return true;
+  }).map((item) => {
     if (user?.role === "ADMIN_FRANQUIA" && item.href === "/franquias") {
       return { ...item, label: "Minha franquia" };
     }

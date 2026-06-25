@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -28,7 +28,7 @@ import {
   type GptMakerWorkspaceOption,
   type WorkspaceCredits
 } from "@/lib/api";
-import { ArrowRight, Bot, Building2, Coins, Loader2, MessageCircle, PlugZap, Radio, Settings, Trash2, Unlink, UserRound } from "lucide-react";
+import { ArrowRight, Bot, Building2, Coins, Loader2, MessageCircle, MessageCircleMore, PlugZap, Radio, Settings, Trash2, Unlink, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -256,6 +256,14 @@ export default function FranchiseDetailPage() {
             <InfoCard icon={UserRound} title="Administrador" value={adminUser?.name ?? "Nao cadastrado"} subtitle={adminUser?.email ?? undefined} />
             <InfoCard icon={PlugZap} title="Workspace" value={connection?.workspaceName ?? "Nao vinculada"} />
             <InfoCard icon={Bot} title="Assistente" value={connection?.agentName ?? "Nao configurado"} action={connection?.agentId ? { label: "Abrir", href: `/franquias/${franchise?.id}/agente` } : undefined} />
+            {isSuperAdmin ? (
+              <InfoCard
+                icon={MessageCircleMore}
+                title="Notificações de agendamento"
+                value="Contatos e teste do Evolution por franquia"
+                action={{ label: "Configurar", href: `/franquias/${franchise?.id}/notificacoes-whatsapp` }}
+              />
+            ) : null}
           </section>
 
           <section className="card">
@@ -447,3 +455,4 @@ export default function FranchiseDetailPage() {
     </AppShell>
   );
 }
+

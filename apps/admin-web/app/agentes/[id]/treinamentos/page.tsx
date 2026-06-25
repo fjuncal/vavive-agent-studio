@@ -52,7 +52,7 @@ const guidanceCards = [
   },
   {
     title: "Revise antes de enviar",
-    description: "Voce pode ajustar o texto final do treinamento antes da publicacao no GPTMaker."
+    description: "Voce pode ajustar o texto final do treinamento antes da publicacao na plataforma do agente."
   },
   {
     title: "Erro de integracao nao perde trabalho",
@@ -162,7 +162,7 @@ export default function AgentTrainingsPage() {
 
   async function handleDeleteGptMakerTraining(trainingId: string) {
     if (!params?.id) return;
-    if (!confirm("Tem certeza que deseja excluir este treinamento do GPTMaker?")) return;
+    if (!confirm("Tem certeza que deseja excluir este treinamento da plataforma do agente?")) return;
 
     setDeletingId(trainingId);
     try {
@@ -182,7 +182,7 @@ export default function AgentTrainingsPage() {
       return;
     }
     if (!agentReady) {
-      setError("Para publicar no GPTMaker, este agente precisa estar vinculado a um agente real na tela da franquia.");
+      setError("Para publicar, este agente precisa estar vinculado a um agente real na tela da franquia.");
       setSuccess(null);
       return;
     }
@@ -207,7 +207,7 @@ export default function AgentTrainingsPage() {
         setError(created.message || "Nao foi possivel publicar o treinamento. Verifique a configuracao ou tente novamente.");
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel publicar no GPTMaker. Verifique a configuracao da integracao ou tente novamente.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel publicar na plataforma do agente. Verifique a configuracao da integracao ou tente novamente.");
     } finally {
       setIsSubmitting(false);
     }
@@ -324,7 +324,7 @@ export default function AgentTrainingsPage() {
             <div className="rounded-2xl border border-line/80 bg-white dark:bg-slate-900 p-4">
               <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Revisao final</p>
               <p className="mt-1 text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>
-                Antes de enviar ao GPTMaker, revise o texto abaixo. Ele pode ser ajustado diretamente na plataforma, sem expor detalhes tecnicos.
+                Antes de enviar, revise o texto abaixo. Ele pode ser ajustado diretamente na plataforma, sem expor detalhes tecnicos.
               </p>
               <textarea
                 className="input-field mt-4 min-h-[220px] leading-7"
@@ -371,7 +371,7 @@ export default function AgentTrainingsPage() {
             )}
           </FormSection>
 
-          <FormSection title="Treinamentos no GPTMaker" description="Treinamentos sincronizados com a plataforma GPTMaker.">
+          <FormSection title="Treinamentos publicados" description="Treinamentos sincronizados com a plataforma do agente.">
             {gptMakerTrainings.length ? (
               <div className="grid gap-3">
                 {gptMakerTrainings.map((training: any) => (
@@ -407,7 +407,7 @@ export default function AgentTrainingsPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState icon={FileText} title="Nenhum treinamento no GPTMaker" description="Treinamentos publicados aparecerão aqui." />
+              <EmptyState icon={FileText} title="Nenhum treinamento publicado" description="Treinamentos publicados aparecerão aqui." />
             )}
           </FormSection>
         </div>

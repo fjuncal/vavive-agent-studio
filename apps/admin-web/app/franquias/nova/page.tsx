@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AppShell } from "@/components/AppShell";
 import { PageHeader } from "@/components/PageHeader";
@@ -31,7 +31,7 @@ type Step = {
 
 const steps: Step[] = [
   { id: "franchise", label: "Dados da franquia", description: "Informações da unidade", icon: Building2 },
-  { id: "connection", label: "Conexão", description: "Integração GPTMaker", icon: PlugZap },
+  { id: "connection", label: "Conexão", description: "Integração do agente", icon: PlugZap },
   { id: "admin", label: "Administrador", description: "Acesso da franquia", icon: UserRound },
   { id: "review", label: "Revisão", description: "Confirmar dados", icon: Check }
 ];
@@ -106,7 +106,7 @@ function FranchiseStep({ name, setName, document, setDocument, city, setCity, st
           <Building2 size={20} className="text-brand-600 dark:text-brand-400" />
           Dados da franquia
         </h3>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Preencha as informações oficiais da unidade.</p>
+        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Preencha as informaÃ§Ãµes oficiais da unidade.</p>
       </div>
 
       <div className="grid gap-5">
@@ -151,7 +151,7 @@ function FranchiseStep({ name, setName, document, setDocument, city, setCity, st
             </span>
             <input
               className="input-field"
-              placeholder="São Paulo"
+              placeholder="SÃ£o Paulo"
               value={city}
               onChange={(e) => setCity(e.target.value)}
               disabled={isSubmitting}
@@ -193,7 +193,7 @@ function ConnectionStep({ workspaces, selectedWorkspaceId, setSelectedWorkspaceI
       <div className="mb-6">
         <h3 className="text-lg font-semibold flex items-center gap-2" style={{ color: "var(--color-text-primary)" }}>
           <PlugZap size={20} className="text-brand-600 dark:text-brand-400" />
-          Conexão GPTMaker
+          Conexão do agente
         </h3>
         <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Vincule a uma integração existente ou pule esta etapa.</p>
       </div>
@@ -227,7 +227,7 @@ function ConnectionStep({ workspaces, selectedWorkspaceId, setSelectedWorkspaceI
                 <span className="font-medium">Dica:</span>
               </p>
               <p className="mt-1 text-sm text-brand-600 dark:text-brand-300">
-                Você pode vincular a integração depois. A franquia será criada e você poderá configurar a conexão na página de detalhes.
+                VocÃª pode vincular a integração depois. A franquia será criada e vocÃª poderÃ¡ configurar a conexÃ£o na pÃ¡gina de detalhes.
               </p>
             </div>
           </>
@@ -256,7 +256,7 @@ function AdminStep({ adminName, setAdminName, adminEmail, setAdminEmail, adminPa
           <UserRound size={20} className="text-brand-600 dark:text-brand-400" />
           Administrador da franquia
         </h3>
-        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Crie o usuário que gerenciará esta unidade.</p>
+        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Crie o usuÃ¡rio que gerenciarÃ¡ esta unidade.</p>
       </div>
 
       <div className="grid gap-5">
@@ -302,14 +302,14 @@ function AdminStep({ adminName, setAdminName, adminEmail, setAdminEmail, adminPa
           <input
             className="input-field"
             type="password"
-            placeholder="Mínimo 6 caracteres"
+            placeholder="MÃ­nimo 6 caracteres"
             value={adminPassword}
             onChange={(e) => setAdminPassword(e.target.value)}
             disabled={isSubmitting}
             required
             minLength={6}
           />
-          <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>O administrador poderá alterar a senha após o primeiro acesso.</span>
+          <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>O administrador poderÃ¡ alterar a senha após o primeiro acesso.</span>
         </label>
       </div>
     </div>
@@ -337,14 +337,14 @@ function ReviewStep({ name, document, city, state, selectedWorkspace, adminName,
           <div className="mt-3 grid gap-2">
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Nome</span>
-              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{name || "—"}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{name || "â€”"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Documento</span>
-              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{document || "—"}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{document || "â€”"}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Localização</span>
+              <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>LocalizaÃ§Ã£o</span>
               <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{city}/{state}</span>
             </div>
           </div>
@@ -354,7 +354,7 @@ function ReviewStep({ name, document, city, state, selectedWorkspace, adminName,
           <p className="section-title">Conexão</p>
           <div className="mt-3">
             <div className="flex justify-between">
-              <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Integração</span>
+              <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>IntegraÃ§Ã£o</span>
               <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{selectedWorkspace?.name || "Nenhuma"}</span>
             </div>
           </div>
@@ -365,11 +365,11 @@ function ReviewStep({ name, document, city, state, selectedWorkspace, adminName,
           <div className="mt-3 grid gap-2">
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Nome</span>
-              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminName || "—"}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminName || "â€”"}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Email</span>
-              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminEmail || "—"}</span>
+              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{adminEmail || "â€”"}</span>
             </div>
           </div>
         </div>
@@ -449,7 +449,7 @@ export default function NewFranchisePage() {
           return false;
         }
         if (adminPassword.length < 6) {
-          setError("A senha deve ter no mínimo 6 caracteres.");
+          setError("A senha deve ter no mÃ­nimo 6 caracteres.");
           return false;
         }
         return true;
@@ -506,7 +506,7 @@ export default function NewFranchisePage() {
       <PageHeader
         eyebrow="Cadastro"
         title="Nova franquia"
-        description="Cadastre a unidade e o responsável em poucos passos."
+        description="Cadastre a unidade e o responsÃ¡vel em poucos passos."
       />
 
       <div className="max-w-3xl">
@@ -544,7 +544,7 @@ export default function NewFranchisePage() {
                 </div>
                 <h3 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Conexão automática</h3>
                 <p className="mt-2 text-sm max-w-md" style={{ color: "var(--color-text-secondary)" }}>
-                  A integração GPTMaker será configurada pela matriz após a criação da franquia.
+                  A integração do Vavive Agent será configurada pela matriz após a criação da franquia.
                 </p>
               </div>
             </div>
@@ -604,7 +604,7 @@ export default function NewFranchisePage() {
                 disabled={isSubmitting}
                 className="btn-primary"
               >
-                Próximo
+                PrÃ³ximo
                 <ArrowRight size={16} />
               </button>
             ) : (
@@ -633,3 +633,5 @@ export default function NewFranchisePage() {
     </AppShell>
   );
 }
+
+
