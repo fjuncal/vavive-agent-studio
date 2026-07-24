@@ -38,7 +38,10 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "gptmaker.mock-enabled=true",
+    "spring.flyway.enabled=false"
+})
 @AutoConfigureMockMvc
 @Transactional
 class FranchiseSecurityIntegrationTest {
@@ -495,8 +498,9 @@ class FranchiseSecurityIntegrationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
             .andExpect(jsonPath("$.workspaceName").value("Workspace Sao Paulo"))
-            .andExpect(jsonPath("$.agentId").doesNotExist())
-            .andExpect(jsonPath("$.status").value("SEM_AGENTE"));
+            .andExpect(jsonPath("$.agentId").value("mock-agent-mock-workspace-sp-01"))
+            .andExpect(jsonPath("$.agentName").value("Assistente Comercial"))
+            .andExpect(jsonPath("$.status").value("ATIVA"));
     }
 
     @Test
@@ -521,14 +525,14 @@ class FranchiseSecurityIntegrationTest {
                     """))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.workspaceId").value("mock-workspace-sp"))
-            .andExpect(jsonPath("$.agentId").doesNotExist())
-            .andExpect(jsonPath("$.agentName").doesNotExist())
-            .andExpect(jsonPath("$.status").value("SEM_AGENTE"));
+            .andExpect(jsonPath("$.agentId").value("mock-agent-mock-workspace-sp-01"))
+            .andExpect(jsonPath("$.agentName").value("Assistente Comercial"))
+            .andExpect(jsonPath("$.status").value("ATIVA"));
 
         Franchise updated = franchiseRepository.findById(franchise.getId()).orElseThrow();
-        assertThat(updated.getAgentId()).isNull();
-        assertThat(updated.getAgentName()).isNull();
-        assertThat(updated.getGptMakerLastSyncAt()).isNull();
+        assertThat(updated.getAgentId()).isEqualTo("mock-agent-mock-workspace-sp-01");
+        assertThat(updated.getAgentName()).isEqualTo("Assistente Comercial");
+        assertThat(updated.getGptMakerLastSyncAt()).isNotNull();
     }
 
     @Test

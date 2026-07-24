@@ -29,7 +29,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+    "vavive.whatsapp.provider=dry-run",
+    "vavive.webhooks.agent.secret=",
+    "gptmaker.mock-enabled=true",
+    "spring.flyway.enabled=false"
+})
 @AutoConfigureMockMvc
 @Transactional
 class WhatsAppNotificationIntegrationTest {

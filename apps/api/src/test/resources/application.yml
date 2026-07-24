@@ -4,6 +4,8 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
+  flyway:
+    enabled: false
   jpa:
     open-in-view: false
     hibernate:
@@ -14,6 +16,13 @@ app:
     secret: test-secret-with-at-least-32-characters
 
 gptmaker:
-  base-url: ${GPTMAKER_BASE_URL:https://api.gptmaker.ai}
-  api-token: ${GPTMAKER_API_TOKEN:}
-  mock-enabled: ${GPTMAKER_MOCK_ENABLED:true}
+  base-url: https://api.gptmaker.ai
+  api-token:
+  mock-enabled: true
+
+vavive:
+  whatsapp:
+    provider: dry-run
+  webhooks:
+    agent:
+      secret:
