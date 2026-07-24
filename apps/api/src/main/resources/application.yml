@@ -1,29 +1,38 @@
 spring:
   application:
-    name: vavive-gptmaker-api
+    name: nome-aplicacao
+
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/vavive_gptmaker}
-    username: ${DATABASE_USERNAME:vavive}
-    password: ${DATABASE_PASSWORD:vavive}
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USERNAME}
+    password: ${DATABASE_PASSWORD}
+
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: ${JPA_DDL_AUTO:update}
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${JPA_FORMAT_SQL:true}
+
   jackson:
     time-zone: America/Sao_Paulo
+
+  flyway:
+    enabled: ${FLYWAY_ENABLED:false}
+    baseline-on-migrate: ${FLYWAY_BASELINE_ON_MIGRATE:true}
 
 server:
   port: ${SERVER_PORT:8080}
 
 app:
   jwt:
-    secret: ${JWT_SECRET:vavive-dev-secret-change-me-with-at-least-32-chars}
+    secret: ${JWT_SECRET}
     expiration-seconds: ${JWT_EXPIRATION_SECONDS:86400}
+
   cors:
     allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:3000}
+
   features:
     real-channels-enabled: ${APP_FEATURE_REAL_CHANNELS_ENABLED:true}
     live-inbox-enabled: ${APP_FEATURE_LIVE_INBOX_ENABLED:true}
@@ -31,5 +40,19 @@ app:
 
 gptmaker:
   base-url: ${GPTMAKER_BASE_URL:https://api.gptmaker.ai}
-  api-token: ${GPTMAKER_API_TOKEN:}
+  api-token: ${GPTMAKER_API_TOKEN}
   mock-enabled: ${GPTMAKER_MOCK_ENABLED:false}
+
+vavive:
+  whatsapp:
+    provider: ${VAVIVE_WHATSAPP_PROVIDER:evolution}
+
+    evolution:
+      base-url: ${VAVIVE_WHATSAPP_EVOLUTION_BASE_URL}
+      api-key: ${VAVIVE_WHATSAPP_EVOLUTION_API_KEY}
+      instance: ${VAVIVE_WHATSAPP_EVOLUTION_INSTANCE}
+      send-path: ${VAVIVE_WHATSAPP_EVOLUTION_SEND_PATH:/message/sendText/{instance}}
+
+  webhooks:
+    agent:
+      secret: ${VAVIVE_WEBHOOKS_AGENT_SECRET}
