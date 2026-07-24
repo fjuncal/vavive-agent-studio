@@ -1120,6 +1120,7 @@ export function createFranchiseChannel(franchiseId: string, name: string, type: 
 export type ChannelQRCodeResponse = {
   value?: string;
   connected?: boolean;
+  message?: string | null;
 };
 
 export function getChannelQRCode(franchiseId: string, channelId: string) {

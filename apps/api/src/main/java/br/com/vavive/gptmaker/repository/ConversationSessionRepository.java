@@ -7,6 +7,8 @@ import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ConversationSessionRepository extends JpaRepository<ConversationSession, UUID> {
+    List<ConversationSession> findByFranchiseId(UUID franchiseId);
+
     List<ConversationSession> findByFranchiseIdOrderByUpdatedAtDesc(UUID franchiseId);
 
     Optional<ConversationSession> findByIdAndFranchiseId(UUID id, UUID franchiseId);

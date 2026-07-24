@@ -1042,6 +1042,9 @@ public class GptMakerClient {
         if (itemsNode == null || itemsNode.isNull()) {
             return List.of();
         }
+        if (itemsNode.isObject()) {
+            return List.of(parseAgent(itemsNode));
+        }
         if (!itemsNode.isArray()) {
             throw new GptMakerIntegrationException("GPTMAKER_INVALID_PAYLOAD", "A API GPTMaker retornou um formato inesperado para agentes.", sanitize(itemsNode.toString()), null, endpoint, sanitize(itemsNode.toString()));
         }
@@ -1051,19 +1054,23 @@ public class GptMakerClient {
             if (itemNode == null || itemNode.isNull() || !itemNode.isObject()) {
                 continue;
             }
-            items.add(new GptMakerAgentResponse(
-                textValue(itemNode, "id"),
-                textValue(itemNode, "name"),
-                textValue(itemNode, "behavior"),
-                textValue(itemNode, "avatar"),
-                textValue(itemNode, "communicationType"),
-                textValue(itemNode, "type"),
-                textValue(itemNode, "jobName"),
-                textValue(itemNode, "jobSite"),
-                textValue(itemNode, "jobDescription")
-            ));
+            items.add(parseAgent(itemNode));
         }
         return items;
+    }
+
+    private GptMakerAgentResponse parseAgent(JsonNode itemNode) {
+        return new GptMakerAgentResponse(
+            firstTextValue(itemNode, "id", "_id", "agentId", "assistantId"),
+            firstTextValue(itemNode, "name", "agentName", "assistantName", "title"),
+            firstTextValue(itemNode, "behavior", "instruction", "prompt", "description"),
+            firstTextValue(itemNode, "avatar", "picture", "image", "photo"),
+            firstTextValue(itemNode, "communicationType", "communication_type", "tone", "style"),
+            firstTextValue(itemNode, "type", "objectiveType", "objective_type", "agentType"),
+            firstTextValue(itemNode, "jobName", "job_name", "role", "occupation"),
+            firstTextValue(itemNode, "jobSite", "job_site", "site", "website", "url"),
+            firstTextValue(itemNode, "jobDescription", "job_description", "jobDescriptionText", "context", "about")
+        );
     }
 
     private List<GptMakerChannelResponse> parseChannels(JsonNode payload, String endpoint) {
@@ -1812,6 +1819,35 @@ public class GptMakerClient {
         }
         try {
             ResponseEntity<String> response = feignClient.createChannel(workspaceId, new br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateChannelRequest(name, type));
+            return parseResponse(response, endpoint);
+        } catch (RetryableException exception) {
+            throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage(), null, endpoint, null);
+        } catch (FeignException exception) {
+            throw mapFeignException(exception, endpoint);
+        }
+    }
+
+    public JsonNode createAgentChannel(String agentId, String name, String type) {
+        String endpoint = "/v2/agent/%s/create-channel".formatted(agentId == null ? "" : agentId);
+        if (agentId == null || agentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agent ID e obrigatorio.", null, null, endpoint, null);
+        }
+        if (properties.mockEnabled()) {
+            return objectMapper.createObjectNode()
+                .put("id", "mock-agent-channel-" + System.currentTimeMillis())
+                .put("name", name)
+                .put("type", type)
+                .put("connected", false)
+                .put("agentId", agentId);
+        }
+        if (!properties.tokenConfigured()) {
+            throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
+        }
+        try {
+            ResponseEntity<String> response = feignClient.createAgentChannel(
+                agentId,
+                new br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateChannelRequest(name, type)
+            );
             return parseResponse(response, endpoint);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage(), null, endpoint, null);

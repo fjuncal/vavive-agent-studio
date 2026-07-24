@@ -1,6 +1,7 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/auth";
@@ -15,7 +16,7 @@ import {
   type NotificationDispatchSummary,
   type WhatsAppNotificationContact
 } from "@/lib/api";
-import { Loader2, MessageCircleMore, Plus, Save, Send, Trash2 } from "lucide-react";
+import { Loader2, MessageCircleMore, Plus, Save, Send, ToggleLeft, ToggleRight, Trash2 } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -46,7 +47,9 @@ export default function FranchiseWhatsAppNotificationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingTest, setIsSendingTest] = useState(false);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<WhatsAppNotificationContact | null>(null);
 
   async function loadData() {
     if (!params?.id) {
@@ -62,7 +65,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
       setFranchise(franchiseData);
       setContacts(contactsData);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar as notificações.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar as notificacoes.");
     } finally {
       setIsLoading(false);
     }
@@ -92,28 +95,54 @@ export default function FranchiseWhatsAppNotificationsPage() {
       setForm(emptyForm);
       await loadData();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível salvar o contato.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel salvar o contato.");
     } finally {
       setIsSaving(false);
     }
   }
 
-  async function handleDelete(contactId: string) {
+  async function handleToggleActive(contact: WhatsAppNotificationContact) {
     if (!params?.id) {
       return;
     }
-    setDeletingId(contactId);
+    setUpdatingId(contact.id);
     setError(null);
     setSuccess(null);
     try {
-      await deleteWhatsAppNotificationContact(params.id, contactId);
-      setSuccess("Contato desativado com sucesso.");
-      if (form.id === contactId) {
-        setForm(emptyForm);
+      await updateWhatsAppNotificationContact(params.id, contact.id, {
+        name: contact.name,
+        phone: contact.phone,
+        active: !contact.active
+      });
+      setSuccess(contact.active ? "Contato inativado com sucesso." : "Contato reativado com sucesso.");
+      if (form.id === contact.id) {
+        setForm((current) => ({ ...current, active: !contact.active }));
       }
       await loadData();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível desativar o contato.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar o status do contato.");
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!params?.id || !contactToDelete) {
+      return;
+    }
+    setDeletingId(contactToDelete.id);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteWhatsAppNotificationContact(params.id, contactToDelete.id);
+      setSuccess("Contato excluido com sucesso.");
+      if (form.id === contactToDelete.id) {
+        setForm(emptyForm);
+      }
+      setContactToDelete(null);
+      await loadData();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel excluir o contato.");
     } finally {
       setDeletingId(null);
     }
@@ -131,7 +160,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
       setSummary(result);
       setSuccess("Teste disparado para os contatos ativos.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível enviar o teste.");
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel enviar o teste.");
     } finally {
       setIsSendingTest(false);
     }
@@ -143,7 +172,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
         <EmptyState
           icon={MessageCircleMore}
           title="Acesso restrito"
-          description="Somente a matriz pode configurar notificações de agendamento."
+          description="Somente a matriz pode configurar notificacoes de agendamento."
         />
       </AppShell>
     );
@@ -153,8 +182,8 @@ export default function FranchiseWhatsAppNotificationsPage() {
     <AppShell>
       <PageHeader
         eyebrow={franchise?.name ?? "Franquia"}
-        title="Notificações de agendamento"
-        description="Configure quais WhatsApps receberão um aviso quando o Vavive Agent registrar um novo atendimento agendado para esta franquia."
+        title="Notificacoes de agendamento"
+        description="Configure quais WhatsApps receberao um aviso quando o Vavive Agent registrar um novo atendimento agendado para esta franquia."
         backHref={`/franquias/${params?.id}`}
       />
 
@@ -173,7 +202,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
               <div>
                 <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Contatos cadastrados</h2>
                 <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                  {activeContacts.length} contato(s) ativo(s) receberão avisos do Evolution.
+                  {activeContacts.length} contato(s) ativo(s) receberao avisos do Evolution.
                 </p>
               </div>
             </div>
@@ -197,11 +226,26 @@ export default function FranchiseWhatsAppNotificationsPage() {
                       <button
                         type="button"
                         className="btn-secondary"
-                        onClick={() => void handleDelete(contact.id)}
+                        onClick={() => void handleToggleActive(contact)}
+                        disabled={updatingId === contact.id}
+                      >
+                        {updatingId === contact.id ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : contact.active ? (
+                          <ToggleRight size={16} />
+                        ) : (
+                          <ToggleLeft size={16} />
+                        )}
+                        {contact.active ? "Inativar" : "Reativar"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-secondary text-rose-600 dark:text-rose-400"
+                        onClick={() => setContactToDelete(contact)}
                         disabled={deletingId === contact.id}
                       >
                         {deletingId === contact.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                        {contact.active ? "Desativar" : "Manter inativo"}
+                        Excluir
                       </button>
                     </div>
                   </div>
@@ -210,7 +254,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
                   </div>
                 </article>
               )) : (
-                <EmptyState icon={MessageCircleMore} title="Nenhum contato cadastrado" description="Cadastre os números que devem receber as notificações." />
+                <EmptyState icon={MessageCircleMore} title="Nenhum contato cadastrado" description="Cadastre os numeros que devem receber as notificacoes." />
               )}
             </div>
           </section>
@@ -225,7 +269,7 @@ export default function FranchiseWhatsAppNotificationsPage() {
                   Nome
                   <input
                     className="input-field"
-                    placeholder="Ex.: Operação"
+                    placeholder="Ex.: Operacao"
                     value={form.name}
                     onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
                   />
@@ -299,6 +343,21 @@ export default function FranchiseWhatsAppNotificationsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!contactToDelete}
+        title="Excluir contato"
+        description={`Tem certeza que deseja excluir o contato "${contactToDelete?.name}"? Essa acao remove o cadastro da lista de notificacoes.`}
+        confirmLabel="Excluir"
+        variant="danger"
+        isSubmitting={!!contactToDelete && deletingId === contactToDelete.id}
+        onCancel={() => {
+          if (!deletingId) {
+            setContactToDelete(null);
+          }
+        }}
+        onConfirm={() => void handleDelete()}
+      />
     </AppShell>
   );
 }

@@ -1,10 +1,16 @@
 
 > @vavive/admin-web@0.1.0 dev
-> next dev
+> next dev --port 3000
 
    ▲ Next.js 15.5.19
-   - Local:        http://localhost:3001
-   - Network:      http://192.168.15.8:3001
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.15.7:3000
 
  ✓ Starting...
- ✓ Ready in 2.9s
+ ✓ Ready in 3s
+ ○ Compiling / ...
+ ✓ Compiled / in 4.7s (581 modules)
+ GET / 307 in 5086ms
+ ○ Compiling /dashboard ...
+ ✓ Compiled /dashboard in 1794ms (721 modules)
+ GET /dashboard 200 in 2083ms

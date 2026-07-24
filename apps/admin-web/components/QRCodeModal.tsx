@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { X, RefreshCw, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import clsx from "clsx";
+import QRCode from "qrcode";
 
 interface QRCodeModalProps {
   isOpen: boolean;
@@ -10,7 +10,7 @@ interface QRCodeModalProps {
   channelId: string;
   channelName: string;
   onConnected?: () => void;
-  fetchQRCode: (channelId: string) => Promise<{ value?: string; connected?: boolean }>;
+  fetchQRCode: (channelId: string) => Promise<{ value?: string; connected?: boolean; message?: string | null }>;
 }
 
 export function QRCodeModal({
@@ -22,27 +22,48 @@ export function QRCodeModal({
   fetchQRCode
 }: QRCodeModalProps) {
   const [qrData, setQrData] = useState<string | null>(null);
+  const [qrImageSrc, setQrImageSrc] = useState<string | null>(null);
   const [status, setStatus] = useState<"loading" | "qr" | "connected" | "error" | "timeout">("loading");
   const [errorMessage, setErrorMessage] = useState("");
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const elapsedRef = useRef(0);
 
   const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
     }
+  }, []);
+
+  const resolveQrImageSrc = useCallback(async (value: string) => {
+    if (value.startsWith("data:")) {
+      return value;
+    }
+
+    if (value.startsWith("<svg") || value.startsWith("<?xml")) {
+      return `data:image/svg+xml;utf8,${encodeURIComponent(value)}`;
+    }
+
+    const normalized = value.replace(/\s+/g, "");
+    const looksLikeImageBase64 = /^[A-Za-z0-9+/=]+$/.test(normalized) && normalized.length > 256;
+    if (looksLikeImageBase64) {
+      return `data:image/png;base64,${normalized}`;
+    }
+
+    return QRCode.toDataURL(value, { width: 256, margin: 1 });
   }, []);
 
   const startPolling = useCallback(() => {
     stopPolling();
     elapsedRef.current = 0;
+    setQrData(null);
+    setQrImageSrc(null);
+    setErrorMessage("");
     setStatus("loading");
 
     const poll = async () => {
       try {
         const data = await fetchQRCode(channelId);
-        elapsedRef.current += 3;
 
         if (data.connected) {
           setStatus("connected");
@@ -51,24 +72,30 @@ export function QRCodeModal({
           return;
         }
 
+        if (data.message) {
+          setStatus("error");
+          setErrorMessage(data.message);
+          stopPolling();
+          return;
+        }
+
         if (data.value) {
           setQrData(data.value);
+          setQrImageSrc(await resolveQrImageSrc(data.value));
           setStatus("qr");
         }
 
-        // Backoff: 3s → 5s after 30s → 10s after 60s → timeout after 120s
         if (elapsedRef.current > 120) {
           setStatus("timeout");
           stopPolling();
           return;
         }
 
-        // Adjust interval based on elapsed time
-        if (intervalRef.current) {
-          clearInterval(intervalRef.current);
-        }
+        elapsedRef.current += 3;
         const nextInterval = elapsedRef.current > 60 ? 10000 : elapsedRef.current > 30 ? 5000 : 3000;
-        intervalRef.current = setInterval(poll, nextInterval);
+        timeoutRef.current = setTimeout(() => {
+          void poll();
+        }, nextInterval);
       } catch {
         setStatus("error");
         setErrorMessage("Erro ao buscar QR code");
@@ -76,9 +103,8 @@ export function QRCodeModal({
       }
     };
 
-    poll();
-    intervalRef.current = setInterval(poll, 3000);
-  }, [channelId, fetchQRCode, onConnected, stopPolling]);
+    void poll();
+  }, [channelId, fetchQRCode, onConnected, resolveQrImageSrc, stopPolling]);
 
   useEffect(() => {
     if (isOpen) {
@@ -91,12 +117,9 @@ export function QRCodeModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Modal */}
       <div className="relative card max-w-md w-full mx-4 p-6">
-        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
             Conectar {channelName}
@@ -110,7 +133,6 @@ export function QRCodeModal({
           </button>
         </div>
 
-        {/* Content */}
         <div className="flex flex-col items-center gap-4">
           {status === "loading" && (
             <div className="flex flex-col items-center gap-3 py-8">
@@ -121,13 +143,13 @@ export function QRCodeModal({
             </div>
           )}
 
-          {status === "qr" && qrData && (
+          {status === "qr" && qrData && qrImageSrc && (
             <>
               <div className="rounded-xl border-2 border-gray-200 dark:border-gray-700 p-4 bg-white">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={qrData.startsWith("data:") ? qrData : `data:image/png;base64,${qrData}`}
-                  alt="QR Code para conexão"
+                  src={qrImageSrc}
+                  alt="QR Code para conexao"
                   width={256}
                   height={256}
                   className="block"
@@ -138,12 +160,12 @@ export function QRCodeModal({
                   Escaneie o QR code com seu WhatsApp
                 </p>
                 <p className="text-xs mt-1" style={{ color: "var(--color-text-tertiary)" }}>
-                  Aguardando conexão...
+                  Aguardando conexao...
                 </p>
               </div>
               <div className="flex items-center gap-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
                 <Loader2 size={14} className="animate-spin" />
-                Verificando conexão automaticamente
+                Verificando conexao automaticamente
               </div>
             </>
           )}

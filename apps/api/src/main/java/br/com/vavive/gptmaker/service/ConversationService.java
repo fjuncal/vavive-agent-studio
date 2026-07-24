@@ -20,6 +20,7 @@ import br.com.vavive.gptmaker.dto.UpdateChatMessageRequest;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationRequest;
+import br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerChatResponse;
 import br.com.vavive.gptmaker.repository.ConversationHandoffEventRepository;
 import br.com.vavive.gptmaker.repository.ConversationSessionRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
@@ -29,7 +30,9 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -88,7 +91,7 @@ public class ConversationService {
                 : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(requireFranchise(franchiseId).getId()))
             : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(currentUserService.requireFranchise(user).getId());
 
-        return base.stream()
+        return deduplicateSessions(base).stream()
             .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.getOperationalStatus()))
             .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.getChannelType()))
             .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.getResponsibleUserName()))
@@ -161,7 +164,7 @@ public class ConversationService {
             "USER",
             "TEXT",
             session.getFirstPrompt(),
-            session.getCustomerName(),
+            displayCustomerName(session),
             null,
             null,
             null,
@@ -174,14 +177,14 @@ public class ConversationService {
         ));
         if (session.getLastResponse() != null && !session.getLastResponse().isBlank()) {
             localMessages.add(new ConversationMessageResponse(
-                session.getId().toString() + "-response",
-                session.isHumanTakeoverActive() ? "HUMAN" : "ASSISTANT",
-                "TEXT",
-                session.getLastResponse(),
-                session.getResponsibleUserName() != null ? session.getResponsibleUserName() : session.getAgentName(),
-                null,
-                null,
-                null,
+            session.getId().toString() + "-response",
+            session.isHumanTakeoverActive() ? "HUMAN" : "ASSISTANT",
+            "TEXT",
+            session.getLastResponse(),
+            firstNonBlank(session.getResponsibleUserName(), session.getAgentName(), "Atendimento"),
+            null,
+            null,
+            null,
                 null,
                 null,
                 null,
@@ -477,7 +480,7 @@ public class ConversationService {
             session.getFranchise().getId(),
             session.getFranchise().getName(),
             session.getAgentName(),
-            session.getCustomerName(),
+            displayCustomerName(session),
             session.getCustomerPhone(),
             session.getFirstPrompt(),
             session.getLastResponse(),
@@ -512,22 +515,32 @@ public class ConversationService {
         }
         try {
             LocalDateTime now = LocalDateTime.now();
+            List<ConversationSession> existingSessions = conversationSessionRepository.findByFranchiseId(franchise.getId());
+            Map<String, ConversationSession> sessionsByIdentity = new LinkedHashMap<>();
+            existingSessions.stream()
+                .sorted(Comparator.comparing(ConversationSession::getUpdatedAt).reversed())
+                .forEach(session -> sessionsByIdentity.putIfAbsent(conversationIdentity(session), session));
             for (var chat : gptMakerClient.listChats(franchise.getWorkspaceId())) {
-                ConversationSession session = conversationSessionRepository.findFirstByFranchiseIdAndChatId(franchise.getId(), chat.id())
-                    .orElseGet(() -> new ConversationSession(
+                ConversationSession session = sessionsByIdentity.get(remoteConversationIdentity(chat.id(), null, "chat-" + chat.id()));
+                if (session == null && chat.id() != null && !chat.id().isBlank()) {
+                    session = conversationSessionRepository.findFirstByFranchiseIdAndChatId(franchise.getId(), chat.id()).orElse(null);
+                }
+                if (session == null) {
+                    session = new ConversationSession(
                         franchise,
                         chat.agentId() != null ? chat.agentId() : franchise.getAgentId(),
                         chat.agentName() != null ? chat.agentName() : franchise.getAgentName(),
                         "chat-" + chat.id(),
-                        firstNonBlank(chat.userName(), chat.title(), chat.name()),
+                        firstNonBlank(chat.userName(), chat.title(), chat.name(), "desconhecido"),
                         chat.whatsappPhone(),
                         chat.conversation(),
                         chat.conversation(),
                         chat.id(),
                         null
-                    ));
+                    );
+                }
                 session.setAgentName(firstNonBlank(chat.agentName(), franchise.getAgentName()));
-                session.setCustomerName(firstNonBlank(chat.userName(), chat.title(), chat.name(), session.getCustomerName()));
+                session.setCustomerName(resolveCustomerName(chat, session, franchise));
                 session.setCustomerPhone(firstNonBlank(chat.whatsappPhone(), session.getCustomerPhone()));
                 session.setLastResponse(firstNonBlank(chat.conversation(), session.getLastResponse()));
                 session.setChannelType(normalizeChannel(chat.type(), chat.conversationType()));
@@ -537,11 +550,40 @@ public class ConversationService {
                 session.setSyncStatus("sincronizada");
                 session.setLastMessageAt(toLocalDateTime(chat.time()));
                 session.setLastSyncedAt(now);
-                conversationSessionRepository.save(session);
+                ConversationSession savedSession = conversationSessionRepository.save(session);
+                sessionsByIdentity.put(conversationIdentity(savedSession), savedSession);
             }
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
+    }
+
+    private List<ConversationSession> deduplicateSessions(List<ConversationSession> sessions) {
+        Map<String, ConversationSession> uniqueSessions = new LinkedHashMap<>();
+        sessions.stream()
+            .sorted(Comparator.comparing(ConversationService::sessionSortTimestamp).reversed())
+            .forEach(session -> uniqueSessions.putIfAbsent(conversationIdentity(session), session));
+        return List.copyOf(uniqueSessions.values());
+    }
+
+    private String conversationIdentity(ConversationSession session) {
+        String identity = remoteConversationIdentity(session.getChatId(), session.getInteractionId(), session.getContextId());
+        return identity != null ? identity : "session:" + session.getId();
+    }
+
+    private String remoteConversationIdentity(String chatId, String interactionId, String contextId) {
+        String identity = firstNonBlank(chatId, interactionId, contextId);
+        return identity == null ? null : identity.trim();
+    }
+
+    private static LocalDateTime sessionSortTimestamp(ConversationSession session) {
+        if (session.getLastMessageAt() != null) {
+            return session.getLastMessageAt();
+        }
+        if (session.getUpdatedAt() != null) {
+            return session.getUpdatedAt();
+        }
+        return session.getCreatedAt();
     }
 
     private String normalizeChannel(String type, String conversationType) {
@@ -576,6 +618,73 @@ public class ConversationService {
             }
         }
         return null;
+    }
+
+    private String displayCustomerName(ConversationSession session) {
+        String customerName = session.getCustomerName();
+        if (customerName == null || customerName.isBlank()) {
+            return "desconhecido";
+        }
+        if (matchesAnyName(customerName.trim(), session.getAgentName(), session.getResponsibleUserName())) {
+            return "desconhecido";
+        }
+        return customerName;
+    }
+
+    private String resolveCustomerName(GptMakerChatResponse chat, ConversationSession session, Franchise franchise) {
+        String resolved = firstUsableCustomerName(
+            firstNonBlank(chat.title(), chat.userName(), chat.name()),
+            chat.userName(),
+            chat.title(),
+            chat.name(),
+            session.getCustomerName()
+        , chat.agentName(), franchise.getAgentName(), chat.messageUserName(), session.getResponsibleUserName());
+        return resolved != null ? resolved : "desconhecido";
+    }
+
+    private String firstUsableCustomerName(
+        String primaryCandidate,
+        String userName,
+        String title,
+        String name,
+        String existingName,
+        String agentName,
+        String franchiseAgentName,
+        String messageUserName,
+        String responsibleUserName
+    ) {
+        for (String candidate : List.of(primaryCandidate, userName, title, name, existingName)) {
+            if (isUsableCustomerName(candidate, agentName, franchiseAgentName, messageUserName, responsibleUserName)) {
+                return candidate.trim();
+            }
+        }
+        return null;
+    }
+
+    private boolean isUsableCustomerName(
+        String candidate,
+        String agentName,
+        String franchiseAgentName,
+        String messageUserName,
+        String responsibleUserName
+    ) {
+        if (candidate == null || candidate.isBlank()) {
+            return false;
+        }
+        String normalizedCandidate = candidate.trim();
+        if (normalizedCandidate.equalsIgnoreCase("desconhecido")) {
+            return false;
+        }
+        return !matchesAnyName(normalizedCandidate, agentName, franchiseAgentName, messageUserName, responsibleUserName);
+    }
+
+    private boolean matchesAnyName(String value, String... references) {
+        for (String reference : references) {
+            if (reference != null && !reference.isBlank() && value.equalsIgnoreCase(reference.trim())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isClosed(ConversationSession session) {

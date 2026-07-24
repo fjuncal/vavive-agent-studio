@@ -5,11 +5,13 @@ import br.com.vavive.gptmaker.domain.entity.Franchise;
 import br.com.vavive.gptmaker.domain.entity.FranchiseChannelSnapshot;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
+import br.com.vavive.gptmaker.dto.ChannelQrCodeResponse;
 import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient;
 import br.com.vavive.gptmaker.integration.gptmaker.GptMakerClient.GptMakerIntegrationException;
 import br.com.vavive.gptmaker.repository.FranchiseChannelSnapshotRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDateTime;
@@ -25,6 +27,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ChannelService {
+    private static final String WHATSAPP_INTEGRATION_MISSING_MESSAGE =
+        "A integracao do WhatsApp nao esta disponivel para este canal. Fale com um dos administradores.";
+
     private final FranchiseRepository franchiseRepository;
     private final FranchiseChannelSnapshotRepository channelRepository;
     private final CurrentUserService currentUserService;
@@ -78,8 +83,11 @@ public class ChannelService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem workspace vinculada. Vincule uma workspace primeiro.");
         }
         String normalizedType = normalizeRequestedType(type);
+        boolean agentManagedCreation = shouldCreateViaAgent(franchise, normalizedType);
         try {
-            var created = gptMakerClient.createChannel(franchise.getWorkspaceId(), name, normalizedType);
+            JsonNode created = agentManagedCreation
+                ? gptMakerClient.createAgentChannel(franchise.getAgentId(), name, normalizedType)
+                : gptMakerClient.createChannel(franchise.getWorkspaceId(), name, normalizedType);
             FranchiseChannelSnapshot snapshot = channelRepository.findFirstByFranchiseIdAndExternalChannelId(franchise.getId(), created.path("id").asText())
                 .orElseGet(() -> new FranchiseChannelSnapshot(
                     franchise,
@@ -93,15 +101,22 @@ public class ChannelService {
             snapshot.setAgentId(created.path("assistantId").isNull() ? null : created.path("assistantId").asText(null));
             snapshot.setAgentName(null);
             snapshot.setExternalUsername(null);
-            snapshot.setRawPayload(created.toString());
+            snapshot.setRawPayload(buildRawPayload(
+                snapshot.getAgentId(),
+                snapshot.getAgentName(),
+                snapshot.getExternalUsername(),
+                agentManagedCreation ? "AGENT" : "WORKSPACE"
+            ));
             snapshot.setLastSyncError(null);
             snapshot.setLastSyncedAt(LocalDateTime.now());
             FranchiseChannelSnapshot saved = channelRepository.save(snapshot);
-            try {
-                channelConfigurationService.applyStandardConfig(saved, normalizedType);
-            } catch (Exception exception) {
-                saved.setLastSyncError("Canal criado, mas a configuracao padrao nao foi aplicada: " + exception.getMessage());
-                channelRepository.save(saved);
+            if (!agentManagedCreation) {
+                try {
+                    channelConfigurationService.applyStandardConfig(saved, normalizedType);
+                } catch (Exception exception) {
+                    saved.setLastSyncError("Canal criado, mas a configuracao padrao nao foi aplicada: " + exception.getMessage());
+                    channelRepository.save(saved);
+                }
             }
             return toResponse(saved);
         } catch (GptMakerIntegrationException exception) {
@@ -109,14 +124,20 @@ public class ChannelService {
         }
     }
 
-    public Object getChannelQRCode(UUID franchiseId, UUID channelId) {
+    public ChannelQrCodeResponse getChannelQRCode(UUID franchiseId, UUID channelId) {
         Franchise franchise = requireAccessibleFranchise(franchiseId);
         FranchiseChannelSnapshot snapshot = requireChannel(franchise, channelId);
         if (snapshot.getExternalChannelId() == null || snapshot.getExternalChannelId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Canal sem ID externo configurado.");
         }
         try {
-            return gptMakerClient.getChannelQRCode(snapshot.getExternalChannelId());
+            JsonNode qrPayload = gptMakerClient.getChannelQRCode(snapshot.getExternalChannelId());
+            if (qrPayload != null && qrPayload.isObject() && qrPayload.hasNonNull("error")) {
+                throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, qrPayload.get("error").asText());
+            }
+            String qrValue = firstTextValue(qrPayload, "value", "qrCode", "qr_code", "base64");
+            boolean connected = resolveConnectedStatus(franchise, snapshot, qrPayload, qrValue);
+            return new ChannelQrCodeResponse(qrValue, connected, resolveQrCodeMessage(snapshot, qrValue, connected));
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
@@ -179,7 +200,7 @@ public class ChannelService {
                 snapshot.setAgentId(channel.agentId());
                 snapshot.setAgentName(channel.agentName());
                 snapshot.setExternalUsername(channel.username());
-                snapshot.setRawPayload(buildRawPayload(channel.agentId(), channel.agentName(), channel.username()));
+                snapshot.setRawPayload(buildRawPayload(channel.agentId(), channel.agentName(), channel.username(), "WORKSPACE"));
                 snapshot.setLastSyncError(null);
                 snapshot.setLastSyncedAt(now);
                 channelRepository.save(snapshot);
@@ -187,6 +208,7 @@ public class ChannelService {
             if (!remoteIds.isEmpty()) {
                 channelRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).stream()
                     .filter(snapshot -> snapshot.getExternalChannelId() != null && !snapshot.getExternalChannelId().isBlank())
+                    .filter(snapshot -> !isAgentManaged(snapshot))
                     .filter(snapshot -> !remoteIds.contains(snapshot.getExternalChannelId()))
                     .forEach(channelRepository::delete);
             }
@@ -239,12 +261,13 @@ public class ChannelService {
         );
     }
 
-    private String buildRawPayload(String agentId, String agentName, String username) {
+    private String buildRawPayload(String agentId, String agentName, String username, String source) {
         try {
             ObjectNode node = objectMapper.createObjectNode();
             node.put("agentId", agentId);
             node.put("agentName", agentName);
             node.put("username", username);
+            node.put("source", source);
             return objectMapper.writeValueAsString(node);
         } catch (Exception e) {
             return "{}";
@@ -271,5 +294,89 @@ public class ChannelService {
 
     private boolean realChannelsEnabled() {
         return runtimeProperties.features() == null || runtimeProperties.features().realChannelsEnabled();
+    }
+
+    private boolean shouldCreateViaAgent(Franchise franchise, String normalizedType) {
+        if (!"WHATSAPP".equals(normalizedType)) {
+            return false;
+        }
+        if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
+            throw new ResponseStatusException(
+                HttpStatus.BAD_REQUEST,
+                "Para criar canal WhatsApp com QR Code, a franquia precisa ter um agente GPTMaker configurado."
+            );
+        }
+        return true;
+    }
+
+    private boolean isAgentManaged(FranchiseChannelSnapshot snapshot) {
+        if (snapshot.getRawPayload() == null || snapshot.getRawPayload().isBlank()) {
+            return false;
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(snapshot.getRawPayload());
+            return "AGENT".equalsIgnoreCase(firstTextValue(payload, "source"));
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private boolean resolveConnectedStatus(
+        Franchise franchise,
+        FranchiseChannelSnapshot snapshot,
+        JsonNode qrPayload,
+        String qrValue
+    ) {
+        boolean connected = booleanValue(qrPayload, "connected", snapshot.isConnected());
+        if ((qrValue == null || qrValue.isBlank())
+            && franchise.getWorkspaceId() != null
+            && !franchise.getWorkspaceId().isBlank()) {
+            connected = gptMakerClient.listWorkspaceChannels(franchise.getWorkspaceId()).stream()
+                .filter(channel -> snapshot.getExternalChannelId().equals(channel.id()))
+                .map(br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerChannelResponse::connected)
+                .findFirst()
+                .orElse(connected);
+        }
+        snapshot.setConnected(connected);
+        snapshot.setLastSyncError(null);
+        snapshot.setLastSyncedAt(LocalDateTime.now());
+        channelRepository.save(snapshot);
+        return connected;
+    }
+
+    private String firstTextValue(JsonNode node, String... fieldNames) {
+        if (node == null || node.isNull()) {
+            return null;
+        }
+        if (node.isTextual()) {
+            String value = node.asText(null);
+            return value == null || value.isBlank() ? null : value;
+        }
+        for (String fieldName : fieldNames) {
+            if (!node.has(fieldName) || node.get(fieldName).isNull()) {
+                continue;
+            }
+            String value = node.get(fieldName).asText(null);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private boolean booleanValue(JsonNode node, String fieldName, boolean fallback) {
+        if (node == null || node.isNull() || !node.has(fieldName) || node.get(fieldName).isNull()) {
+            return fallback;
+        }
+        return node.get(fieldName).asBoolean(fallback);
+    }
+
+    private String resolveQrCodeMessage(FranchiseChannelSnapshot snapshot, String qrValue, boolean connected) {
+        if ("WHATSAPP".equalsIgnoreCase(snapshot.getChannelType())
+            && (qrValue == null || qrValue.isBlank())
+            && !connected) {
+            return WHATSAPP_INTEGRATION_MISSING_MESSAGE;
+        }
+        return null;
     }
 }

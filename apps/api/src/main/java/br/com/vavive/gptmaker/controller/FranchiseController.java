@@ -9,6 +9,7 @@ import br.com.vavive.gptmaker.dto.CriticalChangeRequest;
 import br.com.vavive.gptmaker.dto.EditChannelRequest;
 import br.com.vavive.gptmaker.dto.AssistantStandardProfileResponse;
 import br.com.vavive.gptmaker.dto.ChannelConfigurationResponse;
+import br.com.vavive.gptmaker.dto.ChannelQrCodeResponse;
 import br.com.vavive.gptmaker.dto.FranchiseChannelResponse;
 import br.com.vavive.gptmaker.dto.FranchiseAssistantConfigurationResponse;
 import br.com.vavive.gptmaker.dto.FranchiseGptMakerConnectionResponse;
@@ -180,7 +181,7 @@ public class FranchiseController {
     }
 
     @GetMapping("/franchises/{id}/channels/{channelId}/qr-code")
-    public Object getChannelQRCode(@PathVariable UUID id, @PathVariable UUID channelId) {
+    public ChannelQrCodeResponse getChannelQRCode(@PathVariable UUID id, @PathVariable UUID channelId) {
         return channelService.getChannelQRCode(id, channelId);
     }
 

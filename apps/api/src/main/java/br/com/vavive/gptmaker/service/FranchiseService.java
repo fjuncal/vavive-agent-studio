@@ -1,9 +1,12 @@
 package br.com.vavive.gptmaker.service;
 
 import br.com.vavive.gptmaker.domain.entity.Franchise;
+import br.com.vavive.gptmaker.domain.entity.FranchiseAssistantBlockConfig;
 import br.com.vavive.gptmaker.domain.entity.FranchiseSetup;
 import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
+import br.com.vavive.gptmaker.domain.enums.AssistantBlockMode;
+import br.com.vavive.gptmaker.domain.enums.AssistantBlockType;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.ConversationExampleResponse;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
@@ -34,10 +37,15 @@ import br.com.vavive.gptmaker.repository.AgentTrainingRepository;
 import br.com.vavive.gptmaker.repository.AgentIntentRepository;
 import br.com.vavive.gptmaker.repository.AgentRuleRepository;
 import br.com.vavive.gptmaker.repository.AgentConversationExampleRepository;
+import br.com.vavive.gptmaker.repository.FranchiseAssistantBlockConfigRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
 import br.com.vavive.gptmaker.repository.GptMakerAgentRepository;
 import br.com.vavive.gptmaker.repository.UserRepository;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -62,6 +70,7 @@ public class FranchiseService {
     private final AgentIntentRepository intentRepository;
     private final AgentRuleRepository ruleRepository;
     private final AgentConversationExampleRepository exampleRepository;
+    private final FranchiseAssistantBlockConfigRepository assistantBlockConfigRepository;
     private final TrainingGeneratorService trainingGeneratorService;
     private final SetupProgressService setupProgressService;
     private final GptMakerClient gptMakerClient;
@@ -70,6 +79,7 @@ public class FranchiseService {
     private final PasswordEncoder passwordEncoder;
     private final VaviveDefaultContextService vaviveDefaultContextService;
     private final WorkspaceCreditsService workspaceCreditsService;
+    private final ObjectMapper objectMapper;
 
     public FranchiseService(
         FranchiseRepository franchiseRepository,
@@ -79,6 +89,7 @@ public class FranchiseService {
         AgentIntentRepository intentRepository,
         AgentRuleRepository ruleRepository,
         AgentConversationExampleRepository exampleRepository,
+        FranchiseAssistantBlockConfigRepository assistantBlockConfigRepository,
         TrainingGeneratorService trainingGeneratorService,
         SetupProgressService setupProgressService,
         GptMakerClient gptMakerClient,
@@ -86,7 +97,8 @@ public class FranchiseService {
         UserRepository userRepository,
         PasswordEncoder passwordEncoder,
         VaviveDefaultContextService vaviveDefaultContextService,
-        WorkspaceCreditsService workspaceCreditsService
+        WorkspaceCreditsService workspaceCreditsService,
+        ObjectMapper objectMapper
     ) {
         this.franchiseRepository = franchiseRepository;
         this.franchiseSetupRepository = franchiseSetupRepository;
@@ -95,6 +107,7 @@ public class FranchiseService {
         this.intentRepository = intentRepository;
         this.ruleRepository = ruleRepository;
         this.exampleRepository = exampleRepository;
+        this.assistantBlockConfigRepository = assistantBlockConfigRepository;
         this.trainingGeneratorService = trainingGeneratorService;
         this.setupProgressService = setupProgressService;
         this.gptMakerClient = gptMakerClient;
@@ -103,6 +116,7 @@ public class FranchiseService {
         this.passwordEncoder = passwordEncoder;
         this.vaviveDefaultContextService = vaviveDefaultContextService;
         this.workspaceCreditsService = workspaceCreditsService;
+        this.objectMapper = objectMapper;
     }
 
     @Transactional(readOnly = true)
@@ -215,9 +229,17 @@ public class FranchiseService {
         return toSetupResponse(franchise, setup);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public FranchiseGptMakerConnectionResponse getGptMakerConnection(UUID id) {
         Franchise franchise = requireAccessibleFranchise(id);
+        if ((franchise.getAgentId() == null || franchise.getAgentId().isBlank())
+            && franchise.getWorkspaceId() != null
+            && !franchise.getWorkspaceId().isBlank()) {
+            List<GptMakerAgentOptionResponse> workspaceAgents = syncWorkspaceAgents(franchise);
+            if (!workspaceAgents.isEmpty()) {
+                bindImportedAgent(franchise, workspaceAgents.getFirst());
+            }
+        }
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -377,6 +399,7 @@ public class FranchiseService {
         franchiseRepository.save(franchise);
 
         syncLocalAgent(franchise, agent);
+        importAgentConfiguration(franchise, agent);
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -402,6 +425,15 @@ public class FranchiseService {
         }
         refreshStatus(franchise);
         franchiseRepository.save(franchise);
+        List<GptMakerAgentOptionResponse> workspaceAgents = syncWorkspaceAgents(franchise);
+        if ((franchise.getAgentId() == null || franchise.getAgentId().isBlank()) && !workspaceAgents.isEmpty()) {
+            bindImportedAgent(franchise, workspaceAgents.getFirst());
+        } else if (franchise.getAgentId() != null && !franchise.getAgentId().isBlank()) {
+            workspaceAgents.stream()
+                .filter(agent -> franchise.getAgentId().equals(agent.id()))
+                .findFirst()
+                .ifPresent(agent -> importAgentConfiguration(franchise, agent));
+        }
         return toGptMakerConnectionResponse(franchise);
     }
 
@@ -618,10 +650,267 @@ public class FranchiseService {
         agent.setName(agentResponse.name());
         agent.setAvatar(agentResponse.avatar());
         agent.setStatus("ATIVO");
-        if (agent.getToneOfVoice() == null || agent.getToneOfVoice().isBlank()) {
-            agent.setToneOfVoice(defaultToneOfVoice(franchise));
-        }
+        agent.setToneOfVoice(resolveToneOfVoice(agentResponse.communicationType(), franchise));
         agentRepository.save(agent);
+    }
+
+    private List<GptMakerAgentOptionResponse> syncWorkspaceAgents(Franchise franchise) {
+        if (franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
+            return List.of();
+        }
+        try {
+            List<GptMakerAgentOptionResponse> agents = gptMakerClient.listAgents(franchise.getWorkspaceId()).stream()
+                .map(agent -> new GptMakerAgentOptionResponse(
+                    agent.id(),
+                    agent.name(),
+                    agent.behavior(),
+                    agent.avatar(),
+                    agent.communicationType(),
+                    agent.type(),
+                    agent.jobName(),
+                    agent.jobSite(),
+                    agent.jobDescription()
+                ))
+                .toList();
+            agents.forEach(agent -> syncLocalAgent(
+                franchise,
+                agent
+            ));
+            return agents;
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
+        }
+    }
+
+    private void bindImportedAgent(Franchise franchise, GptMakerAgentOptionResponse agent) {
+        franchise.setAgentId(agent.id());
+        franchise.setAgentName(agent.name());
+        franchise.setGptMakerLastSyncAt(LocalDateTime.now());
+        refreshStatus(franchise);
+        franchiseRepository.save(franchise);
+        syncLocalAgent(franchise, agent);
+        importAgentConfiguration(franchise, agent);
+    }
+
+    private void importAgentConfiguration(Franchise franchise, GptMakerAgentOptionResponse agent) {
+        upsertAssistantBlock(franchise, AssistantBlockType.ROLE, buildRolePayload(franchise, agent));
+        upsertAssistantBlock(franchise, AssistantBlockType.BEHAVIOR, buildBehaviorPayload(franchise, agent));
+        upsertAssistantBlock(franchise, AssistantBlockType.AGENT_SETTINGS, buildAgentSettingsPayload(franchise, agent.id()));
+        upsertAssistantBlock(franchise, AssistantBlockType.TRAININGS, buildTrainingsPayload(agent.id()));
+        upsertAssistantBlock(franchise, AssistantBlockType.INTENTIONS, buildIntentionsPayload(agent.id()));
+        upsertAssistantBlock(franchise, AssistantBlockType.IDLE_ACTIONS, buildIdleActionsPayload(agent.id()));
+        upsertAssistantBlock(franchise, AssistantBlockType.TRANSFER_RULES, buildTransferRulesPayload(agent.id()));
+    }
+
+    private ObjectNode buildRolePayload(Franchise franchise, GptMakerAgentOptionResponse agent) {
+        return objectMapper.createObjectNode()
+            .put("assistantName", fallback(agent.name(), franchise.getAgentName(), "Assistente Vavive"))
+            .put("communicationType", normalizeCommunicationType(agent.communicationType()))
+            .put("type", normalizeObjectiveType(agent.type()))
+            .put("jobName", fallback(agent.jobName(), franchise.getName(), "Assistente Vavive"))
+            .put("jobSite", fallback(agent.jobSite(), "https://vavive.com.br"))
+            .put("description", fallback(agent.jobDescription(), "Atendimento comercial e operacional da unidade."));
+    }
+
+    private ObjectNode buildBehaviorPayload(Franchise franchise, GptMakerAgentOptionResponse agent) {
+        String instruction = fallback(
+            agent.behavior(),
+            agent.jobDescription(),
+            "Assistente consultivo, claro e orientado a conversao para a franquia " + franchise.getName() + "."
+        );
+        return objectMapper.createObjectNode()
+            .put("instruction", instruction)
+            .put("summary", instruction.length() > 200 ? instruction.substring(0, 200) : instruction);
+    }
+
+    private ObjectNode buildAgentSettingsPayload(Franchise franchise, String agentId) {
+        ObjectNode payload = defaultAgentSettingsPayload();
+        try {
+            JsonNode remoteSettings = gptMakerClient.getAgentSettings(agentId);
+            if (remoteSettings != null && remoteSettings.isObject()) {
+                payload.put("prefferModel", text(remoteSettings, "prefferModel", payload.path("prefferModel").asText()));
+                payload.put("timezone", text(remoteSettings, "timezone", payload.path("timezone").asText()));
+                payload.put("enabledHumanTransfer", bool(remoteSettings, "enabledHumanTransfer", payload.path("enabledHumanTransfer").asBoolean()));
+                payload.put("enabledReminder", bool(remoteSettings, "enabledReminder", payload.path("enabledReminder").asBoolean()));
+                payload.put("splitMessages", bool(remoteSettings, "splitMessages", payload.path("splitMessages").asBoolean()));
+                payload.put("enabledEmoji", bool(remoteSettings, "enabledEmoji", payload.path("enabledEmoji").asBoolean()));
+                payload.put("limitSubjects", bool(remoteSettings, "limitSubjects", payload.path("limitSubjects").asBoolean()));
+                payload.put("signMessages", bool(remoteSettings, "signMessages", payload.path("signMessages").asBoolean()));
+                payload.put("messageGroupingTime", text(remoteSettings, "messageGroupingTime", payload.path("messageGroupingTime").asText()));
+                if (remoteSettings.hasNonNull("maxDailyMessages")) {
+                    payload.put("maxDailyMessages", remoteSettings.get("maxDailyMessages").asInt());
+                }
+            }
+        } catch (GptMakerIntegrationException exception) {
+            log.warn("Nao foi possivel importar agent settings do GPTMaker para a franquia {}. Erro: {}", franchise.getId(), exception.getMessage());
+        }
+        return payload;
+    }
+
+    private ObjectNode buildTrainingsPayload(String agentId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("items", mapRemoteItems(fetchRemoteList(agentId, "TRAININGS"), this::toTrainingItem));
+        return payload;
+    }
+
+    private ObjectNode buildIntentionsPayload(String agentId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("items", mapRemoteItems(fetchRemoteList(agentId, "INTENTIONS"), this::toIntentionItem));
+        return payload;
+    }
+
+    private ObjectNode buildIdleActionsPayload(String agentId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("items", mapRemoteItems(fetchRemoteList(agentId, "IDLE_ACTIONS"), this::toReferenceItem));
+        return payload;
+    }
+
+    private ObjectNode buildTransferRulesPayload(String agentId) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.set("items", mapRemoteItems(fetchRemoteList(agentId, "TRANSFER_RULES"), this::toReferenceItem));
+        return payload;
+    }
+
+    private JsonNode fetchRemoteList(String agentId, String blockName) {
+        try {
+            return switch (blockName) {
+                case "TRAININGS" -> gptMakerClient.listTrainings(agentId);
+                case "INTENTIONS" -> gptMakerClient.listIntentions(agentId);
+                case "IDLE_ACTIONS" -> gptMakerClient.listIdleActions(agentId);
+                case "TRANSFER_RULES" -> gptMakerClient.listTransferRules(agentId);
+                default -> objectMapper.createArrayNode();
+            };
+        } catch (GptMakerIntegrationException exception) {
+            log.warn("Nao foi possivel importar bloco {} do GPTMaker para o agente {}. Erro: {}", blockName, agentId, exception.getMessage());
+            return objectMapper.createArrayNode();
+        }
+    }
+
+    private ArrayNode mapRemoteItems(JsonNode remoteItems, java.util.function.Function<JsonNode, ObjectNode> mapper) {
+        ArrayNode result = objectMapper.createArrayNode();
+        for (JsonNode item : extractArray(remoteItems)) {
+            if (item != null && item.isObject()) {
+                result.add(mapper.apply(item));
+            }
+        }
+        return result;
+    }
+
+    private ArrayNode extractArray(JsonNode remoteItems) {
+        if (remoteItems instanceof ArrayNode arrayNode) {
+            return arrayNode;
+        }
+        if (remoteItems != null && remoteItems.isObject()) {
+            for (String field : List.of("items", "data", "content", "results")) {
+                JsonNode nested = remoteItems.get(field);
+                if (nested instanceof ArrayNode arrayNode) {
+                    return arrayNode;
+                }
+            }
+        }
+        return objectMapper.createArrayNode();
+    }
+
+    private ObjectNode toTrainingItem(JsonNode remoteItem) {
+        ObjectNode item = copyObject(remoteItem);
+        ensureText(item, "title", text(remoteItem, "title", text(remoteItem, "name", "Treinamento importado")));
+        ensureText(item, "content", text(remoteItem, "content", text(remoteItem, "description", text(remoteItem, "text", "Conteudo nao informado."))));
+        return item;
+    }
+
+    private ObjectNode toIntentionItem(JsonNode remoteItem) {
+        ObjectNode item = copyObject(remoteItem);
+        ensureText(item, "name", text(remoteItem, "name", text(remoteItem, "title", "intencao-importada")));
+        ensureText(item, "description", text(remoteItem, "description", text(remoteItem, "content", "Descricao nao informada.")));
+        ensureText(item, "instructions", text(remoteItem, "instructions", text(remoteItem, "examplePhrase", text(remoteItem, "phrase", "Responder conforme a configuracao importada."))));
+        return item;
+    }
+
+    private ObjectNode toReferenceItem(JsonNode remoteItem) {
+        ObjectNode item = copyObject(remoteItem);
+        if (!item.hasNonNull("name")) {
+            String derivedName = text(remoteItem, "name", text(remoteItem, "title", text(remoteItem, "id", "item-importado")));
+            item.put("name", derivedName);
+        }
+        return item;
+    }
+
+    private ObjectNode copyObject(JsonNode remoteItem) {
+        return remoteItem instanceof ObjectNode objectNode
+            ? objectNode.deepCopy()
+            : objectMapper.createObjectNode();
+    }
+
+    private void ensureText(ObjectNode objectNode, String field, String value) {
+        objectNode.put(field, value == null || value.isBlank() ? "Nao informado" : value);
+    }
+
+    private ObjectNode defaultAgentSettingsPayload() {
+        return objectMapper.createObjectNode()
+            .put("prefferModel", "GPT_4_O")
+            .put("timezone", "America/Sao_Paulo")
+            .put("enabledHumanTransfer", false)
+            .put("enabledReminder", false)
+            .put("splitMessages", false)
+            .put("enabledEmoji", false)
+            .put("limitSubjects", false)
+            .put("signMessages", false)
+            .put("messageGroupingTime", "NO_GROUP")
+            .putNull("maxDailyMessages");
+    }
+
+    private void upsertAssistantBlock(Franchise franchise, AssistantBlockType blockType, JsonNode payload) {
+        FranchiseAssistantBlockConfig config = assistantBlockConfigRepository.findByFranchiseAndBlockType(franchise, blockType)
+            .orElseGet(() -> new FranchiseAssistantBlockConfig(franchise, blockType, AssistantBlockMode.CUSTOM));
+        config.setMode(AssistantBlockMode.CUSTOM);
+        config.setCustomPayloadJson(writeJson(payload));
+        config.setCustomizedAt(LocalDateTime.now());
+        assistantBlockConfigRepository.save(config);
+    }
+
+    private String writeJson(JsonNode payload) {
+        try {
+            return objectMapper.writeValueAsString(payload);
+        } catch (Exception exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Nao foi possivel serializar a configuracao importada do agente.");
+        }
+    }
+
+    private String normalizeCommunicationType(String communicationType) {
+        if ("FORMAL".equalsIgnoreCase(communicationType) || "RELAXED".equalsIgnoreCase(communicationType)) {
+            return communicationType.toUpperCase();
+        }
+        return "NORMAL";
+    }
+
+    private String normalizeObjectiveType(String type) {
+        if ("SUPPORT".equalsIgnoreCase(type) || "PERSONAL".equalsIgnoreCase(type)) {
+            return type.toUpperCase();
+        }
+        return "SALE";
+    }
+
+    private String text(JsonNode node, String field, String fallback) {
+        if (node.hasNonNull(field) && !node.get(field).asText().isBlank()) {
+            return node.get(field).asText();
+        }
+        return fallback;
+    }
+
+    private boolean bool(JsonNode node, String field, boolean fallback) {
+        if (node.has(field) && !node.get(field).isNull()) {
+            return node.get(field).asBoolean();
+        }
+        return fallback;
+    }
+
+    private String fallback(String... values) {
+        for (String value : values) {
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
     }
 
     private GptMakerAgent syncProvisionedAgent(Franchise franchise, GptMakerCreateAgentResponse createdAgent, String communicationType, String context) {

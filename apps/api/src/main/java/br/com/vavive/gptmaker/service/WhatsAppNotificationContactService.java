@@ -70,8 +70,7 @@ public class WhatsAppNotificationContactService {
         requireFranchise(franchiseId);
         WhatsAppNotificationContact contact = contactRepository.findByIdAndFranchiseId(contactId, franchiseId)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contato de notificacao nao encontrado."));
-        contact.setActive(false);
-        contactRepository.save(contact);
+        contactRepository.delete(contact);
     }
 
     @Transactional

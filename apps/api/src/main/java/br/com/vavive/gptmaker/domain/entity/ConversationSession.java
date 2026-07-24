@@ -14,6 +14,10 @@ import java.util.UUID;
 
 @Entity
 public class ConversationSession {
+    private static final int DEFAULT_TEXT_LIMIT = 255;
+    private static final int SALE_SUMMARY_LIMIT = 3000;
+    private static final int HANDOFF_ERROR_LIMIT = 2000;
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -69,18 +73,18 @@ public class ConversationSession {
         String interactionId
     ) {
         this.franchise = franchise;
-        this.externalAgentId = externalAgentId;
-        this.agentName = agentName;
-        this.contextId = contextId;
-        this.customerName = customerName;
-        this.customerPhone = customerPhone;
-        this.firstPrompt = firstPrompt;
-        this.lastResponse = lastResponse;
-        this.chatId = chatId;
-        this.interactionId = interactionId;
-        this.channelType = "WEBCHAT";
-        this.operationalStatus = "aguardando_ia";
-        this.syncStatus = "local";
+        this.externalAgentId = fit(externalAgentId, DEFAULT_TEXT_LIMIT);
+        this.agentName = fit(agentName, DEFAULT_TEXT_LIMIT);
+        this.contextId = fit(contextId, DEFAULT_TEXT_LIMIT);
+        this.customerName = fit(customerName, DEFAULT_TEXT_LIMIT);
+        this.customerPhone = fit(customerPhone, DEFAULT_TEXT_LIMIT);
+        this.firstPrompt = fit(firstPrompt, DEFAULT_TEXT_LIMIT);
+        this.lastResponse = fit(lastResponse, DEFAULT_TEXT_LIMIT);
+        this.chatId = fit(chatId, DEFAULT_TEXT_LIMIT);
+        this.interactionId = fit(interactionId, DEFAULT_TEXT_LIMIT);
+        this.channelType = fit("WEBCHAT", DEFAULT_TEXT_LIMIT);
+        this.operationalStatus = fit("aguardando_ia", DEFAULT_TEXT_LIMIT);
+        this.syncStatus = fit("local", DEFAULT_TEXT_LIMIT);
     }
 
     @PrePersist
@@ -111,7 +115,7 @@ public class ConversationSession {
     }
 
     public void setAgentName(String agentName) {
-        this.agentName = agentName;
+        this.agentName = fit(agentName, DEFAULT_TEXT_LIMIT);
     }
 
     public String getContextId() {
@@ -123,7 +127,7 @@ public class ConversationSession {
     }
 
     public void setCustomerName(String customerName) {
-        this.customerName = customerName;
+        this.customerName = fit(customerName, DEFAULT_TEXT_LIMIT);
     }
 
     public String getCustomerPhone() {
@@ -131,7 +135,7 @@ public class ConversationSession {
     }
 
     public void setCustomerPhone(String customerPhone) {
-        this.customerPhone = customerPhone;
+        this.customerPhone = fit(customerPhone, DEFAULT_TEXT_LIMIT);
     }
 
     public String getFirstPrompt() {
@@ -143,7 +147,7 @@ public class ConversationSession {
     }
 
     public void setLastResponse(String lastResponse) {
-        this.lastResponse = lastResponse;
+        this.lastResponse = fit(lastResponse, DEFAULT_TEXT_LIMIT);
     }
 
     public String getChatId() {
@@ -151,7 +155,7 @@ public class ConversationSession {
     }
 
     public void setChatId(String chatId) {
-        this.chatId = chatId;
+        this.chatId = fit(chatId, DEFAULT_TEXT_LIMIT);
     }
 
     public String getInteractionId() {
@@ -159,7 +163,7 @@ public class ConversationSession {
     }
 
     public void setInteractionId(String interactionId) {
-        this.interactionId = interactionId;
+        this.interactionId = fit(interactionId, DEFAULT_TEXT_LIMIT);
     }
 
     public boolean isHumanTakeoverActive() {
@@ -175,7 +179,7 @@ public class ConversationSession {
     }
 
     public void setChannelType(String channelType) {
-        this.channelType = channelType;
+        this.channelType = fit(channelType, DEFAULT_TEXT_LIMIT);
     }
 
     public String getOperationalStatus() {
@@ -183,7 +187,7 @@ public class ConversationSession {
     }
 
     public void setOperationalStatus(String operationalStatus) {
-        this.operationalStatus = operationalStatus;
+        this.operationalStatus = fit(operationalStatus, DEFAULT_TEXT_LIMIT);
     }
 
     public String getResponsibleUserName() {
@@ -191,7 +195,7 @@ public class ConversationSession {
     }
 
     public void setResponsibleUserName(String responsibleUserName) {
-        this.responsibleUserName = responsibleUserName;
+        this.responsibleUserName = fit(responsibleUserName, DEFAULT_TEXT_LIMIT);
     }
 
     public String getSyncStatus() {
@@ -199,7 +203,7 @@ public class ConversationSession {
     }
 
     public void setSyncStatus(String syncStatus) {
-        this.syncStatus = syncStatus;
+        this.syncStatus = fit(syncStatus, DEFAULT_TEXT_LIMIT);
     }
 
     public String getClosedReason() {
@@ -207,7 +211,7 @@ public class ConversationSession {
     }
 
     public void setClosedReason(String closedReason) {
-        this.closedReason = closedReason;
+        this.closedReason = fit(closedReason, DEFAULT_TEXT_LIMIT);
     }
 
     public String getSaleOutcome() {
@@ -215,7 +219,7 @@ public class ConversationSession {
     }
 
     public void setSaleOutcome(String saleOutcome) {
-        this.saleOutcome = saleOutcome;
+        this.saleOutcome = fit(saleOutcome, DEFAULT_TEXT_LIMIT);
     }
 
     public String getSaleSummary() {
@@ -223,7 +227,7 @@ public class ConversationSession {
     }
 
     public void setSaleSummary(String saleSummary) {
-        this.saleSummary = saleSummary;
+        this.saleSummary = fit(saleSummary, SALE_SUMMARY_LIMIT);
     }
 
     public String getHandoffStatus() {
@@ -231,7 +235,7 @@ public class ConversationSession {
     }
 
     public void setHandoffStatus(String handoffStatus) {
-        this.handoffStatus = handoffStatus;
+        this.handoffStatus = fit(handoffStatus, DEFAULT_TEXT_LIMIT);
     }
 
     public LocalDateTime getHandoffSentAt() {
@@ -247,7 +251,7 @@ public class ConversationSession {
     }
 
     public void setHandoffError(String handoffError) {
-        this.handoffError = handoffError;
+        this.handoffError = fit(handoffError, HANDOFF_ERROR_LIMIT);
     }
 
     public LocalDateTime getLastMessageAt() {
@@ -272,5 +276,12 @@ public class ConversationSession {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    private String fit(String value, int limit) {
+        if (value == null || value.length() <= limit) {
+            return value;
+        }
+        return value.substring(0, limit);
     }
 }

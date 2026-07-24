@@ -614,6 +614,11 @@ class GptMakerClientTest {
         }
 
         @Override
+        public ResponseEntity<String> createAgentChannel(String agentId, br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerCreateChannelRequest request) {
+            return ResponseEntity.ok("{\"id\":\"channel-agent-1\",\"name\":\"" + request.name() + "\",\"type\":\"" + request.type() + "\",\"agentId\":\"" + agentId + "\"}");
+        }
+
+        @Override
         public ResponseEntity<String> getChannelQRCode(String channelId) {
             return ResponseEntity.ok("{\"value\":\"mock-qr-base64\",\"connected\":false}");
         }

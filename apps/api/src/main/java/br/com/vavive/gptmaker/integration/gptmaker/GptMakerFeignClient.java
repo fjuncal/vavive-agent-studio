@@ -116,6 +116,12 @@ public interface GptMakerFeignClient {
         @RequestBody GptMakerCreateChannelRequest request
     );
 
+    @PostMapping("/v2/agent/{agentId}/create-channel")
+    ResponseEntity<String> createAgentChannel(
+        @PathVariable String agentId,
+        @RequestBody GptMakerCreateChannelRequest request
+    );
+
     @GetMapping("/v2/channel/{channelId}/qr-code")
     ResponseEntity<String> getChannelQRCode(@PathVariable String channelId);
 

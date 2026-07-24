@@ -140,8 +140,7 @@ class WhatsAppNotificationIntegrationTest {
                 .header("Authorization", token))
             .andExpect(status().isNoContent());
 
-        assertThat(contactRepository.findByFranchiseIdOrderByNameAsc(franchise.getId())).hasSize(1);
-        assertThat(contactRepository.findByFranchiseIdOrderByNameAsc(franchise.getId()).getFirst().isActive()).isFalse();
+        assertThat(contactRepository.findByFranchiseIdOrderByNameAsc(franchise.getId())).isEmpty();
     }
 
     @Test
