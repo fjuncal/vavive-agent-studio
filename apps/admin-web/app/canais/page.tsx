@@ -78,13 +78,22 @@ export default function CanaisPage() {
         const defaultFranchiseId = user.role === "ADMIN_FRANQUIA" ? user.franchise?.id : items[0]?.id;
         if (defaultFranchiseId) {
           setSelectedFranchiseId((current) => current || defaultFranchiseId);
+          return;
         }
+        setChannels([]);
+        setIsLoading(false);
       })
-      .catch((requestError) => showError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar franquias."));
+      .catch((requestError) => {
+        setChannels([]);
+        setIsLoading(false);
+        showError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar franquias.");
+      });
   }, [showError, user]);
 
   useEffect(() => {
     if (!selectedFranchiseId) {
+      setChannels([]);
+      setIsLoading(false);
       return;
     }
     setIsLoading(true);
@@ -282,7 +291,17 @@ export default function CanaisPage() {
         </div>
       </section>
 
-      {isLoading ? (
+      {!selectedFranchiseId ? (
+        <EmptyState
+          icon={Radio}
+          title={franchises.length === 0 ? "Nenhuma franquia encontrada" : "Nenhum canal cadastrado"}
+          description={franchises.length === 0
+            ? (isSuperAdmin
+              ? "Nenhuma franquia esta disponivel para gerenciar canais."
+              : "Sua conta ainda nao possui uma franquia vinculada.")
+            : "Nao ha canais cadastrados para a franquia selecionada."}
+        />
+      ) : isLoading ? (
         <section className="card p-6">
           <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando canais...</p>
         </section>
@@ -308,7 +327,7 @@ export default function CanaisPage() {
           ))}
         </section>
       ) : (
-        <EmptyState icon={Radio} title="Nenhum canal" description="Crie um novo canal para comecar." />
+        <EmptyState icon={Radio} title="Nenhum canal cadastrado" description="Crie um novo canal para comecar." />
       )}
 
       {isCreateModalOpen ? (

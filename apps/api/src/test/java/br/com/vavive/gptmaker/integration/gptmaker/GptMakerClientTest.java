@@ -669,22 +669,22 @@ class GptMakerClientTest {
         }
 
         @Override
-        public ResponseEntity<String> updateTransferRule(String ruleId, Object rule) {
+        public ResponseEntity<String> updateTransferRule(String agentId, String ruleId, Object rule) {
             return ResponseEntity.ok("{\"success\":true}");
         }
 
         @Override
-        public ResponseEntity<String> deleteTransferRule(String ruleId) {
+        public ResponseEntity<String> deleteTransferRule(String agentId, String ruleId) {
             return ResponseEntity.ok("{\"success\":true}");
         }
 
         @Override
-        public ResponseEntity<String> updateIdleAction(String actionId, Object action) {
+        public ResponseEntity<String> updateIdleAction(String agentId, String actionId, Object action) {
             return ResponseEntity.ok("{\"success\":true}");
         }
 
         @Override
-        public ResponseEntity<String> deleteIdleAction(String actionId) {
+        public ResponseEntity<String> deleteIdleAction(String agentId, String actionId) {
             return ResponseEntity.ok("{\"success\":true}");
         }
 

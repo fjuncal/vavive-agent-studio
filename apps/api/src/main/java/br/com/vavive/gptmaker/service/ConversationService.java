@@ -653,7 +653,7 @@ public class ConversationService {
         String messageUserName,
         String responsibleUserName
     ) {
-        for (String candidate : List.of(primaryCandidate, userName, title, name, existingName)) {
+        for (String candidate : new String[] { primaryCandidate, userName, title, name, existingName }) {
             if (isUsableCustomerName(candidate, agentName, franchiseAgentName, messageUserName, responsibleUserName)) {
                 return candidate.trim();
             }

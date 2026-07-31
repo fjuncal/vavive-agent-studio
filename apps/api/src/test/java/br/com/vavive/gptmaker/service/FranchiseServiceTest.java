@@ -112,16 +112,16 @@ class FranchiseServiceTest {
                 .put("name", "duvida-comercial")
                 .put("description", "Perguntas comerciais")
                 .put("instructions", "Responder e converter")));
-        when(gptMakerClient.listIdleActions("agent-1")).thenReturn(objectMapper.createArrayNode()
-            .add(objectMapper.createObjectNode()
-                .put("id", "idle-1")
-                .put("name", "Lembrete")
-                .put("delay", 300)));
-        when(gptMakerClient.listTransferRules("agent-1")).thenReturn(objectMapper.createArrayNode()
-            .add(objectMapper.createObjectNode()
-                .put("id", "rule-1")
-                .put("name", "Transferir humano")
-                .put("enabled", true)));
+        when(gptMakerClient.listIdleActions("agent-1")).thenReturn(objectMapper.createObjectNode()
+            .set("actions", objectMapper.createArrayNode()
+                .add(objectMapper.createObjectNode()
+                    .put("id", "idle-1")
+                    .put("name", "Lembrete")
+                    .put("delay", 300))));
+        when(gptMakerClient.listTransferRules("agent-1")).thenReturn(objectMapper.createObjectNode()
+            .put("id", "rule-1")
+            .put("name", "Transferir humano")
+            .put("enabled", true));
         when(agentRepository.findFirstByFranchiseIdAndExternalId(franchiseId, "agent-1")).thenReturn(Optional.empty());
         when(agentRepository.findFirstByFranchiseIdAndName(franchiseId, "Agente existente")).thenReturn(Optional.empty());
         when(agentRepository.findFirstByFranchiseIdOrderByCreatedAtAsc(franchiseId)).thenReturn(Optional.empty());
@@ -202,6 +202,20 @@ class FranchiseServiceTest {
             .orElseThrow())
             .contains("duvida-comercial")
             .contains("Responder e converter");
+        assertThat(configCaptor.getAllValues().stream()
+            .filter(config -> config.getBlockType() == AssistantBlockType.IDLE_ACTIONS)
+            .findFirst()
+            .map(FranchiseAssistantBlockConfig::getCustomPayloadJson)
+            .orElseThrow())
+            .contains("idle-1")
+            .contains("Lembrete");
+        assertThat(configCaptor.getAllValues().stream()
+            .filter(config -> config.getBlockType() == AssistantBlockType.TRANSFER_RULES)
+            .findFirst()
+            .map(FranchiseAssistantBlockConfig::getCustomPayloadJson)
+            .orElseThrow())
+            .contains("rule-1")
+            .contains("Transferir humano");
     }
 
     @Test

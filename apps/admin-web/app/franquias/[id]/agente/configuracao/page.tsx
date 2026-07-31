@@ -5,7 +5,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ConversationSettings } from "@/components/ConversationSettings";
 import { Field } from "@/components/FormSection";
 import { IdleActionsSettings } from "@/components/IdleActionsSettings";
-import { OptionCards, RichTextarea } from "@/components/FriendlyForm";
+import { OptionCards, RichTextarea, SelectField, ToggleField } from "@/components/FriendlyForm";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusDropdown } from "@/components/StatusDropdown";
 import { TabConfig, type TabItem } from "@/components/TabConfig";
@@ -38,15 +38,18 @@ import {
   updateAgentSettings,
   updateAgentWebhooks,
   updateFranchiseAssistantBlock,
+  updateGptMakerIntention,
+  updateGptMakerTraining,
   updateIdleAction,
   updateTransferRule,
   type FranchiseAssistantConfiguration,
   type FranchiseGptMakerConnection,
   type FranchiseSummary,
   type GptMakerIntention,
+  type GptMakerTraining,
   type AgentSyncStatus,
 } from "@/lib/api";
-import { BookOpen, Bot, Briefcase, Plus, Save, Settings, Target } from "lucide-react";
+import { BookOpen, Bot, Briefcase, ChevronLeft, ChevronRight, Link2, Plus, Save, Settings, Target, Variable, X } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -62,8 +65,262 @@ const communicationOptions = [
   { value: "RELAXED", label: "Relaxado", description: "Mais proximo e leve" }
 ];
 
+const trainingTypeOptions = [
+  { value: "TEXT", label: "Texto" },
+  { value: "WEBSITE", label: "Website" },
+  { value: "VIDEO", label: "Video" },
+  { value: "DOCUMENT", label: "Documento" }
+];
+
+const intentionTypeOptions = [
+  { value: "WEBHOOK", label: "Webhook" },
+  { value: "INSTRUCTIONS", label: "Instrucoes" }
+];
+
+const httpMethodOptions = [
+  { value: "GET", label: "GET" },
+  { value: "POST", label: "POST" },
+  { value: "PUT", label: "PUT" },
+  { value: "PATCH", label: "PATCH" },
+  { value: "DELETE", label: "DELETE" }
+];
+
+type IntentionKeyValue = {
+  name: string;
+  value: string;
+};
+
+type IntentionFieldConfig = {
+  name: string;
+  jsonName: string;
+  description: string;
+  required: boolean;
+};
+
+type IntentionVariableConfig = {
+  valueExpression: string;
+  defaultFieldKey: string;
+  customField: {
+    id: string;
+    name: string;
+    description: string;
+    jsonName: string;
+  };
+};
+
+type EditableTraining = GptMakerTraining & {
+  id?: string;
+  type: string;
+  text: string;
+  image: string;
+  website: string;
+  trainingSubPages: string;
+  trainingInterval: string;
+  video: string;
+  documentUrl: string;
+  documentName: string;
+  documentMimetype: string;
+  callbackUrl: string;
+};
+
+type EditableIntention = Omit<GptMakerIntention, "headers" | "params" | "fields" | "variables"> & {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  details: string;
+  type: string;
+  httpMethod: string;
+  url: string;
+  headers: IntentionKeyValue[];
+  params: IntentionKeyValue[];
+  fields: IntentionFieldConfig[];
+  variables: IntentionVariableConfig[];
+  requestBody: string;
+  autoGenerateParams: boolean;
+  autoGenerateBody: boolean;
+};
+
 const communicationTypeValues = new Set(["FORMAL", "NORMAL", "RELAXED"]);
 const objectiveTypeValues = new Set(["SUPPORT", "SALE", "PERSONAL"]);
+
+function getBlockPayload(configuration: FranchiseAssistantConfiguration | null, blockType: string) {
+  return configuration?.blocks.find((block) => block.blockType === blockType)?.payload ?? {};
+}
+
+function getImportedItems(configuration: FranchiseAssistantConfiguration | null, blockType: string) {
+  const payload = getBlockPayload(configuration, blockType);
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null ? value as Record<string, unknown> : {};
+}
+
+function toStringValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function toBooleanValue(value: unknown, fallback = false) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function toKeyValueList(value: unknown): IntentionKeyValue[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const record = asRecord(item);
+    return {
+      name: toStringValue(record.name),
+      value: toStringValue(record.value)
+    };
+  });
+}
+
+function toIntentionFields(value: unknown): IntentionFieldConfig[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const record = asRecord(item);
+    return {
+      name: toStringValue(record.name),
+      jsonName: toStringValue(record.jsonName),
+      description: toStringValue(record.description),
+      required: toBooleanValue(record.required)
+    };
+  });
+}
+
+function toIntentionVariables(value: unknown): IntentionVariableConfig[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.map((item) => {
+    const record = asRecord(item);
+    const customField = asRecord(record.customField);
+    return {
+      valueExpression: toStringValue(record.valueExpression),
+      defaultFieldKey: toStringValue(record.defaultFieldKey),
+      customField: {
+        id: toStringValue(customField.id),
+        name: toStringValue(customField.name),
+        description: toStringValue(customField.description),
+        jsonName: toStringValue(customField.jsonName)
+      }
+    };
+  });
+}
+
+function normalizeTrainingItem(item: unknown): EditableTraining {
+  const training = asRecord(item);
+  const type = toStringValue(training.type) || "TEXT";
+  const content = toStringValue(training.content);
+  const text = toStringValue(training.text) || content;
+  return {
+    id: typeof training.id === "string" ? training.id : undefined,
+    type,
+    title: toStringValue(training.title),
+    content,
+    text,
+    image: toStringValue(training.image),
+    website: toStringValue(training.website),
+    trainingSubPages: toStringValue(training.trainingSubPages),
+    trainingInterval: toStringValue(training.trainingInterval),
+    video: toStringValue(training.video),
+    documentUrl: toStringValue(training.documentUrl),
+    documentName: toStringValue(training.documentName),
+    documentMimetype: toStringValue(training.documentMimetype),
+    callbackUrl: toStringValue(training.callbackUrl)
+  };
+}
+
+function normalizeIntentionItem(item: unknown): EditableIntention {
+  const intention = asRecord(item);
+  return {
+    id: toStringValue(intention.id),
+    name: toStringValue(intention.name),
+    description: toStringValue(intention.description) || toStringValue(intention.name),
+    instructions: toStringValue(intention.instructions),
+    details: toStringValue(intention.details),
+    type: toStringValue(intention.type) || "INSTRUCTIONS",
+    active: toBooleanValue(intention.active, true),
+    httpMethod: toStringValue(intention.httpMethod),
+    url: toStringValue(intention.url),
+    headers: toKeyValueList(intention.headers),
+    params: toKeyValueList(intention.params),
+    variables: toIntentionVariables(intention.variables),
+    fields: toIntentionFields(intention.fields),
+    requestBody: toStringValue(intention.requestBody),
+    autoGenerateParams: toBooleanValue(intention.autoGenerateParams),
+    autoGenerateBody: toBooleanValue(intention.autoGenerateBody)
+  };
+}
+
+function normalizeTrainings(
+  remoteTrainings: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  const source = Array.isArray(remoteTrainings) && remoteTrainings.length > 0
+    ? remoteTrainings
+    : getImportedItems(configuration, "TRAININGS");
+
+  return source.map(normalizeTrainingItem);
+}
+
+function normalizeIntentions(
+  remoteIntentions: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  const source = Array.isArray(remoteIntentions) && remoteIntentions.length > 0
+    ? remoteIntentions
+    : getImportedItems(configuration, "INTENTIONS");
+
+  return source.map(normalizeIntentionItem);
+}
+
+function normalizeSettings(
+  remoteSettings: Record<string, unknown>,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  if (Object.keys(remoteSettings).length > 0) {
+    return remoteSettings;
+  }
+  const imported = getBlockPayload(configuration, "AGENT_SETTINGS");
+  return imported;
+}
+
+function normalizeIdleActions(
+  remoteIdleActions: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  if (Array.isArray(remoteIdleActions) && remoteIdleActions.length > 0) {
+    return remoteIdleActions as Array<Record<string, unknown>>;
+  }
+  const payload = getBlockPayload(configuration, "IDLE_ACTIONS");
+  if (Array.isArray(payload.items)) {
+    return payload.items as Array<Record<string, unknown>>;
+  }
+  if (Array.isArray(payload.actions)) {
+    return payload.actions as Array<Record<string, unknown>>;
+  }
+  return [];
+}
+
+function normalizeTransferRules(
+  remoteTransferRules: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  if (Array.isArray(remoteTransferRules) && remoteTransferRules.length > 0) {
+    return remoteTransferRules as Array<Record<string, unknown>>;
+  }
+  const payload = getBlockPayload(configuration, "TRANSFER_RULES");
+  if (Array.isArray(payload.items)) {
+    return payload.items as Array<Record<string, unknown>>;
+  }
+  return [];
+}
 
 function resolveProfileDraft(
   configuration: FranchiseAssistantConfiguration | null,
@@ -124,6 +381,394 @@ function BlockNotice({
   );
 }
 
+function KeyValueEditor({
+  title,
+  description,
+  items,
+  addLabel,
+  onAdd,
+  onChange,
+  onRemove
+}: {
+  title: string;
+  description: string;
+  items: IntentionKeyValue[];
+  addLabel: string;
+  onAdd: () => void;
+  onChange: (index: number, key: "name" | "value", value: string) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>{title}</p>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{description}</p>
+        </div>
+        <button type="button" onClick={onAdd} className="btn-secondary text-sm">
+          <Plus size={14} />
+          {addLabel}
+        </button>
+      </div>
+
+      {items.length ? items.map((item, index) => (
+        <div key={`${title}-${index}`} className="grid gap-3 rounded-xl border p-3 md:grid-cols-[1fr_1fr_auto]" style={{ borderColor: "var(--color-border)" }}>
+          <Field label="Nome" value={item.name} onChange={(value) => onChange(index, "name", value)} />
+          <Field label="Valor" value={item.value} onChange={(value) => onChange(index, "value", value)} />
+          <button type="button" onClick={() => onRemove(index)} className="text-sm text-red-500 md:self-end">
+            Remover
+          </button>
+        </div>
+      )) : (
+        <div className="rounded-xl border border-dashed p-4 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-text-tertiary)" }}>
+          Nenhum item configurado.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntentionFieldsEditor({
+  fields,
+  onAdd,
+  onChange,
+  onRemove
+}: {
+  fields: IntentionFieldConfig[];
+  onAdd: () => void;
+  onChange: (index: number, key: keyof IntentionFieldConfig, value: string | boolean) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Campos retornados</p>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>Defina os campos que a intenção expõe para o agente usar.</p>
+        </div>
+        <button type="button" onClick={onAdd} className="btn-secondary text-sm">
+          <Plus size={14} />
+          Adicionar campo
+        </button>
+      </div>
+
+      {fields.length ? fields.map((field, index) => (
+        <div key={`field-${index}`} className="grid gap-3 rounded-xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="Nome" value={field.name} onChange={(value) => onChange(index, "name", value)} />
+            <Field label="jsonName" value={field.jsonName} onChange={(value) => onChange(index, "jsonName", value)} />
+          </div>
+          <RichTextarea label="Descricao" value={field.description} onChange={(value) => onChange(index, "description", value)} rows={2} />
+          <div className="flex items-center justify-between gap-3">
+            <ToggleField label="Obrigatorio" checked={field.required} onChange={(checked) => onChange(index, "required", checked)} />
+            <button type="button" onClick={() => onRemove(index)} className="text-sm text-red-500">
+              Remover
+            </button>
+          </div>
+        </div>
+      )) : (
+        <div className="rounded-xl border border-dashed p-5 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-text-tertiary)" }}>
+          Nenhum campo configurado.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntentionVariablesEditor({
+  variables,
+  onAdd,
+  onChange,
+  onRemove
+}: {
+  variables: IntentionVariableConfig[];
+  onAdd: () => void;
+  onChange: (
+    index: number,
+    key: "valueExpression" | "defaultFieldKey" | "customField.id" | "customField.name" | "customField.jsonName" | "customField.description",
+    value: string
+  ) => void;
+  onRemove: (index: number) => void;
+}) {
+  return (
+    <div className="grid gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Variaveis</p>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>Mapeie as variáveis que alimentam a chamada e os campos customizados.</p>
+        </div>
+        <button type="button" onClick={onAdd} className="btn-secondary text-sm">
+          <Plus size={14} />
+          Adicionar variavel
+        </button>
+      </div>
+
+      {variables.length ? variables.map((variable, index) => (
+        <div key={`variable-${index}`} className="grid gap-3 rounded-xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="valueExpression" value={variable.valueExpression} onChange={(value) => onChange(index, "valueExpression", value)} />
+            <Field label="defaultFieldKey" value={variable.defaultFieldKey} onChange={(value) => onChange(index, "defaultFieldKey", value)} />
+          </div>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="customField.id" value={variable.customField.id} onChange={(value) => onChange(index, "customField.id", value)} />
+            <Field label="customField.name" value={variable.customField.name} onChange={(value) => onChange(index, "customField.name", value)} />
+            <Field label="customField.jsonName" value={variable.customField.jsonName} onChange={(value) => onChange(index, "customField.jsonName", value)} />
+            <Field label="customField.description" value={variable.customField.description} onChange={(value) => onChange(index, "customField.description", value)} />
+          </div>
+          <div className="flex justify-end">
+            <button type="button" onClick={() => onRemove(index)} className="text-sm text-red-500">
+              Remover
+            </button>
+          </div>
+        </div>
+      )) : (
+        <div className="rounded-xl border border-dashed p-5 text-sm" style={{ borderColor: "var(--color-border)", color: "var(--color-text-tertiary)" }}>
+          Nenhuma variavel configurada.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function IntentionEditModal({
+  isOpen,
+  draft,
+  step,
+  isSaving,
+  onStepChange,
+  onChange,
+  onClose,
+  onSave
+}: {
+  isOpen: boolean;
+  draft: EditableIntention | null;
+  step: number;
+  isSaving: boolean;
+  onStepChange: (step: number) => void;
+  onChange: (updater: (current: EditableIntention) => EditableIntention) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && isOpen && !isSaving) {
+        onClose();
+      }
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, isSaving, onClose]);
+
+  if (!isOpen || !draft) {
+    return null;
+  }
+
+  const steps = [
+    {
+      id: "endpoint",
+      title: "Endpoint",
+      description: draft.url || "Defina URL, metodo, headers e parametros.",
+      icon: <Link2 size={16} />
+    },
+    {
+      id: "fields",
+      title: "Campos",
+      description: `${draft.fields.length} campo${draft.fields.length === 1 ? "" : "s"} configurado${draft.fields.length === 1 ? "" : "s"}.`,
+      icon: <Target size={16} />
+    },
+    {
+      id: "variables",
+      title: "Variaveis",
+      description: `${draft.variables.length} variavel${draft.variables.length === 1 ? "" : "is"} configurada${draft.variables.length === 1 ? "" : "s"}.`,
+      icon: <Variable size={16} />
+    }
+  ];
+
+  const endpointStep = (
+    <div className="grid gap-6">
+      <div className="grid gap-4 rounded-xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <Field label="Nome interno" value={draft.name} onChange={(value) => onChange((current) => ({ ...current, name: value }))} />
+          <Field label="Descricao" value={draft.description} onChange={(value) => onChange((current) => ({ ...current, description: value }))} />
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          <SelectField
+            label="Tipo"
+            value={draft.type}
+            onChange={(value) => onChange((current) => ({ ...current, type: value }))}
+            options={intentionTypeOptions.some((option) => option.value === draft.type) ? intentionTypeOptions : [...intentionTypeOptions, { value: draft.type, label: draft.type }]}
+          />
+          <SelectField
+            label="Metodo HTTP"
+            value={draft.httpMethod || "POST"}
+            onChange={(value) => onChange((current) => ({ ...current, httpMethod: value }))}
+            options={httpMethodOptions.some((option) => option.value === draft.httpMethod) || !draft.httpMethod
+              ? httpMethodOptions
+              : [...httpMethodOptions, { value: draft.httpMethod, label: draft.httpMethod }]}
+          />
+        </div>
+        <Field label="URL do webhook" value={draft.url} onChange={(value) => onChange((current) => ({ ...current, url: value }))} />
+        <RichTextarea label="Quando usar" value={draft.instructions} onChange={(value) => onChange((current) => ({ ...current, instructions: value }))} rows={4} />
+        <RichTextarea label="Detalhes de saida" value={draft.details} onChange={(value) => onChange((current) => ({ ...current, details: value }))} rows={3} />
+      </div>
+
+      <KeyValueEditor
+        title="Headers"
+        description="Envie cabeçalhos fixos ou credenciais exigidas pelo endpoint."
+        items={draft.headers}
+        addLabel="Adicionar header"
+        onAdd={() => onChange((current) => ({ ...current, headers: [...current.headers, { name: "", value: "" }] }))}
+        onChange={(index, key, value) => onChange((current) => ({
+          ...current,
+          headers: current.headers.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)
+        }))}
+        onRemove={(index) => onChange((current) => ({ ...current, headers: current.headers.filter((_, itemIndex) => itemIndex !== index) }))}
+      />
+
+      <KeyValueEditor
+        title="Parametros"
+        description="Defina query params ou parâmetros fixos usados na chamada."
+        items={draft.params}
+        addLabel="Adicionar parametro"
+        onAdd={() => onChange((current) => ({ ...current, params: [...current.params, { name: "", value: "" }] }))}
+        onChange={(index, key, value) => onChange((current) => ({
+          ...current,
+          params: current.params.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)
+        }))}
+        onRemove={(index) => onChange((current) => ({ ...current, params: current.params.filter((_, itemIndex) => itemIndex !== index) }))}
+      />
+
+      <div className="grid gap-4 rounded-xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+        <RichTextarea label="Request body" value={draft.requestBody} onChange={(value) => onChange((current) => ({ ...current, requestBody: value }))} rows={6} />
+        <div className="grid gap-3 md:grid-cols-2">
+          <ToggleField label="Gerar params automaticamente" checked={draft.autoGenerateParams} onChange={(checked) => onChange((current) => ({ ...current, autoGenerateParams: checked }))} />
+          <ToggleField label="Gerar body automaticamente" checked={draft.autoGenerateBody} onChange={(checked) => onChange((current) => ({ ...current, autoGenerateBody: checked }))} />
+        </div>
+      </div>
+    </div>
+  );
+
+  const fieldsStep = (
+    <IntentionFieldsEditor
+      fields={draft.fields}
+      onAdd={() => onChange((current) => ({
+        ...current,
+        fields: [...current.fields, { name: "", jsonName: "", description: "", required: false }]
+      }))}
+      onChange={(index, key, value) => onChange((current) => ({
+        ...current,
+        fields: current.fields.map((item, itemIndex) => itemIndex === index ? { ...item, [key]: value } : item)
+      }))}
+      onRemove={(index) => onChange((current) => ({
+        ...current,
+        fields: current.fields.filter((_, itemIndex) => itemIndex !== index)
+      }))}
+    />
+  );
+
+  const variablesStep = (
+    <IntentionVariablesEditor
+      variables={draft.variables}
+      onAdd={() => onChange((current) => ({
+        ...current,
+        variables: [...current.variables, { valueExpression: "", defaultFieldKey: "", customField: { id: "", name: "", description: "", jsonName: "" } }]
+      }))}
+      onChange={(index, key, value) => onChange((current) => ({
+        ...current,
+        variables: current.variables.map((item, itemIndex) => {
+          if (itemIndex !== index) {
+            return item;
+          }
+          if (key.startsWith("customField.")) {
+            const customFieldKey = key.replace("customField.", "") as keyof IntentionVariableConfig["customField"];
+            return { ...item, customField: { ...item.customField, [customFieldKey]: value } };
+          }
+          return { ...item, [key]: value };
+        })
+      }))}
+      onRemove={(index) => onChange((current) => ({
+        ...current,
+        variables: current.variables.filter((_, itemIndex) => itemIndex !== index)
+      }))}
+    />
+  );
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 animate-in">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={isSaving ? undefined : onClose} />
+      <div className="card relative flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden shadow-soft-lg animate-scale-in">
+        <div className="flex items-start justify-between gap-4 border-b px-6 py-5" style={{ borderColor: "var(--color-border)" }}>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>Editar intencao</p>
+            <h2 className="mt-1 text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
+              {draft.description || draft.name || "Intencao"}
+            </h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+              Fluxo em etapas para revisar endpoint, campos e variaveis sem poluir a listagem.
+            </p>
+          </div>
+          <button type="button" onClick={onClose} disabled={isSaving} className="rounded-md p-2 text-sm transition hover:bg-black/5 dark:hover:bg-white/5" aria-label="Fechar edicao da intencao">
+            <X size={18} />
+          </button>
+        </div>
+
+        <div className="grid gap-3 border-b px-6 py-4 md:grid-cols-3" style={{ borderColor: "var(--color-border)" }}>
+          {steps.map((item, index) => {
+            const active = index === step;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => onStepChange(index)}
+                className="grid min-h-[88px] gap-2 rounded-lg border px-4 py-3 text-left transition"
+                style={{
+                  borderColor: active ? "rgb(14 165 233 / 0.45)" : "var(--color-border)",
+                  background: active ? "var(--color-bg-secondary)" : "var(--color-bg-primary)"
+                }}
+              >
+                <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
+                  {item.icon}
+                  <span>{`Passo ${index + 1}`}</span>
+                </div>
+                <div>
+                  <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{item.title}</p>
+                  <p className="mt-1 text-xs leading-5" style={{ color: "var(--color-text-tertiary)" }}>{item.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="overflow-y-auto px-6 py-5">
+          {step === 0 ? endpointStep : step === 1 ? fieldsStep : variablesStep}
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t px-6 py-4" style={{ borderColor: "var(--color-border)" }}>
+          <button type="button" onClick={() => onStepChange(Math.max(0, step - 1))} disabled={step === 0 || isSaving} className="btn-secondary text-sm">
+            <ChevronLeft size={16} />
+            Voltar
+          </button>
+          <div className="flex items-center gap-3">
+            <button type="button" onClick={onClose} disabled={isSaving} className="btn-secondary text-sm">
+              Cancelar
+            </button>
+            {step < steps.length - 1 ? (
+              <button type="button" onClick={() => onStepChange(step + 1)} disabled={isSaving} className="btn-primary text-sm">
+                Proximo
+                <ChevronRight size={16} />
+              </button>
+            ) : (
+              <button type="button" onClick={onSave} disabled={isSaving || !draft.description.trim()} className="btn-primary text-sm min-w-[160px]">
+                {isSaving ? "Salvando..." : "Salvar intencao"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function AgentConfigPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -132,8 +777,8 @@ export default function AgentConfigPage() {
   const [connection, setConnection] = useState<FranchiseGptMakerConnection | null>(null);
   const [configuration, setConfiguration] = useState<FranchiseAssistantConfiguration | null>(null);
   const [settings, setSettings] = useState<Record<string, unknown>>({});
-  const [trainings, setTrainings] = useState<Array<{ id?: string; title?: string; content?: string }>>([]);
-  const [intentions, setIntentions] = useState<GptMakerIntention[]>([]);
+  const [trainings, setTrainings] = useState<EditableTraining[]>([]);
+  const [intentions, setIntentions] = useState<EditableIntention[]>([]);
   const [idleActions, setIdleActions] = useState<Array<Record<string, unknown>>>([]);
   const [webhooks, setWebhooks] = useState<Record<string, unknown>>({});
   const [transferRules, setTransferRules] = useState<Array<Record<string, unknown>>>([]);
@@ -155,6 +800,11 @@ export default function AgentConfigPage() {
   const [newIntentionName, setNewIntentionName] = useState("");
   const [newIntentionDescription, setNewIntentionDescription] = useState("");
   const [newIntentionInstructions, setNewIntentionInstructions] = useState("");
+  const [editingTrainingId, setEditingTrainingId] = useState<string | null>(null);
+  const [trainingDraft, setTrainingDraft] = useState<EditableTraining | null>(null);
+  const [editingIntentionId, setEditingIntentionId] = useState<string | null>(null);
+  const [intentionDraft, setIntentionDraft] = useState<EditableIntention | null>(null);
+  const [intentionEditStep, setIntentionEditStep] = useState(0);
 
   const applyProfileDraft = useCallback((
     nextConfiguration: FranchiseAssistantConfiguration | null,
@@ -189,34 +839,27 @@ export default function AgentConfigPage() {
       getTransferRules(params.id).catch(() => []),
     ])
       .then(([franchiseData, connectionData, configurationData, settingsData, intentionsData, trainingsData, idleActionsData, webhooksData, transferRulesData]) => {
+        const normalizedSettings = normalizeSettings(settingsData as Record<string, unknown>, configurationData);
+        const normalizedIntentions = normalizeIntentions(intentionsData, configurationData);
+        const normalizedTrainings = normalizeTrainings(trainingsData, configurationData);
+        const normalizedIdleActions = normalizeIdleActions(idleActionsData, configurationData);
+        const normalizedTransferRules = normalizeTransferRules(transferRulesData, configurationData);
         setFranchise(franchiseData);
         setConnection(connectionData);
         setConfiguration(configurationData);
-        setSettings(settingsData);
-        setIntentions(Array.isArray(intentionsData) ? intentionsData : []);
-        // Map GPTMaker training format {id, type, text} to frontend format {id, title, content}
-        const trainingsArray = Array.isArray(trainingsData) ? trainingsData as Array<Record<string, unknown>> : [];
-        const mappedTrainings = trainingsArray.map((t) => ({
-          id: t.id as string | undefined,
-          title: (t.title as string) || (t.type as string) || "Treinamento",
-          content: (t.content as string) || (t.text as string) || "",
-        }));
-        setTrainings(mappedTrainings);
-        // Map idle actions
-        const idleActionsObj = idleActionsData as Record<string, unknown>;
-        setIdleActions(Array.isArray(idleActionsObj?.actions) ? idleActionsObj.actions as Array<Record<string, unknown>> : []);
-        // Map webhooks
+        setSettings(normalizedSettings);
+        setIntentions(normalizedIntentions);
+        setTrainings(normalizedTrainings);
+        setIdleActions(normalizedIdleActions);
         setWebhooks(webhooksData as Record<string, unknown>);
-        // Map transfer rules
-        setTransferRules(Array.isArray(transferRulesData) ? transferRulesData as Array<Record<string, unknown>> : []);
+        setTransferRules(normalizedTransferRules);
         setSyncStatus({
           status: connectionData.status || franchiseData.status || "ATIVA",
           agentId: connectionData.agentId ?? null,
           agentName: connectionData.agentName ?? null,
           syncedAt: connectionData.lastSyncAt ?? undefined,
         });
-        const settingsObject = settingsData as Record<string, unknown>;
-        applyProfileDraft(configurationData, settingsObject, connectionData, franchiseData);
+        applyProfileDraft(configurationData, normalizedSettings, connectionData, franchiseData);
       })
       .catch((requestError) => showError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar configuracao do assistente."))
       .finally(() => setIsLoading(false));
@@ -342,11 +985,13 @@ export default function AgentConfigPage() {
         text: newTrainingContent
       });
       const createdRecord = created as Record<string, unknown>;
-      setTrainings((current) => [...current, {
-        id: createdRecord.id as string | undefined,
-        title: newTrainingTitle || (createdRecord.type as string) || "Treinamento",
-        content: newTrainingContent
-      }]);
+      setTrainings((current) => [...current, normalizeTrainingItem({
+        ...createdRecord,
+        title: newTrainingTitle,
+        text: newTrainingContent,
+        content: newTrainingContent,
+        type: createdRecord.type ?? "TEXT"
+      })]);
       setNewTrainingTitle("");
       setNewTrainingContent("");
       showSuccess("Treinamento criado com sucesso.");
@@ -356,6 +1001,59 @@ export default function AgentConfigPage() {
       setIsSaving(false);
     }
   }, [newTrainingContent, newTrainingTitle, params?.id, showError, showSuccess]);
+
+  const buildTrainingPayload = useCallback((training: EditableTraining) => {
+    const payload: Record<string, unknown> = {
+      id: training.id,
+      type: training.type || "TEXT",
+      callbackUrl: training.callbackUrl.trim() || undefined
+    };
+
+    if (training.type === "WEBSITE") {
+      payload.website = training.website.trim();
+      payload.trainingSubPages = training.trainingSubPages.trim() || undefined;
+      payload.trainingInterval = training.trainingInterval.trim() || undefined;
+    } else if (training.type === "VIDEO") {
+      payload.video = training.video.trim();
+    } else if (training.type === "DOCUMENT") {
+      payload.documentUrl = training.documentUrl.trim();
+      payload.documentName = training.documentName.trim() || undefined;
+      payload.documentMimetype = training.documentMimetype.trim() || undefined;
+    } else {
+      payload.text = training.text.trim();
+      payload.image = training.image.trim() || undefined;
+    }
+
+    return payload;
+  }, []);
+
+  const startTrainingEdit = useCallback((training: EditableTraining) => {
+    setEditingTrainingId(training.id ?? null);
+    setTrainingDraft({ ...training });
+  }, []);
+
+  const cancelTrainingEdit = useCallback(() => {
+    setEditingTrainingId(null);
+    setTrainingDraft(null);
+  }, []);
+
+  const saveTrainingEdit = useCallback(async () => {
+    if (!params?.id || !editingTrainingId || !trainingDraft) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = buildTrainingPayload(trainingDraft);
+      await updateGptMakerTraining(params.id, editingTrainingId, payload);
+      setTrainings((current) => current.map((item) => item.id === editingTrainingId ? { ...trainingDraft } : item));
+      cancelTrainingEdit();
+      showSuccess("Treinamento atualizado com sucesso.");
+    } catch (requestError) {
+      showError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar o treinamento.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [buildTrainingPayload, cancelTrainingEdit, editingTrainingId, params?.id, showError, showSuccess, trainingDraft]);
 
   const handleAddIntention = useCallback(async () => {
     if (!params?.id || !newIntentionName.trim()) {
@@ -368,7 +1066,12 @@ export default function AgentConfigPage() {
         description: newIntentionDescription,
         instructions: newIntentionInstructions
       });
-      setIntentions((current) => [...current, created]);
+      setIntentions((current) => [...current, normalizeIntentionItem({
+        ...created,
+        name: newIntentionName,
+        description: newIntentionDescription || newIntentionName,
+        instructions: newIntentionInstructions
+      })]);
       setNewIntentionName("");
       setNewIntentionDescription("");
       setNewIntentionInstructions("");
@@ -379,6 +1082,98 @@ export default function AgentConfigPage() {
       setIsSaving(false);
     }
   }, [newIntentionDescription, newIntentionInstructions, newIntentionName, params?.id, showError, showSuccess]);
+
+  const buildIntentionPayload = useCallback((intention: EditableIntention) => {
+    const compactKeyValues = (items: IntentionKeyValue[]) => items
+      .filter((item) => item.name.trim() || item.value.trim())
+      .map((item) => ({ name: item.name.trim(), value: item.value.trim() }));
+
+    const compactFields = intention.fields
+      .filter((field) => field.name.trim() || field.jsonName.trim() || field.description.trim())
+      .map((field) => ({
+        name: field.name.trim(),
+        jsonName: field.jsonName.trim(),
+        description: field.description.trim(),
+        required: field.required
+      }));
+
+    const compactVariables = intention.variables
+      .filter((variable) =>
+        variable.valueExpression.trim()
+        || variable.defaultFieldKey.trim()
+        || variable.customField.id.trim()
+        || variable.customField.name.trim()
+        || variable.customField.description.trim()
+        || variable.customField.jsonName.trim()
+      )
+      .map((variable) => ({
+        valueExpression: variable.valueExpression.trim(),
+        defaultFieldKey: variable.defaultFieldKey.trim() || undefined,
+        customField: {
+          id: variable.customField.id.trim() || undefined,
+          name: variable.customField.name.trim() || undefined,
+          description: variable.customField.description.trim() || undefined,
+          jsonName: variable.customField.jsonName.trim() || undefined
+        }
+      }));
+
+    return {
+      id: intention.id,
+      name: intention.name.trim() || undefined,
+      description: intention.description.trim(),
+      instructions: intention.instructions.trim(),
+      details: intention.details.trim() || undefined,
+      fields: compactFields,
+      type: intention.type.trim(),
+      httpMethod: intention.httpMethod.trim() || undefined,
+      url: intention.url.trim() || undefined,
+      headers: compactKeyValues(intention.headers),
+      params: compactKeyValues(intention.params),
+      variables: compactVariables,
+      requestBody: intention.requestBody.trim() || undefined,
+      autoGenerateParams: intention.autoGenerateParams,
+      autoGenerateBody: intention.autoGenerateBody
+    };
+  }, []);
+
+  const startIntentionEdit = useCallback((intention: EditableIntention) => {
+    setEditingIntentionId(intention.id);
+    setIntentionEditStep(0);
+    setIntentionDraft({
+      ...intention,
+      headers: intention.headers.map((item) => ({ ...item })),
+      params: intention.params.map((item) => ({ ...item })),
+      fields: intention.fields.map((item) => ({ ...item })),
+      variables: intention.variables.map((item) => ({
+        ...item,
+        customField: { ...item.customField }
+      }))
+    });
+  }, []);
+
+  const cancelIntentionEdit = useCallback(() => {
+    setEditingIntentionId(null);
+    setIntentionDraft(null);
+    setIntentionEditStep(0);
+  }, []);
+
+  const saveIntentionEdit = useCallback(async () => {
+    if (!params?.id || !editingIntentionId || !intentionDraft) {
+      return;
+    }
+    setIsSaving(true);
+    try {
+      const payload = buildIntentionPayload(intentionDraft);
+      await updateGptMakerIntention(params.id, editingIntentionId, payload);
+      setIntentions((current) => current.map((item) => item.id === editingIntentionId ? { ...intentionDraft } : item));
+      cancelIntentionEdit();
+      showSuccess("Intencao atualizada com sucesso.");
+    } catch (requestError) {
+      showError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar a intencao.");
+    } finally {
+      setIsSaving(false);
+    }
+  }, [buildIntentionPayload, cancelIntentionEdit, editingIntentionId, intentionDraft, params?.id, showError, showSuccess]);
 
   const tabs: TabItem[] = [
     {
@@ -487,29 +1282,100 @@ export default function AgentConfigPage() {
           {trainings.length ? (
             <div className="space-y-3">
               {trainings.map((training, index) => (
-                <div key={training.id ?? index} className="card p-4 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{training.title || `Treinamento ${index + 1}`}</p>
-                    <p className="mt-1 text-sm line-clamp-2" style={{ color: "var(--color-text-secondary)" }}>{training.content || ""}</p>
+                <div key={training.id ?? index} className="card p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                        {training.title || training.type || `Treinamento ${index + 1}`}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>
+                        {training.type || "TEXT"}
+                      </p>
+                      <p className="mt-2 text-sm line-clamp-3 whitespace-pre-wrap" style={{ color: "var(--color-text-secondary)" }}>
+                        {training.text || training.content || training.website || training.video || training.documentUrl || "Sem conteudo."}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      {training.id ? (
+                        <button
+                          type="button"
+                          onClick={() => startTrainingEdit(training)}
+                          disabled={Boolean(useStandardTrainings)}
+                          className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:opacity-60"
+                        >
+                          Editar
+                        </button>
+                      ) : null}
+                      {training.id && (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            if (!params?.id || !training.id) return;
+                            try {
+                              await deleteGptMakerTraining(params.id, training.id);
+                              setTrainings((current) => current.filter((t) => t.id !== training.id));
+                              if (editingTrainingId === training.id) {
+                                cancelTrainingEdit();
+                              }
+                              showSuccess("Treinamento removido.");
+                            } catch (err) {
+                              showError(err instanceof Error ? err.message : "Erro ao remover treinamento.");
+                            }
+                          }}
+                          disabled={Boolean(useStandardTrainings)}
+                          className="text-sm text-red-500 hover:text-red-700 disabled:opacity-60"
+                        >
+                          Remover
+                        </button>
+                      )}
+                    </div>
                   </div>
-                  {training.id && (
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!params?.id) return;
-                        try {
-                          await deleteGptMakerTraining(params.id, training.id!);
-                          setTrainings((current) => current.filter((t) => t.id !== training.id));
-                          showSuccess("Treinamento removido.");
-                        } catch (err) {
-                          showError(err instanceof Error ? err.message : "Erro ao remover treinamento.");
-                        }
-                      }}
-                      className="text-sm text-red-500 hover:text-red-700 shrink-0"
-                    >
-                      Remover
-                    </button>
-                  )}
+
+                  {editingTrainingId === training.id && trainingDraft ? (
+                    <div className="grid gap-4 rounded-xl border p-4" style={{ borderColor: "var(--color-border)", background: "var(--color-bg-secondary)" }}>
+                      <SelectField
+                        label="Tipo do treinamento"
+                        value={trainingDraft.type}
+                        onChange={(value) => setTrainingDraft((current) => current ? { ...current, type: value } : current)}
+                        options={trainingTypeOptions}
+                        disabled={isSaving}
+                      />
+                      {trainingDraft.type === "WEBSITE" ? (
+                        <>
+                          <Field label="URL do website" value={trainingDraft.website} onChange={(value) => setTrainingDraft((current) => current ? { ...current, website: value } : current)} />
+                          <Field label="Subpaginas" value={trainingDraft.trainingSubPages} onChange={(value) => setTrainingDraft((current) => current ? { ...current, trainingSubPages: value } : current)} hint="Ex.: true, false ou regra usada pela operacao." />
+                          <Field label="Intervalo de treino" value={trainingDraft.trainingInterval} onChange={(value) => setTrainingDraft((current) => current ? { ...current, trainingInterval: value } : current)} />
+                        </>
+                      ) : trainingDraft.type === "VIDEO" ? (
+                        <Field label="URL do video" value={trainingDraft.video} onChange={(value) => setTrainingDraft((current) => current ? { ...current, video: value } : current)} />
+                      ) : trainingDraft.type === "DOCUMENT" ? (
+                        <>
+                          <Field label="URL do documento" value={trainingDraft.documentUrl} onChange={(value) => setTrainingDraft((current) => current ? { ...current, documentUrl: value } : current)} />
+                          <Field label="Nome do documento" value={trainingDraft.documentName} onChange={(value) => setTrainingDraft((current) => current ? { ...current, documentName: value } : current)} />
+                          <Field label="Mimetype" value={trainingDraft.documentMimetype} onChange={(value) => setTrainingDraft((current) => current ? { ...current, documentMimetype: value } : current)} />
+                        </>
+                      ) : (
+                        <>
+                          <Field label="Imagem (opcional)" value={trainingDraft.image} onChange={(value) => setTrainingDraft((current) => current ? { ...current, image: value } : current)} />
+                          <RichTextarea label="Texto do treinamento" value={trainingDraft.text} onChange={(value) => setTrainingDraft((current) => current ? { ...current, text: value, content: value } : current)} rows={5} />
+                        </>
+                      )}
+                      <Field label="Callback URL (opcional)" value={trainingDraft.callbackUrl} onChange={(value) => setTrainingDraft((current) => current ? { ...current, callbackUrl: value } : current)} />
+                      <div className="flex justify-end gap-3">
+                        <button type="button" onClick={cancelTrainingEdit} disabled={isSaving} className="btn-secondary text-sm">
+                          Cancelar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={saveTrainingEdit}
+                          disabled={isSaving}
+                          className="btn-primary text-sm"
+                        >
+                          {isSaving ? "Salvando..." : "Salvar treinamento"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -542,27 +1408,51 @@ export default function AgentConfigPage() {
           {intentions.length ? (
             <div className="space-y-3">
               {intentions.map((intention) => (
-                <div key={intention.id} className="card p-4 flex items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{intention.description}</p>
-                    {intention.instructions ? <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{intention.instructions}</p> : null}
+                <div key={intention.id} className="card p-4 space-y-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>
+                        {intention.description || intention.name || "Intencao"}
+                      </p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        <span className="rounded-full px-2 py-1" style={{ background: "var(--color-bg-secondary)" }}>{intention.type || "INSTRUCTIONS"}</span>
+                        {intention.httpMethod ? <span>{intention.httpMethod}</span> : null}
+                        {intention.url ? <span className="truncate">{intention.url}</span> : null}
+                      </div>
+                      {intention.instructions ? <p className="mt-2 text-sm whitespace-pre-wrap" style={{ color: "var(--color-text-secondary)" }}>{intention.instructions}</p> : null}
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startIntentionEdit(intention)}
+                        disabled={Boolean(useStandardIntentions)}
+                        className="text-sm font-medium text-brand-600 hover:text-brand-700 disabled:opacity-60"
+                      >
+                        Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (!params?.id) return;
+                          try {
+                            await deleteGptMakerIntention(params.id, intention.id);
+                            setIntentions((current) => current.filter((i) => i.id !== intention.id));
+                            if (editingIntentionId === intention.id) {
+                              cancelIntentionEdit();
+                            }
+                            showSuccess("Intencao removida.");
+                          } catch (err) {
+                            showError(err instanceof Error ? err.message : "Erro ao remover intencao.");
+                          }
+                        }}
+                        disabled={Boolean(useStandardIntentions)}
+                        className="text-sm text-red-500 hover:text-red-700 disabled:opacity-60"
+                      >
+                        Remover
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!params?.id) return;
-                      try {
-                        await deleteGptMakerIntention(params.id, intention.id);
-                        setIntentions((current) => current.filter((i) => i.id !== intention.id));
-                        showSuccess("Intencao removida.");
-                      } catch (err) {
-                        showError(err instanceof Error ? err.message : "Erro ao remover intencao.");
-                      }
-                    }}
-                    className="text-sm text-red-500 hover:text-red-700 shrink-0"
-                  >
-                    Remover
-                  </button>
+
                 </div>
               ))}
             </div>
@@ -761,6 +1651,17 @@ export default function AgentConfigPage() {
             setConfirmClear(false);
           }
         }}
+      />
+
+      <IntentionEditModal
+        isOpen={Boolean(editingIntentionId && intentionDraft)}
+        draft={intentionDraft}
+        step={intentionEditStep}
+        isSaving={isSaving}
+        onStepChange={setIntentionEditStep}
+        onChange={(updater) => setIntentionDraft((current) => current ? updater(current) : current)}
+        onClose={cancelIntentionEdit}
+        onSave={saveIntentionEdit}
       />
     </AppShell>
   );

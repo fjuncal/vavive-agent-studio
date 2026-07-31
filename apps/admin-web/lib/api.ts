@@ -571,6 +571,47 @@ function createNetworkError(path: string): ApiError {
   return error;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function unwrapCollection(value: unknown): unknown[] {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+
+  for (const key of ["items", "data", "results", "content", "trainings", "intentions", "actions", "idleActions", "rules", "transferRules"]) {
+    const candidate = value[key];
+    if (Array.isArray(candidate)) {
+      return candidate;
+    }
+    if (isRecord(candidate)) {
+      const nested = unwrapCollection(candidate);
+      if (nested.length > 0) {
+        return nested;
+      }
+    }
+  }
+
+  return [];
+}
+
+function unwrapObject(value: unknown): Record<string, unknown> {
+  if (isRecord(value)) {
+    for (const key of ["settings", "data", "payload", "content"]) {
+      const candidate = value[key];
+      if (isRecord(candidate)) {
+        return candidate;
+      }
+    }
+    return value;
+  }
+  return {};
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const token = getStoredToken();
@@ -955,7 +996,7 @@ const DEFAULT_AGENT_SETTINGS: Record<string, unknown> = {
 };
 
 export async function getAgentSettings(franchiseId: string): Promise<Record<string, unknown>> {
-  const remote = await apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-settings`);
+  const remote = unwrapObject(await apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/agent-settings`));
   return { ...DEFAULT_AGENT_SETTINGS, ...remote };
 }
 
@@ -968,7 +1009,7 @@ export function updateAgentSettings(franchiseId: string, settings: Record<string
 }
 
 export function getAgentWebhooks(franchiseId: string) {
-  return apiFetch<Record<string, unknown>>(`/franchises/${franchiseId}/gptmaker/agent-webhooks`);
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/agent-webhooks`).then(unwrapObject);
 }
 
 export function updateAgentWebhooks(franchiseId: string, webhooks: Record<string, unknown>) {
@@ -980,6 +1021,7 @@ export function updateAgentWebhooks(franchiseId: string, webhooks: Record<string
 
 export type GptMakerIntention = {
   id: string;
+  name?: string;
   description: string;
   type: string;
   instructions: string;
@@ -996,8 +1038,25 @@ export type GptMakerIntention = {
   autoGenerateBody?: boolean;
 };
 
+export type GptMakerTraining = {
+  id?: string;
+  type?: "TEXT" | "WEBSITE" | "VIDEO" | "DOCUMENT" | string;
+  text?: string;
+  image?: string;
+  website?: string;
+  trainingSubPages?: string;
+  trainingInterval?: string;
+  video?: string;
+  documentUrl?: string;
+  documentName?: string;
+  documentMimetype?: string;
+  callbackUrl?: string;
+  title?: string;
+  content?: string;
+};
+
 export function getGptMakerIntentions(franchiseId: string) {
-  return apiFetch<GptMakerIntention[]>(`/franchises/${franchiseId}/gptmaker/intentions`);
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/intentions`).then((response) => unwrapCollection(response) as GptMakerIntention[]);
 }
 
 export function createGptMakerIntention(franchiseId: string, payload: Record<string, unknown>) {
@@ -1014,7 +1073,7 @@ export function deleteGptMakerIntention(franchiseId: string, intentionId: string
 }
 
 export function getGptMakerTrainings(franchiseId: string) {
-  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/trainings`);
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/trainings`).then((response) => unwrapCollection(response) as GptMakerTraining[]);
 }
 
 export function createGptMakerTraining(franchiseId: string, payload: Record<string, unknown>) {
@@ -1030,10 +1089,10 @@ export function deleteGptMakerTraining(franchiseId: string, trainingId: string) 
   });
 }
 
-export function updateGptMakerTraining(franchiseId: string, trainingId: string, payload: { type?: string; text: string }) {
+export function updateGptMakerTraining(franchiseId: string, trainingId: string, payload: Record<string, unknown>) {
   return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/trainings/${trainingId}`, {
     method: "PUT",
-    body: JSON.stringify({ type: payload.type || "TEXT", text: payload.text })
+    body: JSON.stringify(payload)
   });
 }
 
@@ -1045,7 +1104,12 @@ export function updateGptMakerIntention(franchiseId: string, intentionId: string
 }
 
 export function getTransferRules(franchiseId: string) {
-  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/transfer-rules`);
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/transfer-rules`).then((response) => {
+    if (isRecord(response) && typeof response.id === "string") {
+      return [response];
+    }
+    return unwrapCollection(response);
+  });
 }
 
 export function createTransferRule(franchiseId: string, payload: Record<string, unknown>) {
@@ -1069,7 +1133,12 @@ export function deleteTransferRule(franchiseId: string, ruleId: string) {
 }
 
 export function getIdleActions(franchiseId: string) {
-  return apiFetch<unknown[]>(`/franchises/${franchiseId}/gptmaker/idle-actions`);
+  return apiFetch<unknown>(`/franchises/${franchiseId}/gptmaker/idle-actions`).then((response) => {
+    if (isRecord(response) && Array.isArray(response.actions)) {
+      return response.actions;
+    }
+    return unwrapCollection(response);
+  });
 }
 
 export function createIdleAction(franchiseId: string, payload: Record<string, unknown>) {

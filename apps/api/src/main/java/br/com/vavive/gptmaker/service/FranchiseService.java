@@ -801,11 +801,16 @@ public class FranchiseService {
             return arrayNode;
         }
         if (remoteItems != null && remoteItems.isObject()) {
-            for (String field : List.of("items", "data", "content", "results")) {
+            for (String field : List.of("items", "data", "content", "results", "actions", "idleActions", "rules", "transferRules")) {
                 JsonNode nested = remoteItems.get(field);
                 if (nested instanceof ArrayNode arrayNode) {
                     return arrayNode;
                 }
+            }
+            if (remoteItems.hasNonNull("id") && !remoteItems.has("error") && !remoteItems.has("status")) {
+                ArrayNode singleItem = objectMapper.createArrayNode();
+                singleItem.add(remoteItems);
+                return singleItem;
             }
         }
         return objectMapper.createArrayNode();
@@ -1172,7 +1177,7 @@ public class FranchiseService {
     }
 
     public Object getAgentSettings(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1184,7 +1189,7 @@ public class FranchiseService {
     }
 
     public Object updateAgentSettings(UUID franchiseId, Object settings) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1196,7 +1201,7 @@ public class FranchiseService {
     }
 
     public Object getAgentWebhooks(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1208,7 +1213,7 @@ public class FranchiseService {
     }
 
     public Object updateAgentWebhooks(UUID franchiseId, Object webhooks) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1220,7 +1225,7 @@ public class FranchiseService {
     }
 
     public Object updateAgent(UUID franchiseId, Object request) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1246,7 +1251,7 @@ public class FranchiseService {
     }
 
     public Object listIntentions(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1258,7 +1263,7 @@ public class FranchiseService {
     }
 
     public Object listTrainings(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1270,7 +1275,7 @@ public class FranchiseService {
     }
 
     public Object createTraining(UUID franchiseId, Object training) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1282,7 +1287,7 @@ public class FranchiseService {
     }
 
     public Object updateTraining(UUID franchiseId, String trainingId, Object training) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1294,7 +1299,7 @@ public class FranchiseService {
     }
 
     public Object deleteTraining(UUID franchiseId, String trainingId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1307,7 +1312,7 @@ public class FranchiseService {
     }
 
     public Object createIntention(UUID franchiseId, Object intention) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1319,7 +1324,7 @@ public class FranchiseService {
     }
 
     public Object updateIntention(UUID franchiseId, String intentionId, Object intention) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1331,7 +1336,7 @@ public class FranchiseService {
     }
 
     public Object deleteIntention(UUID franchiseId, String intentionId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1344,7 +1349,7 @@ public class FranchiseService {
     }
 
     public Object listTransferRules(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1356,7 +1361,7 @@ public class FranchiseService {
     }
 
     public Object createTransferRule(UUID franchiseId, Object rule) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1368,24 +1373,24 @@ public class FranchiseService {
     }
 
     public Object updateTransferRule(UUID franchiseId, String ruleId, Object rule) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
         try {
-            return gptMakerClient.updateTransferRule(ruleId, rule);
+            return gptMakerClient.updateTransferRule(franchise.getAgentId(), ruleId, rule);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }
     }
 
     public Object deleteTransferRule(UUID franchiseId, String ruleId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
         try {
-            gptMakerClient.deleteTransferRule(ruleId);
+            gptMakerClient.deleteTransferRule(franchise.getAgentId(), ruleId);
             return java.util.Map.of("success", true);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
@@ -1393,7 +1398,7 @@ public class FranchiseService {
     }
 
     public Object listIdleActions(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1405,7 +1410,7 @@ public class FranchiseService {
     }
 
     public Object createIdleAction(UUID franchiseId, Object action) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1417,24 +1422,24 @@ public class FranchiseService {
     }
 
     public Object updateIdleAction(UUID franchiseId, String actionId, Object action) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
         try {
-            return gptMakerClient.updateIdleAction(actionId, action);
+            return gptMakerClient.updateIdleAction(franchise.getAgentId(), actionId, action);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
         }
     }
 
     public Object deleteIdleAction(UUID franchiseId, String actionId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
         try {
-            gptMakerClient.deleteIdleAction(actionId);
+            gptMakerClient.deleteIdleAction(franchise.getAgentId(), actionId);
             return java.util.Map.of("success", true);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(statusForGptMakerException(exception), exception.getMessage());
@@ -1442,7 +1447,7 @@ public class FranchiseService {
     }
 
     public Object activateAgent(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1462,7 +1467,7 @@ public class FranchiseService {
     }
 
     public Object inactivateAgent(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1482,7 +1487,7 @@ public class FranchiseService {
     }
 
     public Object updateAgentStatus(UUID franchiseId, Object request) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1528,7 +1533,7 @@ public class FranchiseService {
     }
 
     public Object deleteAgent(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Franquia sem agente configurado.");
         }
@@ -1557,7 +1562,7 @@ public class FranchiseService {
     }
 
     public Object syncAgentStatus(UUID franchiseId) {
-        Franchise franchise = requireFranchise(franchiseId);
+        Franchise franchise = requireAccessibleFranchise(franchiseId);
         if (franchise.getAgentId() == null || franchise.getAgentId().isBlank()) {
             return java.util.Map.of(
                 "status", "SEM_AGENTE",
@@ -1665,3 +1670,4 @@ public class FranchiseService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Franquia nao encontrada."));
     }
 }
+

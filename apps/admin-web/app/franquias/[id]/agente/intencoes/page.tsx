@@ -123,7 +123,7 @@ export default function AgentIntentionsPage() {
         </p>
         <button type="button" onClick={openModal} className="btn-primary">
           <Plus size={16} />
-          Nova intenção
+          Nova intenÃ§Ã£o
         </button>
       </div>
 
@@ -180,7 +180,7 @@ export default function AgentIntentionsPage() {
           <div className="card relative w-full max-w-lg p-6 shadow-soft-lg animate-scale-in">
             <div className="flex items-center justify-between gap-3 mb-5">
               <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                Nova intenção
+                Nova intenÃ§Ã£o
               </h2>
               <button
                 type="button"
@@ -208,7 +208,7 @@ export default function AgentIntentionsPage() {
               </label>
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-                  Descrição
+                  DescriÃ§Ã£o
                 </span>
                 <input
                   className="input-field"
@@ -219,7 +219,7 @@ export default function AgentIntentionsPage() {
               </label>
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>
-                  Instruções <span className="text-rose-500">*</span>
+                  InstruÃ§Ãµes <span className="text-rose-500">*</span>
                 </span>
                 <textarea
                   className="input-field min-h-[140px] leading-6"

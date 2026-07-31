@@ -17,9 +17,11 @@ import {
   createGptMakerTraining,
   createIdleAction,
   createTransferRule,
+  deleteGptMakerAgent,
   getFranchiseAssistantConfiguration,
   getFranchiseById,
   getFranchiseGptMakerConnection,
+  getAgentSettings,
   provisionFranchiseGptMakerAgent,
   updateAgentSettings,
   updateAgentWebhooks,
@@ -160,6 +162,32 @@ function intentionPayload(intention: IntentionData, index: number) {
   };
 }
 
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForRemoteAgentReadiness(franchiseId: string) {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await getAgentSettings(franchiseId);
+      return;
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error("Nao foi possivel validar o agente criado.");
+      await sleep(750 * (attempt + 1));
+    }
+  }
+  throw lastError ?? new Error("O agente foi criado, mas ainda nao ficou disponivel no GPTMaker para sincronizacao.");
+}
+
+async function syncStep(label: string, action: () => Promise<unknown>, failures: string[]) {
+  try {
+    await action();
+  } catch (error) {
+    failures.push(error instanceof Error ? `${label}: ${error.message}` : `${label}: falha desconhecida.`);
+  }
+}
+
 function SummaryCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div className="card p-4">
@@ -276,6 +304,7 @@ export default function AgentWizardPage() {
     }
     setIsSaving(true);
     setError(null);
+    let provisioned = false;
     try {
       await provisionFranchiseGptMakerAgent(params.id, {
         workspaceId: connection.workspaceId,
@@ -289,20 +318,49 @@ export default function AgentWizardPage() {
         behavior,
         confirmCriticalChange: hasAgent
       });
+      provisioned = true;
 
-      await Promise.allSettled([
-        updateAgentSettings(params.id, settings),
-        updateAgentWebhooks(params.id, webhooks),
-        ...trainings.map((training) => createGptMakerTraining(params.id, trainingPayload(training))),
-        ...intentions.map((intention, index) => createGptMakerIntention(params.id, intentionPayload(intention, index))),
-        ...idleActions.map(({ id, ...payload }) => createIdleAction(params.id, payload)),
-        ...transferRules.map(({ id, ...payload }) => createTransferRule(params.id, payload))
-      ]);
+      await waitForRemoteAgentReadiness(params.id);
+
+      const syncFailures: string[] = [];
+      await syncStep("Configuracoes do agente", () => updateAgentSettings(params.id, settings), syncFailures);
+      await syncStep("Webhooks", () => updateAgentWebhooks(params.id, webhooks), syncFailures);
+
+      for (const [index, training] of trainings.entries()) {
+        await syncStep(`Treinamento ${index + 1}`, () => createGptMakerTraining(params.id, trainingPayload(training)), syncFailures);
+      }
+      for (const [index, intention] of intentions.entries()) {
+        await syncStep(`Intencao ${index + 1}`, () => createGptMakerIntention(params.id, intentionPayload(intention, index)), syncFailures);
+      }
+      for (const [index, action] of idleActions.entries()) {
+        const { id, ...payload } = action;
+        await syncStep(`Acao de inatividade ${index + 1}`, () => createIdleAction(params.id, payload), syncFailures);
+      }
+      for (const [index, rule] of transferRules.entries()) {
+        const { id, ...payload } = rule;
+        await syncStep(`Regra de transferencia ${index + 1}`, () => createTransferRule(params.id, payload), syncFailures);
+      }
+
+      if (syncFailures.length > 0) {
+        throw new Error(`O agente foi criado no GPTMaker, mas algumas configuracoes nao sincronizaram: ${syncFailures.join(" | ")}`);
+      }
 
       showSuccess("Assistente criado com sucesso.");
       router.push(`/franquias/${params.id}/agente/configuracao`);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Erro ao criar assistente.");
+      let message = requestError instanceof Error ? requestError.message : "Erro ao criar assistente.";
+
+      if (provisioned) {
+        try {
+          await deleteGptMakerAgent(params.id);
+          message = `${message} O provisionamento foi desfeito para evitar cadastro inconsistente.`;
+        } catch (rollbackError) {
+          const rollbackMessage = rollbackError instanceof Error ? rollbackError.message : "Nao foi possivel desfazer automaticamente o agente criado.";
+          message = `${message} Falha ao desfazer o provisionamento: ${rollbackMessage}`;
+        }
+      }
+
+      setError(message);
     } finally {
       setIsSaving(false);
     }

@@ -48,6 +48,56 @@ function getMultiAvatarUrl(seed: string): string {
   return `https://api.dicebear.com/7.x/${style}/svg?seed=${hash}`;
 }
 
+function getBlockPayload(configuration: FranchiseAssistantConfiguration | null, blockType: string) {
+  return configuration?.blocks.find((block) => block.blockType === blockType)?.payload ?? {};
+}
+
+function getImportedItems(configuration: FranchiseAssistantConfiguration | null, blockType: string) {
+  const payload = getBlockPayload(configuration, blockType);
+  return Array.isArray(payload.items) ? payload.items : [];
+}
+
+function normalizeSettings(
+  remoteSettings: Record<string, unknown>,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  if (Object.keys(remoteSettings).length > 0) {
+    return remoteSettings;
+  }
+  return getBlockPayload(configuration, "AGENT_SETTINGS");
+}
+
+function normalizeTrainings(
+  remoteTrainings: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  const source = Array.isArray(remoteTrainings) && remoteTrainings.length > 0
+    ? remoteTrainings
+    : getImportedItems(configuration, "TRAININGS");
+  return source as Array<{ id?: string; type?: string; text?: string; title?: string; content?: string }>;
+}
+
+function normalizeIntentions(
+  remoteIntentions: unknown,
+  configuration: FranchiseAssistantConfiguration | null
+) {
+  const source = Array.isArray(remoteIntentions) && remoteIntentions.length > 0
+    ? remoteIntentions
+    : getImportedItems(configuration, "INTENTIONS");
+  return source as GptMakerIntention[];
+}
+
+function normalizeReferenceItems(
+  remoteItems: unknown,
+  configuration: FranchiseAssistantConfiguration | null,
+  blockType: "IDLE_ACTIONS" | "TRANSFER_RULES"
+) {
+  if (Array.isArray(remoteItems) && remoteItems.length > 0) {
+    return remoteItems;
+  }
+  return getImportedItems(configuration, blockType);
+}
+
 function AgentMenu({ onEdit, onToggleStatus, onRemove, isActive }: { onEdit: () => void; onToggleStatus: () => void; onRemove: () => void; isActive: boolean }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -130,14 +180,19 @@ export default function FranchiseAgentPage() {
       getIdleActions(params.id).catch(() => []),
     ])
       .then(([franchiseData, connectionData, assistantConfiguration, settingsData, trainingsData, intentionsData, transferData, idleData]) => {
+        const normalizedSettings = normalizeSettings(settingsData as Record<string, unknown>, assistantConfiguration);
+        const normalizedTrainings = normalizeTrainings(trainingsData, assistantConfiguration);
+        const normalizedIntentions = normalizeIntentions(intentionsData, assistantConfiguration);
+        const normalizedTransferRules = normalizeReferenceItems(transferData, assistantConfiguration, "TRANSFER_RULES");
+        const normalizedIdleActions = normalizeReferenceItems(idleData, assistantConfiguration, "IDLE_ACTIONS");
         setFranchise(franchiseData);
         setConnection(connectionData);
         setConfiguration(assistantConfiguration);
-        setSettings(settingsData);
-        setTrainings(Array.isArray(trainingsData) ? trainingsData as Array<{ id?: string; type?: string; text?: string; title?: string; content?: string }> : []);
-        setIntentions(Array.isArray(intentionsData) ? intentionsData : []);
-        setTransferRules(Array.isArray(transferData) ? transferData : []);
-        setIdleActions(Array.isArray(idleData) ? idleData : []);
+        setSettings(normalizedSettings);
+        setTrainings(normalizedTrainings);
+        setIntentions(normalizedIntentions);
+        setTransferRules(normalizedTransferRules);
+        setIdleActions(normalizedIdleActions);
         setSyncStatus({
           status: connectionData.status || franchiseData.status || "ATIVA",
           agentId: connectionData.agentId ?? null,

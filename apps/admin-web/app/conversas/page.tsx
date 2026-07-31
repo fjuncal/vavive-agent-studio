@@ -84,6 +84,36 @@ function formatMessageDayLabel(value?: number | null) {
     return titleizeDayLabel(weekday);
   }
 
+  return `${titleizeDayLabel(weekday)} Â· ${new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(messageDate)}`;
+}
+
+function formatConversationDayLabel(value?: number | null) {
+  const timestamp = normalizeTimestamp(value);
+  if (!timestamp) {
+    return "Sem data";
+  }
+
+  const messageDate = new Date(timestamp);
+  const now = new Date();
+  if (isSameDay(messageDate, now)) {
+    return "Hoje";
+  }
+
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (isSameDay(messageDate, yesterday)) {
+    return "Ontem";
+  }
+
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(messageDate);
+  if (Math.abs(now.getTime() - messageDate.getTime()) < 7 * 24 * 60 * 60 * 1000) {
+    return titleizeDayLabel(weekday);
+  }
+
   return `${titleizeDayLabel(weekday)} · ${new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -189,9 +219,15 @@ export default function ConversationsPage() {
       setHandoffs([]);
       return;
     }
-    getConversationMessages(selectedConversationId).then(setMessages).catch(() => setMessages([]));
-    getConversationHandoffs(selectedConversationId).then(setHandoffs).catch(() => setHandoffs([]));
-  }, [selectedConversationId]);
+    const currentConversation = conversations.find((item) => item.id === selectedConversationId);
+    if (!currentConversation) {
+      setMessages([]);
+      setHandoffs([]);
+      return;
+    }
+    getConversationMessages(currentConversation.id).then(setMessages).catch(() => setMessages([]));
+    getConversationHandoffs(currentConversation.id).then(setHandoffs).catch(() => setHandoffs([]));
+  }, [conversations, selectedConversationId]);
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.id === selectedConversationId) ?? null,
@@ -205,7 +241,7 @@ export default function ConversationsPage() {
     });
 
     return sortedMessages.reduce<Array<{ label: string; items: ConversationMessage[] }>>((groups, message) => {
-      const label = formatMessageDayLabel(message.time);
+      const label = formatConversationDayLabel(message.time);
       const currentGroup = groups[groups.length - 1];
       if (!currentGroup || currentGroup.label !== label) {
         groups.push({ label, items: [message] });
@@ -308,7 +344,10 @@ export default function ConversationsPage() {
                     key={conversation.id}
                     type="button"
                     onClick={() => setSelectedConversationId(conversation.id)}
-                    className={`min-w-0 overflow-hidden rounded-2xl border p-4 text-left transition ${selectedConversationId === conversation.id ? "border-brand-500 bg-brand-50 shadow-sm dark:bg-brand-950/30" : "border-line bg-white dark:bg-surface hover:bg-slate-50 dark:hover:bg-surface-hover"}`}
+                    className={`min-w-0 overflow-hidden rounded-2xl border p-4 text-left transition ${selectedConversationId === conversation.id ? "border-brand-500 shadow-sm" : "hover:opacity-95"}`}
+                    style={selectedConversationId === conversation.id
+                      ? { background: "rgba(34, 165, 135, 0.12)" }
+                      : { borderColor: "var(--color-border)", background: "var(--color-bg-primary)" }}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
@@ -371,13 +410,13 @@ export default function ConversationsPage() {
                   </div>
                 </div>
                 <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                  <button type="button" onClick={() => void runAction(() => startHumanTakeover(selectedConversation.id))} disabled={isActionLoading || selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-white px-3 py-2 text-center text-sm font-semibold leading-tight break-words text-slate-700 ring-1 ring-line disabled:opacity-60 dark:bg-surface dark:text-slate-300">
+                  <button type="button" onClick={() => void runAction(() => startHumanTakeover(selectedConversation.id))} disabled={isActionLoading || selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
                     Assumir humano
                   </button>
-                  <button type="button" onClick={() => void runAction(() => stopHumanTakeover(selectedConversation.id))} disabled={isActionLoading || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-white px-3 py-2 text-center text-sm font-semibold leading-tight break-words text-slate-700 ring-1 ring-line disabled:opacity-60 dark:bg-surface dark:text-slate-300">
+                  <button type="button" onClick={() => void runAction(() => stopHumanTakeover(selectedConversation.id))} disabled={isActionLoading || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
                     Devolver para IA
                   </button>
-                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-white px-3 py-2 text-center text-sm font-semibold leading-tight break-words text-slate-700 ring-1 ring-line disabled:opacity-60 dark:bg-surface dark:text-slate-300">
+                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
                     Concluir atendimento
                   </button>
                   <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "VENDA_CONCLUIDA", closedReason: "Venda fechada", saleSummary }))} disabled={isActionLoading || isConversationClosed || !saleSummary.trim()} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-ink px-3 py-2 text-center text-sm font-semibold leading-tight break-words text-white disabled:opacity-60">

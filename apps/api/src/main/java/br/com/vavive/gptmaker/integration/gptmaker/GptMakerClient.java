@@ -2004,11 +2004,11 @@ public class GptMakerClient {
         }
         try {
             ResponseEntity<String> response = feignClient.listTransferRules(agentId);
-            return parseResponse(response, "/v2/transfer-rules/agent/" + agentId);
+            return parseResponse(response, "/v2/agent/" + agentId + "/transfer-rules");
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/transfer-rules/agent/" + agentId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/transfer-rules");
         }
     }
 
@@ -2024,11 +2024,11 @@ public class GptMakerClient {
         }
         try {
             ResponseEntity<String> response = feignClient.listIdleActions(agentId);
-            return parseResponse(response, "/v2/idle-actions/agent/" + agentId);
+            return parseResponse(response, "/v2/agent/" + agentId + "/idle-actions");
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/idle-actions/agent/" + agentId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/idle-actions");
         }
     }
 
@@ -2044,15 +2044,18 @@ public class GptMakerClient {
         }
         try {
             ResponseEntity<String> response = feignClient.createIdleAction(agentId, action);
-            return parseResponse(response, "/v2/idle-actions/agent/" + agentId);
+            return parseResponse(response, "/v2/agent/" + agentId + "/idle-actions");
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/idle-actions/agent/" + agentId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/idle-actions");
         }
     }
 
-    public JsonNode updateIdleAction(String actionId, Object action) {
+    public JsonNode updateIdleAction(String agentId, String actionId, Object action) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agent ID e obrigatorio.");
+        }
         if (actionId == null || actionId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_ACTION", "Action ID e obrigatorio.");
         }
@@ -2063,16 +2066,19 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<String> response = feignClient.updateIdleAction(actionId, action);
-            return parseResponse(response, "/v2/idle-action/" + actionId);
+            ResponseEntity<String> response = feignClient.updateIdleAction(agentId, actionId, action);
+            return parseResponse(response, "/v2/agent/" + agentId + "/idle-actions/" + actionId);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/idle-action/" + actionId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/idle-actions/" + actionId);
         }
     }
 
-    public void deleteIdleAction(String actionId) {
+    public void deleteIdleAction(String agentId, String actionId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agent ID e obrigatorio.");
+        }
         if (actionId == null || actionId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_ACTION", "Action ID e obrigatorio.");
         }
@@ -2083,11 +2089,11 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            feignClient.deleteIdleAction(actionId);
+            feignClient.deleteIdleAction(agentId, actionId);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/idle-action/" + actionId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/idle-actions/" + actionId);
         }
     }
 
@@ -2103,15 +2109,18 @@ public class GptMakerClient {
         }
         try {
             ResponseEntity<String> response = feignClient.createTransferRule(agentId, rule);
-            return parseResponse(response, "/v2/transfer-rules/agent/" + agentId);
+            return parseResponse(response, "/v2/agent/" + agentId + "/transfer-rules");
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/transfer-rules/agent/" + agentId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/transfer-rules");
         }
     }
 
-    public JsonNode updateTransferRule(String ruleId, Object rule) {
+    public JsonNode updateTransferRule(String agentId, String ruleId, Object rule) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agent ID e obrigatorio.");
+        }
         if (ruleId == null || ruleId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_RULE", "Rule ID e obrigatorio.");
         }
@@ -2122,16 +2131,19 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            ResponseEntity<String> response = feignClient.updateTransferRule(ruleId, rule);
-            return parseResponse(response, "/v2/transfer-rule/" + ruleId);
+            ResponseEntity<String> response = feignClient.updateTransferRule(agentId, ruleId, rule);
+            return parseResponse(response, "/v2/agent/" + agentId + "/transfer-rules/" + ruleId);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/transfer-rule/" + ruleId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/transfer-rules/" + ruleId);
         }
     }
 
-    public void deleteTransferRule(String ruleId) {
+    public void deleteTransferRule(String agentId, String ruleId) {
+        if (agentId == null || agentId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_AGENT", "Agent ID e obrigatorio.");
+        }
         if (ruleId == null || ruleId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_RULE", "Rule ID e obrigatorio.");
         }
@@ -2142,11 +2154,11 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE);
         }
         try {
-            feignClient.deleteTransferRule(ruleId);
+            feignClient.deleteTransferRule(agentId, ruleId);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "GPTMaker indisponivel agora.", exception.getMessage());
         } catch (FeignException exception) {
-            throw mapFeignException(exception, "/v2/transfer-rule/" + ruleId);
+            throw mapFeignException(exception, "/v2/agent/" + agentId + "/transfer-rules/" + ruleId);
         }
     }
 

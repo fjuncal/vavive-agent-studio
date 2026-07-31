@@ -26,9 +26,9 @@ type TrainingForm = {
 };
 
 const trainingTypes = [
-  { value: "TEXT" as const, label: "Texto", icon: Type, description: "Conteúdo digitado diretamente" },
+  { value: "TEXT" as const, label: "Texto", icon: Type, description: "ConteÃºdo digitado diretamente" },
   { value: "WEBSITE" as const, label: "Website", icon: Globe, description: "Importar de URL" },
-  { value: "VIDEO" as const, label: "Vídeo", icon: Video, description: "Transcrição de vídeo" },
+  { value: "VIDEO" as const, label: "VÃ­deo", icon: Video, description: "TranscriÃ§Ã£o de vÃ­deo" },
   { value: "DOCUMENT" as const, label: "Documento", icon: FileTextIcon, description: "PDF, DOC, TXT" }
 ];
 
@@ -168,7 +168,7 @@ export default function AgentTrainingsPage() {
     try {
       await deleteGptMakerTraining(params.id, trainingId);
       setGptMakerTrainings((current) => current.filter((t: any) => t.id !== trainingId));
-      setSuccess("Treinamento excluído com sucesso.");
+      setSuccess("Treinamento excluÃ­do com sucesso.");
       setError(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Erro ao excluir treinamento.");
@@ -220,7 +220,7 @@ export default function AgentTrainingsPage() {
         title="Treinamento do Agente"
         description="Ensine o agente com informacoes da sua franquia e revise o conteudo antes de publicar."
       />
-      {!agentReady ? <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/50 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">Agente ainda não configurado. O treinamento será salvo localmente até que a integração seja configurada.</div> : null}
+      {!agentReady ? <div className="rounded-2xl bg-amber-50 dark:bg-amber-950/50 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">Agente ainda nÃ£o configurado. O treinamento serÃ¡ salvo localmente atÃ© que a integraÃ§Ã£o seja configurada.</div> : null}
 
       {error ? (
         <div className="flex items-start gap-3 rounded-2xl bg-rose-50 dark:bg-rose-950/50 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">
@@ -249,7 +249,7 @@ export default function AgentTrainingsPage() {
         </div>
         <div className="mt-4 rounded-xl bg-mist dark:bg-slate-800/50 px-4 py-3">
           <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>Status</p>
-          <p className="mt-2 text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{agentReady ? "Conectado" : "Não configurado"}</p>
+          <p className="mt-2 text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>{agentReady ? "Conectado" : "NÃ£o configurado"}</p>
         </div>
         {!agentReady && agent ? (
           <div className="mt-4 flex flex-wrap items-center gap-3 rounded-xl bg-amber-50 dark:bg-amber-950/50 px-4 py-3 text-sm text-amber-800 dark:text-amber-300">
@@ -407,7 +407,7 @@ export default function AgentTrainingsPage() {
                 ))}
               </div>
             ) : (
-              <EmptyState icon={FileText} title="Nenhum treinamento publicado" description="Treinamentos publicados aparecerão aqui." />
+              <EmptyState icon={FileText} title="Nenhum treinamento publicado" description="Treinamentos publicados aparecerÃ£o aqui." />
             )}
           </FormSection>
         </div>

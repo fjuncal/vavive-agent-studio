@@ -137,7 +137,7 @@ export default function AgentSettingsPage() {
         });
       })
       .catch((requestError) => {
-        setError(requestError instanceof Error ? requestError.message : "Não foi possível carregar as configurações do agente.");
+        setError(requestError instanceof Error ? requestError.message : "NÃ£o foi possÃ­vel carregar as configuraÃ§Ãµes do agente.");
       })
       .finally(() => setIsLoading(false));
   }, [params?.id]);
@@ -157,9 +157,9 @@ export default function AgentSettingsPage() {
     setSuccess(null);
     try {
       await updateAgentSettings(params.id, settings as unknown as Record<string, unknown>);
-      setSuccess("Configurações salvas com sucesso.");
+      setSuccess("ConfiguraÃ§Ãµes salvas com sucesso.");
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "Não foi possível salvar as configurações.");
+      setError(requestError instanceof Error ? requestError.message : "NÃ£o foi possÃ­vel salvar as configuraÃ§Ãµes.");
     } finally {
       setIsSaving(false);
     }
@@ -169,7 +169,7 @@ export default function AgentSettingsPage() {
     <AppShell>
       <PageHeader
         eyebrow="Agente"
-        title="Configurações do agente"
+        title="ConfiguraÃ§Ãµes do agente"
         description="Ajuste o modelo, comportamento e limites do agente."
         backHref={`/franquias/${params?.id}/agente`}
       />
@@ -179,14 +179,14 @@ export default function AgentSettingsPage() {
 
       {isLoading ? (
         <section className="card p-6">
-          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando configurações...</p>
+          <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando configuraÃ§Ãµes...</p>
         </section>
       ) : (
         <form onSubmit={handleSave} className="grid gap-5">
           {/* Modelo e Timezone */}
           <section className="card">
-            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Modelo e Região</h2>
-            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Defina o modelo de linguagem e o fuso horário do agente.</p>
+            <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Modelo e RegiÃ£o</h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Defina o modelo de linguagem e o fuso horÃ¡rio do agente.</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Modelo preferido</span>
@@ -201,7 +201,7 @@ export default function AgentSettingsPage() {
                 </select>
               </label>
               <label className="grid gap-1.5">
-                <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Fuso horário</span>
+                <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Fuso horÃ¡rio</span>
                 <select
                   className="input-field"
                   value={settings.timezone}
@@ -221,20 +221,20 @@ export default function AgentSettingsPage() {
             <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Controle como o agente interage com os clientes.</p>
             <div className="mt-5 grid gap-5">
               <Toggle
-                label="Transferência para humano"
+                label="TransferÃªncia para humano"
                 description="Permite que o agente transfira a conversa para um atendente humano."
                 checked={settings.enabledHumanTransfer}
                 onChange={(value) => updateField("enabledHumanTransfer", value)}
               />
               <Toggle
-                label="Lembretes automáticos"
-                description="Envia lembretes automáticos para conversas inativas."
+                label="Lembretes automÃ¡ticos"
+                description="Envia lembretes automÃ¡ticos para conversas inativas."
                 checked={settings.enabledReminder}
                 onChange={(value) => updateField("enabledReminder", value)}
               />
               <Toggle
                 label="Dividir mensagens"
-                description="Divide mensagens longas em múltiplas mensagens curtas."
+                description="Divide mensagens longas em mÃºltiplas mensagens curtas."
                 checked={settings.splitMessages}
                 onChange={(value) => updateField("splitMessages", value)}
               />
@@ -262,7 +262,7 @@ export default function AgentSettingsPage() {
           {/* Agrupamento e Limites */}
           <section className="card">
             <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Agrupamento e Limites</h2>
-            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Configure agrupamento de mensagens e limites diários.</p>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Configure agrupamento de mensagens e limites diÃ¡rios.</p>
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <label className="grid gap-1.5">
                 <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Agrupamento de mensagens</span>
@@ -276,11 +276,11 @@ export default function AgentSettingsPage() {
                   ))}
                 </select>
                 <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                  Agrupa mensagens consecutivas do cliente em uma única entrega.
+                  Agrupa mensagens consecutivas do cliente em uma Ãºnica entrega.
                 </span>
               </label>
               <label className="grid gap-1.5">
-                <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Limite diário de mensagens</span>
+                <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Limite diÃ¡rio de mensagens</span>
                 <select
                   className="input-field"
                   value={settings.maxDailyMessages === null ? "" : String(settings.maxDailyMessages)}
@@ -291,7 +291,7 @@ export default function AgentSettingsPage() {
                   ))}
                 </select>
                 <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                  Número máximo de mensagens enviadas pelo agente por dia.
+                  NÃºmero mÃ¡ximo de mensagens enviadas pelo agente por dia.
                 </span>
               </label>
             </div>
@@ -304,7 +304,7 @@ export default function AgentSettingsPage() {
               disabled={isSaving}
               className="btn-primary disabled:cursor-wait disabled:opacity-70"
             >
-              {isSaving ? "Salvando..." : "Salvar configurações"}
+              {isSaving ? "Salvando..." : "Salvar configuraÃ§Ãµes"}
             </button>
           </div>
         </form>

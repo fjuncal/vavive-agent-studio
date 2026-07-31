@@ -209,29 +209,29 @@ public interface GptMakerFeignClient {
     @DeleteMapping("/v2/contact/{contactId}/delete")
     ResponseEntity<String> deleteContact(@PathVariable String contactId);
 
-    @GetMapping("/v2/transfer-rules/agent/{agentId}")
+    @GetMapping("/v2/agent/{agentId}/transfer-rules")
     ResponseEntity<String> listTransferRules(@PathVariable String agentId);
 
-    @PostMapping("/v2/transfer-rules/agent/{agentId}")
+    @PostMapping("/v2/agent/{agentId}/transfer-rules")
     ResponseEntity<String> createTransferRule(@PathVariable String agentId, @RequestBody Object rule);
 
-    @PutMapping("/v2/transfer-rule/{ruleId}")
-    ResponseEntity<String> updateTransferRule(@PathVariable String ruleId, @RequestBody Object rule);
+    @PutMapping("/v2/agent/{agentId}/transfer-rules/{ruleId}")
+    ResponseEntity<String> updateTransferRule(@PathVariable String agentId, @PathVariable String ruleId, @RequestBody Object rule);
 
-    @DeleteMapping("/v2/transfer-rule/{ruleId}")
-    ResponseEntity<String> deleteTransferRule(@PathVariable String ruleId);
+    @DeleteMapping("/v2/agent/{agentId}/transfer-rules/{ruleId}")
+    ResponseEntity<String> deleteTransferRule(@PathVariable String agentId, @PathVariable String ruleId);
 
-    @GetMapping("/v2/idle-actions/agent/{agentId}")
+    @GetMapping("/v2/agent/{agentId}/idle-actions")
     ResponseEntity<String> listIdleActions(@PathVariable String agentId);
 
-    @PostMapping("/v2/idle-actions/agent/{agentId}")
+    @PostMapping("/v2/agent/{agentId}/idle-actions")
     ResponseEntity<String> createIdleAction(@PathVariable String agentId, @RequestBody Object action);
 
-    @PutMapping("/v2/idle-action/{actionId}")
-    ResponseEntity<String> updateIdleAction(@PathVariable String actionId, @RequestBody Object action);
+    @PutMapping("/v2/agent/{agentId}/idle-actions/{actionId}")
+    ResponseEntity<String> updateIdleAction(@PathVariable String agentId, @PathVariable String actionId, @RequestBody Object action);
 
-    @DeleteMapping("/v2/idle-action/{actionId}")
-    ResponseEntity<String> deleteIdleAction(@PathVariable String actionId);
+    @DeleteMapping("/v2/agent/{agentId}/idle-actions/{actionId}")
+    ResponseEntity<String> deleteIdleAction(@PathVariable String agentId, @PathVariable String actionId);
 
     @PutMapping("/v2/training/{trainingId}")
     ResponseEntity<String> updateTraining(@PathVariable String trainingId, @RequestBody Object training);
