@@ -560,6 +560,17 @@ async function parseError(response: Response): Promise<ApiError> {
   return error;
 }
 
+function createNetworkError(path: string): ApiError {
+  const message =
+    path === "/auth/login"
+      ? "Nao foi possivel conectar ao servidor para fazer login. Verifique sua conexao e tente novamente."
+      : "Nao foi possivel conectar ao servidor. Verifique sua conexao e tente novamente.";
+
+  const error = new Error(message) as ApiError;
+  error.status = 0;
+  return error;
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
   const token = getStoredToken();
@@ -571,10 +582,18 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers
+    });
+  } catch (requestError) {
+    if (requestError instanceof TypeError) {
+      throw createNetworkError(path);
+    }
+    throw requestError;
+  }
 
   if (!response.ok) {
     if (response.status === 401 && typeof window !== "undefined") {
