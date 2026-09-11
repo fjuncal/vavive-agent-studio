@@ -12,6 +12,7 @@ import br.com.vavive.gptmaker.dto.ConversationCompleteRequest;
 import br.com.vavive.gptmaker.dto.ConversationHandoffEventResponse;
 import br.com.vavive.gptmaker.dto.ConversationManualMessageRequest;
 import br.com.vavive.gptmaker.dto.ConversationMessageResponse;
+import br.com.vavive.gptmaker.dto.ConversationMessagePageResponse;
 import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
@@ -41,6 +42,9 @@ import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ConversationService {
+    private static final int MAX_MESSAGE_PAGE_SIZE = 100;
+    private static final int CHAT_SYNC_PAGE = 1;
+    private static final int CHAT_SYNC_PAGE_SIZE = 50;
     private final ConversationSessionRepository conversationSessionRepository;
     private final ConversationHandoffEventRepository handoffEventRepository;
     private final FranchiseRepository franchiseRepository;
@@ -77,8 +81,6 @@ public class ConversationService {
             if (user.getRole() == UserRole.SUPER_ADMIN) {
                 if (franchiseId != null) {
                     syncFranchise(requireFranchise(franchiseId));
-                } else {
-                    franchiseRepository.findAll().forEach(this::syncFranchiseSilently);
                 }
             } else {
                 syncFranchiseSilently(currentUserService.requireFranchise(user));
@@ -101,80 +103,57 @@ public class ConversationService {
     }
 
     @Transactional(readOnly = true)
-    public List<ConversationMessageResponse> listMessages(UUID conversationId) {
+    public ConversationMessagePageResponse listMessages(UUID conversationId, int page, int pageSize) {
+        validateMessagePagination(page, pageSize);
         ConversationSession session = requireAccessibleConversation(conversationId);
         if (session.getChatId() != null && !session.getChatId().isBlank()) {
             try {
-                List<ConversationMessageResponse> remoteMessages = gptMakerClient.listChatMessages(session.getChatId()).stream()
-                    .map(item -> new ConversationMessageResponse(
-                        item.id(),
-                        item.role(),
-                        item.type(),
-                        item.text(),
-                        item.userName(),
-                        item.userPicture(),
-                        item.imageUrl(),
-                        item.audioUrl(),
-                        item.documentUrl(),
-                        item.fileName(),
-                        item.mediaContent(),
-                        item.time(),
-                        item.width(),
-                        item.height()
-                    ))
+                List<ConversationMessageResponse> remoteMessages = gptMakerClient.listChatMessages(session.getChatId(), page, pageSize).stream()
+                    .map(this::toMessageResponse)
                     .toList();
                 if (!remoteMessages.isEmpty()) {
-                    return remoteMessages;
+                    return messagePage(remoteMessages, page, pageSize);
                 }
             } catch (GptMakerIntegrationException ignored) {
             }
         }
 
-        if (session.getInteractionId() != null && !session.getInteractionId().isBlank()) {
+        if (page == 1 && session.getInteractionId() != null && !session.getInteractionId().isBlank()) {
             try {
                 List<ConversationMessageResponse> remoteMessages = gptMakerClient.listInteractionMessages(session.getInteractionId()).stream()
-                    .map(item -> new ConversationMessageResponse(
-                        item.id(),
-                        item.role(),
-                        item.type(),
-                        item.text(),
-                        item.userName(),
-                        item.userPicture(),
-                        item.imageUrl(),
-                        item.audioUrl(),
-                        item.documentUrl(),
-                        item.fileName(),
-                        item.mediaContent(),
-                        item.time(),
-                        item.width(),
-                        item.height()
-                    ))
+                    .map(this::toMessageResponse)
                     .toList();
                 if (!remoteMessages.isEmpty()) {
-                    return remoteMessages;
+                    return new ConversationMessagePageResponse(remoteMessages, page, pageSize, false);
                 }
             } catch (GptMakerIntegrationException exception) {
                 throw new ResponseStatusException(statusFor(exception), exception.getMessage());
             }
         }
 
+        if (page > 1) {
+            return new ConversationMessagePageResponse(List.of(), page, pageSize, false);
+        }
+
         List<ConversationMessageResponse> localMessages = new ArrayList<>();
-        localMessages.add(new ConversationMessageResponse(
-            session.getId().toString() + "-prompt",
-            "USER",
-            "TEXT",
-            session.getFirstPrompt(),
-            displayCustomerName(session),
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            session.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
-            null,
-            null
-        ));
+        if (session.getFirstPrompt() != null && !session.getFirstPrompt().isBlank()) {
+            localMessages.add(new ConversationMessageResponse(
+                session.getId().toString() + "-prompt",
+                "USER",
+                "TEXT",
+                session.getFirstPrompt(),
+                displayCustomerName(session),
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                session.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli(),
+                null,
+                null
+            ));
+        }
         if (session.getLastResponse() != null && !session.getLastResponse().isBlank()) {
             localMessages.add(new ConversationMessageResponse(
             session.getId().toString() + "-response",
@@ -193,7 +172,7 @@ public class ConversationService {
                 null
             ));
         }
-        return localMessages;
+        return new ConversationMessagePageResponse(localMessages, page, pageSize, false);
     }
 
     @Transactional
@@ -520,7 +499,7 @@ public class ConversationService {
             existingSessions.stream()
                 .sorted(Comparator.comparing(ConversationSession::getUpdatedAt).reversed())
                 .forEach(session -> sessionsByIdentity.putIfAbsent(conversationIdentity(session), session));
-            for (var chat : gptMakerClient.listChats(franchise.getWorkspaceId())) {
+            for (var chat : gptMakerClient.listChats(franchise.getWorkspaceId(), CHAT_SYNC_PAGE, CHAT_SYNC_PAGE_SIZE)) {
                 ConversationSession session = sessionsByIdentity.get(remoteConversationIdentity(chat.id(), null, "chat-" + chat.id()));
                 if (session == null && chat.id() != null && !chat.id().isBlank()) {
                     session = conversationSessionRepository.findFirstByFranchiseIdAndChatId(franchise.getId(), chat.id()).orElse(null);
@@ -564,6 +543,40 @@ public class ConversationService {
             .sorted(Comparator.comparing(ConversationService::sessionSortTimestamp).reversed())
             .forEach(session -> uniqueSessions.putIfAbsent(conversationIdentity(session), session));
         return List.copyOf(uniqueSessions.values());
+    }
+
+    private void validateMessagePagination(int page, int pageSize) {
+        if (page < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A pagina deve ser maior ou igual a 1.");
+        }
+        if (pageSize < 1 || pageSize > MAX_MESSAGE_PAGE_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tamanho da pagina deve estar entre 1 e " + MAX_MESSAGE_PAGE_SIZE + ".");
+        }
+    }
+
+    private ConversationMessagePageResponse messagePage(List<ConversationMessageResponse> items, int page, int pageSize) {
+        return new ConversationMessagePageResponse(items, page, pageSize, items.size() == pageSize);
+    }
+
+    private ConversationMessageResponse toMessageResponse(
+        br.com.vavive.gptmaker.integration.gptmaker.dto.GptMakerConversationMessageResponse item
+    ) {
+        return new ConversationMessageResponse(
+            item.id(),
+            item.role(),
+            item.type(),
+            item.text(),
+            item.userName(),
+            item.userPicture(),
+            item.imageUrl(),
+            item.audioUrl(),
+            item.documentUrl(),
+            item.fileName(),
+            item.mediaContent(),
+            item.time(),
+            item.width(),
+            item.height()
+        );
     }
 
     private String conversationIdentity(ConversationSession session) {

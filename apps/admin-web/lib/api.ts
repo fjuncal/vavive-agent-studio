@@ -386,6 +386,13 @@ export type ConversationMessage = {
   height?: number | null;
 };
 
+export type ConversationMessagePage = {
+  items: ConversationMessage[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
 export type StartHumanTakeoverResult = {
   conversationId: string;
   success: boolean;
@@ -882,8 +889,9 @@ export function getConversations(filters: { franchiseId?: string; status?: strin
   return apiFetch<ConversationSummary[]>(`/conversations${suffix}`);
 }
 
-export function getConversationMessages(id: string) {
-  return apiFetch<ConversationMessage[]>(`/conversations/${id}/messages`);
+export function getConversationMessages(id: string, page = 1, pageSize = 30) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  return apiFetch<ConversationMessagePage>(`/conversations/${id}/messages?${params.toString()}`);
 }
 
 export function startHumanTakeover(id: string) {

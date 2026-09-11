@@ -816,9 +816,27 @@ class FranchiseSecurityIntegrationTest {
         String conversationId = objectMapper.readTree(created).get("conversationId").asText();
 
         mockMvc.perform(get("/conversations/{id}/messages", conversationId)
+                .param("page", "1")
+                .param("pageSize", "30")
                 .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].text").value("Quero saber mais sobre atendimento."));
+            .andExpect(jsonPath("$.items[0].text").value("Quero saber mais sobre atendimento."))
+            .andExpect(jsonPath("$.page").value(1))
+            .andExpect(jsonPath("$.pageSize").value(30))
+            .andExpect(jsonPath("$.hasMore").value(false));
+
+        mockMvc.perform(get("/conversations/{id}/messages", conversationId)
+                .param("page", "2")
+                .param("pageSize", "30")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.items").isEmpty())
+            .andExpect(jsonPath("$.hasMore").value(false));
+
+        mockMvc.perform(get("/conversations/{id}/messages", conversationId)
+                .param("page", "0")
+                .header("Authorization", bearerToken("franquia@vavive.com", "admin123")))
+            .andExpect(status().isBadRequest());
 
         mockMvc.perform(get("/conversations/{id}/messages", conversationId)
                 .header("Authorization", bearerToken("osasco@vavive.com", "admin123")))

@@ -136,6 +136,47 @@ class GptMakerClientTest {
     }
 
     @Test
+    void listChatMessagesPropagatesPagination() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        feignClient.chatMessagesPayload = """
+            [{"id":"message-1","role":"USER","type":"TEXT","text":"Ola","time":123}]
+            """;
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            new ObjectMapper()
+        );
+
+        var messages = client.listChatMessages("chat-1", 3, 30);
+
+        assertEquals(1, messages.size());
+        assertEquals("message-1", messages.getFirst().id());
+        assertEquals("chat-1", feignClient.lastMessagesChatId);
+        assertEquals(3, feignClient.lastMessagesPage);
+        assertEquals(30, feignClient.lastMessagesPageSize);
+    }
+
+    @Test
+    void listChatsUsesExplicitPagination() {
+        TrackingFeignClient feignClient = new TrackingFeignClient();
+        feignClient.chatsPayload = """
+            [{"id":"chat-1","agentId":"agent-1","conversation":"Ola","time":123}]
+            """;
+        GptMakerClient client = new GptMakerClient(
+            new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
+            feignClient,
+            new ObjectMapper()
+        );
+
+        var chats = client.listChats("workspace-1", 1, 50);
+
+        assertEquals(1, chats.size());
+        assertEquals("chat-1", chats.getFirst().id());
+        assertEquals(1, feignClient.lastChatsPage);
+        assertEquals(50, feignClient.lastChatsPageSize);
+    }
+
+    @Test
     void diagnosticsReturnsConnectedWhenRealModeListsWorkspaces() {
         TrackingFeignClient feignClient = new TrackingFeignClient();
         ObjectMapper objectMapper = new ObjectMapper();
@@ -441,8 +482,15 @@ class GptMakerClientTest {
         String workspacePayload = "[]";
         String agentPayload = "[]";
         String createAgentPayload = "{}";
+        String chatsPayload = "[]";
+        String chatMessagesPayload = "[]";
         String lastCreateAgentWorkspaceId;
         GptMakerCreateAgentRequest lastCreateAgentRequest;
+        String lastMessagesChatId;
+        Integer lastMessagesPage;
+        Integer lastMessagesPageSize;
+        Integer lastChatsPage;
+        Integer lastChatsPageSize;
 
         @Override
         public ResponseEntity<String> listWorkspaces() {
@@ -488,12 +536,17 @@ class GptMakerClientTest {
 
         @Override
         public ResponseEntity<String> listChats(String workspaceId, String agentId, Integer page, Integer pageSize, String query) {
-            return ResponseEntity.ok("[]");
+            lastChatsPage = page;
+            lastChatsPageSize = pageSize;
+            return ResponseEntity.ok(chatsPayload);
         }
 
         @Override
         public ResponseEntity<String> listChatMessages(String chatId, Integer page, Integer pageSize) {
-            return ResponseEntity.ok("[]");
+            lastMessagesChatId = chatId;
+            lastMessagesPage = page;
+            lastMessagesPageSize = pageSize;
+            return ResponseEntity.ok(chatMessagesPayload);
         }
 
         @Override

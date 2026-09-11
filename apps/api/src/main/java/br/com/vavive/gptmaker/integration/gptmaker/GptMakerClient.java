@@ -572,6 +572,10 @@ public class GptMakerClient {
     }
 
     public List<GptMakerChatResponse> listChats(String workspaceId) {
+        return listChats(workspaceId, 1, 50);
+    }
+
+    public List<GptMakerChatResponse> listChats(String workspaceId, int page, int pageSize) {
         String endpoint = "/v2/workspace/%s/chats".formatted(workspaceId == null ? "" : workspaceId);
         if (workspaceId == null || workspaceId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
@@ -583,7 +587,7 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
-            ResponseEntity<String> response = feignClient.listChats(workspaceId, null, null, null, null);
+            ResponseEntity<String> response = feignClient.listChats(workspaceId, null, page, pageSize, null);
             JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
             return parseChats(payload, endpoint);
         } catch (RetryableException exception) {
@@ -594,6 +598,10 @@ public class GptMakerClient {
     }
 
     public List<GptMakerConversationMessageResponse> listChatMessages(String chatId) {
+        return listChatMessages(chatId, 1, 30);
+    }
+
+    public List<GptMakerConversationMessageResponse> listChatMessages(String chatId, int page, int pageSize) {
         String endpoint = "/v2/chat/%s/messages".formatted(chatId == null ? "" : chatId);
         if (chatId == null || chatId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, endpoint, null);
@@ -605,7 +613,7 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
-            ResponseEntity<String> response = feignClient.listChatMessages(chatId, null, null);
+            ResponseEntity<String> response = feignClient.listChatMessages(chatId, page, pageSize);
             JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
             return parseConversationMessages(payload, endpoint);
         } catch (RetryableException exception) {

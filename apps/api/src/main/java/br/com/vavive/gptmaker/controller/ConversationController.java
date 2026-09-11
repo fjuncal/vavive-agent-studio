@@ -4,7 +4,7 @@ import br.com.vavive.gptmaker.dto.ConversationActionResponse;
 import br.com.vavive.gptmaker.dto.ConversationCompleteRequest;
 import br.com.vavive.gptmaker.dto.ConversationHandoffEventResponse;
 import br.com.vavive.gptmaker.dto.ConversationManualMessageRequest;
-import br.com.vavive.gptmaker.dto.ConversationMessageResponse;
+import br.com.vavive.gptmaker.dto.ConversationMessagePageResponse;
 import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
@@ -42,8 +42,12 @@ public class ConversationController {
     }
 
     @GetMapping("/conversations/{id}/messages")
-    public List<ConversationMessageResponse> listMessages(@PathVariable UUID id) {
-        return conversationService.listMessages(id);
+    public ConversationMessagePageResponse listMessages(
+        @PathVariable UUID id,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "30") int pageSize
+    ) {
+        return conversationService.listMessages(id, page, pageSize);
     }
 
     @PutMapping("/conversations/{id}/start-human")

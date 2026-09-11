@@ -21,7 +21,10 @@ import {
   type FranchiseSummary
 } from "@/lib/api";
 import { Bot, Building2, Loader2, MessageSquareText, Phone, Send, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+
+const MESSAGE_PAGE_SIZE = 30;
+const LOAD_OLDER_THRESHOLD_PX = 120;
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -134,6 +137,20 @@ function displayCustomerName(value?: string | null) {
   return trimmed ? trimmed : "desconhecido";
 }
 
+function messageIdentity(message: ConversationMessage) {
+  return message.id || [message.time, message.role, message.type, message.text].join(":");
+}
+
+function prependAndSortMessages(current: ConversationMessage[], older: ConversationMessage[]) {
+  const unique = new Map<string, ConversationMessage>();
+  [...older, ...current].forEach((message) => unique.set(messageIdentity(message), message));
+  return Array.from(unique.values()).sort((left, right) => {
+    const leftTime = normalizeTimestamp(left.time) ?? 0;
+    const rightTime = normalizeTimestamp(right.time) ?? 0;
+    return leftTime - rightTime;
+  });
+}
+
 const statusOptions = [
   { value: "", label: "Todos" },
   { value: "aguardando_ia", label: "Aguardando IA" },
@@ -160,6 +177,18 @@ export default function ConversationsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [currentMessagePage, setCurrentMessagePage] = useState(1);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const loadedMessagePagesRef = useRef(new Set<number>());
+  const currentMessagePageRef = useRef(1);
+  const hasMoreMessagesRef = useRef(false);
+  const messageRequestInFlightRef = useRef(false);
+  const messageLoadGenerationRef = useRef(0);
+  const initializedConversationRef = useRef<string | null>(null);
+  const pendingScrollAdjustmentRef = useRef<{ height: number; top: number } | "bottom" | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -213,21 +242,109 @@ export default function ConversationsPage() {
     void loadConversations();
   }, [selectedFranchiseId, selectedStatus, user]);
 
+  async function loadInitialMessages(conversationId: string) {
+    const generation = ++messageLoadGenerationRef.current;
+    initializedConversationRef.current = conversationId;
+    loadedMessagePagesRef.current = new Set();
+    currentMessagePageRef.current = 1;
+    hasMoreMessagesRef.current = false;
+    messageRequestInFlightRef.current = true;
+    pendingScrollAdjustmentRef.current = null;
+    setMessages([]);
+    setCurrentMessagePage(1);
+    setHasMoreMessages(false);
+    setIsLoadingMessages(true);
+    setIsLoadingOlderMessages(false);
+    try {
+      const response = await getConversationMessages(conversationId, 1, MESSAGE_PAGE_SIZE);
+      if (generation !== messageLoadGenerationRef.current) return;
+      loadedMessagePagesRef.current.add(1);
+      pendingScrollAdjustmentRef.current = "bottom";
+      setMessages(response.items);
+      currentMessagePageRef.current = 1;
+      hasMoreMessagesRef.current = response.hasMore;
+      setCurrentMessagePage(1);
+      setHasMoreMessages(response.hasMore);
+    } catch {
+      if (generation !== messageLoadGenerationRef.current) return;
+      setMessages([]);
+      hasMoreMessagesRef.current = false;
+      setHasMoreMessages(false);
+    } finally {
+      if (generation === messageLoadGenerationRef.current) {
+        messageRequestInFlightRef.current = false;
+        setIsLoadingMessages(false);
+      }
+    }
+  }
+
+  async function loadOlderMessages() {
+    if (!selectedConversationId || messageRequestInFlightRef.current || !hasMoreMessagesRef.current) return;
+    const page = currentMessagePageRef.current + 1;
+    if (loadedMessagePagesRef.current.has(page)) return;
+
+    const generation = messageLoadGenerationRef.current;
+    const container = messagesContainerRef.current;
+    if (container) {
+      pendingScrollAdjustmentRef.current = { height: container.scrollHeight, top: container.scrollTop };
+    }
+    messageRequestInFlightRef.current = true;
+    setIsLoadingOlderMessages(true);
+    try {
+      const response = await getConversationMessages(selectedConversationId, page, MESSAGE_PAGE_SIZE);
+      if (generation !== messageLoadGenerationRef.current) return;
+      loadedMessagePagesRef.current.add(page);
+      currentMessagePageRef.current = page;
+      hasMoreMessagesRef.current = response.hasMore;
+      setMessages((current) => prependAndSortMessages(current, response.items));
+      setCurrentMessagePage(page);
+      setHasMoreMessages(response.hasMore);
+    } catch {
+      pendingScrollAdjustmentRef.current = null;
+    } finally {
+      if (generation === messageLoadGenerationRef.current) {
+        messageRequestInFlightRef.current = false;
+        setIsLoadingOlderMessages(false);
+      }
+    }
+  }
+
   useEffect(() => {
     if (!selectedConversationId) {
+      messageLoadGenerationRef.current += 1;
+      initializedConversationRef.current = null;
+      currentMessagePageRef.current = 1;
+      hasMoreMessagesRef.current = false;
       setMessages([]);
       setHandoffs([]);
+      setCurrentMessagePage(1);
+      setHasMoreMessages(false);
       return;
     }
-    const currentConversation = conversations.find((item) => item.id === selectedConversationId);
-    if (!currentConversation) {
-      setMessages([]);
-      setHandoffs([]);
-      return;
+    if (initializedConversationRef.current === selectedConversationId) return;
+    void loadInitialMessages(selectedConversationId);
+    const generation = messageLoadGenerationRef.current;
+    setHandoffs([]);
+    getConversationHandoffs(selectedConversationId)
+      .then((items) => {
+        if (generation === messageLoadGenerationRef.current) setHandoffs(items);
+      })
+      .catch(() => {
+        if (generation === messageLoadGenerationRef.current) setHandoffs([]);
+      });
+  }, [selectedConversationId]);
+
+  useLayoutEffect(() => {
+    const container = messagesContainerRef.current;
+    const pending = pendingScrollAdjustmentRef.current;
+    if (!container || !pending) return;
+    if (pending === "bottom") {
+      container.scrollTop = container.scrollHeight;
+    } else {
+      container.scrollTop = pending.top + (container.scrollHeight - pending.height);
     }
-    getConversationMessages(currentConversation.id).then(setMessages).catch(() => setMessages([]));
-    getConversationHandoffs(currentConversation.id).then(setHandoffs).catch(() => setHandoffs([]));
-  }, [conversations, selectedConversationId]);
+    pendingScrollAdjustmentRef.current = null;
+  }, [messages]);
 
   const selectedConversation = useMemo(
     () => conversations.find((item) => item.id === selectedConversationId) ?? null,
@@ -285,7 +402,7 @@ export default function ConversationsPage() {
       setSaleSummary("");
       await loadConversations();
       if (selectedConversationId) {
-        setMessages(await getConversationMessages(selectedConversationId));
+        await loadInitialMessages(selectedConversationId);
         setHandoffs(await getConversationHandoffs(selectedConversationId));
       }
     } catch (requestError) {
@@ -427,8 +544,29 @@ export default function ConversationsPage() {
 
               <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="grid min-w-0 gap-4">
-                  <div className="grid gap-5 overflow-x-hidden">
-                    {groupedMessages.length ? (
+                  <div
+                    ref={messagesContainerRef}
+                    onScroll={(event) => {
+                      if (event.currentTarget.scrollTop <= LOAD_OLDER_THRESHOLD_PX) {
+                        void loadOlderMessages();
+                      }
+                    }}
+                    data-current-page={currentMessagePage}
+                    data-has-more={hasMoreMessages}
+                    className="grid h-[calc(100vh-16rem)] min-h-[24rem] content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 scrollbar-thin"
+                  >
+                    {isLoadingOlderMessages ? (
+                      <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        <Loader2 size={14} className="animate-spin" />
+                        Carregando mensagens antigas...
+                      </div>
+                    ) : null}
+                    {isLoadingMessages ? (
+                      <div className="flex min-h-[20rem] items-center justify-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                        <Loader2 size={16} className="animate-spin" />
+                        Carregando mensagens...
+                      </div>
+                    ) : groupedMessages.length ? (
                       groupedMessages.map((group) => (
                         <section key={group.label} className="grid gap-3">
                           <div className="flex items-center gap-3">
