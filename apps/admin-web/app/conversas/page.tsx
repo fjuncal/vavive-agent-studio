@@ -26,8 +26,11 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const MESSAGE_PAGE_SIZE = 30;
 const CONVERSATION_PAGE_SIZE = 50;
+const POLLING_INTERVAL_MS = 10_000;
+const POLLING_MAX_BACKOFF_MS = 60_000;
 const LOAD_OLDER_THRESHOLD_PX = 120;
 const LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX = 160;
+const LOAD_NEWER_MESSAGES_THRESHOLD_PX = 160;
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -135,6 +138,32 @@ function sortConversationsByRecent(items: ConversationSummary[]) {
   });
 }
 
+function sameConversationSummary(left: ConversationSummary, right: ConversationSummary) {
+  return left.id === right.id
+    && left.chatId === right.chatId
+    && left.franchiseId === right.franchiseId
+    && left.franchiseName === right.franchiseName
+    && left.agentName === right.agentName
+    && left.customerName === right.customerName
+    && left.customerPhone === right.customerPhone
+    && left.customerPicture === right.customerPicture
+    && left.firstPrompt === right.firstPrompt
+    && left.lastResponse === right.lastResponse
+    && left.channelType === right.channelType
+    && left.operationalStatus === right.operationalStatus
+    && left.responsibleUserName === right.responsibleUserName
+    && left.syncStatus === right.syncStatus
+    && left.closedReason === right.closedReason
+    && left.saleOutcome === right.saleOutcome
+    && left.handoffStatus === right.handoffStatus
+    && left.humanTakeoverActive === right.humanTakeoverActive
+    && left.lastMessageAt === right.lastMessageAt
+    && left.createdAt === right.createdAt
+    && left.updatedAt === right.updatedAt
+    && left.read === right.read
+    && left.unReadCount === right.unReadCount;
+}
+
 function conversationKey(conversation: ConversationSummary) {
   if (conversation.chatId) {
     return `chat:${conversation.franchiseId}:${conversation.chatId}`;
@@ -147,8 +176,19 @@ function conversationKey(conversation: ConversationSummary) {
 
 function mergeConversations(current: ConversationSummary[], incoming: ConversationSummary[]) {
   const unique = new Map<string, ConversationSummary>();
-  [...current, ...incoming].forEach((conversation) => unique.set(conversationKey(conversation), conversation));
-  return sortConversationsByRecent(Array.from(unique.values()));
+  current.forEach((conversation) => unique.set(conversationKey(conversation), conversation));
+  incoming.forEach((conversation) => {
+    const key = conversationKey(conversation);
+    const existing = unique.get(key);
+    if (!existing || !sameConversationSummary(existing, conversation)) {
+      unique.set(key, conversation);
+    }
+  });
+  const sorted = sortConversationsByRecent(Array.from(unique.values()));
+  if (sorted.length === current.length && sorted.every((item, index) => item === current[index])) {
+    return current;
+  }
+  return sorted;
 }
 
 function conversationDate(value?: string | null) {
@@ -240,14 +280,41 @@ function messageIdentity(message: ConversationMessage) {
   return message.id || [message.time, message.role, message.type, message.text].join(":");
 }
 
-function prependAndSortMessages(current: ConversationMessage[], older: ConversationMessage[]) {
+function sameMessage(left: ConversationMessage, right: ConversationMessage) {
+  return left.id === right.id
+    && left.role === right.role
+    && left.type === right.type
+    && left.text === right.text
+    && left.userName === right.userName
+    && left.userPicture === right.userPicture
+    && left.imageUrl === right.imageUrl
+    && left.audioUrl === right.audioUrl
+    && left.documentUrl === right.documentUrl
+    && left.fileName === right.fileName
+    && left.mediaContent === right.mediaContent
+    && left.time === right.time
+    && left.width === right.width
+    && left.height === right.height;
+}
+
+function mergeMessages(current: ConversationMessage[], incoming: ConversationMessage[]) {
   const unique = new Map<string, ConversationMessage>();
-  [...older, ...current].forEach((message) => unique.set(messageIdentity(message), message));
+  current.forEach((message) => unique.set(messageIdentity(message), message));
+  incoming.forEach((message) => unique.set(messageIdentity(message), message));
   return Array.from(unique.values()).sort((left, right) => {
     const leftTime = normalizeTimestamp(left.time) ?? 0;
     const rightTime = normalizeTimestamp(right.time) ?? 0;
     return leftTime - rightTime;
   });
+}
+
+function countNewMessages(current: ConversationMessage[], incoming: ConversationMessage[]) {
+  const known = new Set(current.map(messageIdentity));
+  return incoming.reduce((count, message) => count + (known.has(messageIdentity(message)) ? 0 : 1), 0);
+}
+
+function prependAndSortMessages(current: ConversationMessage[], older: ConversationMessage[]) {
+  return mergeMessages(current, older);
 }
 
 const statusOptions = [
@@ -283,11 +350,19 @@ export default function ConversationsPage() {
   const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [currentMessagePage, setCurrentMessagePage] = useState(1);
+  const [pendingNewMessages, setPendingNewMessages] = useState(0);
   const conversationsContainerRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const conversationsRef = useRef<ConversationSummary[]>([]);
+  const selectedConversationIdRef = useRef("");
+  const messagesRef = useRef<ConversationMessage[]>([]);
   const currentConversationPageRef = useRef(0);
   const hasMoreConversationsRef = useRef(true);
   const conversationRequestInFlightRef = useRef(false);
+  const conversationPollingInFlightRef = useRef(false);
+  const pendingConversationReloadRef = useRef(false);
+  const loadConversationsRef = useRef<() => Promise<void>>(async () => undefined);
+  const pollingEffectActiveRef = useRef(false);
   const conversationMaterializationInFlightRef = useRef(false);
   const conversationLoadGenerationRef = useRef(0);
   const loadedMessagePagesRef = useRef(new Set<number>());
@@ -296,7 +371,17 @@ export default function ConversationsPage() {
   const messageRequestInFlightRef = useRef(false);
   const messageLoadGenerationRef = useRef(0);
   const initializedConversationRef = useRef<string | null>(null);
-  const pendingScrollAdjustmentRef = useRef<{ height: number; top: number } | "bottom" | null>(null);
+  const pendingOpenConversationRefreshRef = useRef<ConversationSummary | null>(null);
+  const pendingScrollAdjustmentRef = useRef<
+    { height: number; top: number }
+    | { preserveTop: number }
+    | "bottom"
+    | null
+  >(null);
+
+  conversationsRef.current = conversations;
+  selectedConversationIdRef.current = selectedConversationId;
+  messagesRef.current = messages;
 
   function selectConversation(conversation: ConversationSummary) {
     setError(null);
@@ -327,6 +412,10 @@ export default function ConversationsPage() {
     if (!user) {
       return;
     }
+    if (conversationPollingInFlightRef.current) {
+      pendingConversationReloadRef.current = true;
+      return;
+    }
     const generation = ++conversationLoadGenerationRef.current;
     currentConversationPageRef.current = 0;
     hasMoreConversationsRef.current = true;
@@ -352,6 +441,7 @@ export default function ConversationsPage() {
       currentConversationPageRef.current = response.page;
       hasMoreConversationsRef.current = response.hasMore;
       setHasMoreConversations(response.hasMore);
+      conversationsRef.current = nextItems;
       setConversations(nextItems);
       const selectedStillPresent = Boolean(selectedConversationId)
         && nextItems.some((item) => conversationKey(item) === selectedConversationId);
@@ -373,8 +463,10 @@ export default function ConversationsPage() {
     }
   }
 
+  loadConversationsRef.current = loadConversations;
+
   async function loadMoreConversations() {
-    if (!user || conversationRequestInFlightRef.current || !hasMoreConversationsRef.current) {
+    if (!user || conversationRequestInFlightRef.current || conversationPollingInFlightRef.current || !hasMoreConversationsRef.current) {
       return;
     }
     const page = currentConversationPageRef.current + 1;
@@ -390,7 +482,11 @@ export default function ConversationsPage() {
       currentConversationPageRef.current = response.page;
       hasMoreConversationsRef.current = response.hasMore;
       setHasMoreConversations(response.hasMore);
-      setConversations((current) => mergeConversations(current, response.items));
+      setConversations((current) => {
+        const merged = mergeConversations(current, response.items);
+        conversationsRef.current = merged;
+        return merged;
+      });
     } catch (requestError) {
       if (generation !== conversationLoadGenerationRef.current) return;
       if (conversations.length === 0) {
@@ -441,11 +537,14 @@ export default function ConversationsPage() {
     const conversationId = conversationKey(conversation);
     const generation = ++messageLoadGenerationRef.current;
     initializedConversationRef.current = conversationId;
+    pendingOpenConversationRefreshRef.current = null;
     loadedMessagePagesRef.current = new Set();
     currentMessagePageRef.current = 1;
     hasMoreMessagesRef.current = false;
     messageRequestInFlightRef.current = true;
     pendingScrollAdjustmentRef.current = null;
+    setPendingNewMessages(0);
+    messagesRef.current = [];
     setMessages([]);
     setCurrentMessagePage(1);
     setHasMoreMessages(false);
@@ -456,6 +555,7 @@ export default function ConversationsPage() {
       if (generation !== messageLoadGenerationRef.current) return;
       loadedMessagePagesRef.current.add(1);
       pendingScrollAdjustmentRef.current = "bottom";
+      messagesRef.current = response.items;
       setMessages(response.items);
       currentMessagePageRef.current = 1;
       hasMoreMessagesRef.current = response.hasMore;
@@ -463,6 +563,7 @@ export default function ConversationsPage() {
       setHasMoreMessages(response.hasMore);
     } catch {
       if (generation !== messageLoadGenerationRef.current) return;
+      messagesRef.current = [];
       setMessages([]);
       hasMoreMessagesRef.current = false;
       setHasMoreMessages(false);
@@ -471,6 +572,11 @@ export default function ConversationsPage() {
       if (generation === messageLoadGenerationRef.current) {
         messageRequestInFlightRef.current = false;
         setIsLoadingMessages(false);
+        const pendingConversation = pendingOpenConversationRefreshRef.current;
+        pendingOpenConversationRefreshRef.current = null;
+        if (pendingConversation && selectedConversationIdRef.current === conversationKey(pendingConversation)) {
+          void refreshOpenConversationMessages(pendingConversation);
+        }
       }
     }
   }
@@ -494,7 +600,11 @@ export default function ConversationsPage() {
       loadedMessagePagesRef.current.add(page);
       currentMessagePageRef.current = page;
       hasMoreMessagesRef.current = response.hasMore;
-      setMessages((current) => prependAndSortMessages(current, response.items));
+      setMessages((current) => {
+        const merged = prependAndSortMessages(current, response.items);
+        messagesRef.current = merged;
+        return merged;
+      });
       setCurrentMessagePage(page);
       setHasMoreMessages(response.hasMore);
     } catch {
@@ -503,6 +613,11 @@ export default function ConversationsPage() {
       if (generation === messageLoadGenerationRef.current) {
         messageRequestInFlightRef.current = false;
         setIsLoadingOlderMessages(false);
+        const pendingConversation = pendingOpenConversationRefreshRef.current;
+        pendingOpenConversationRefreshRef.current = null;
+        if (pendingConversation && selectedConversationIdRef.current === conversationKey(pendingConversation)) {
+          void refreshOpenConversationMessages(pendingConversation);
+        }
       }
     }
   }
@@ -514,9 +629,12 @@ export default function ConversationsPage() {
       initializedConversationRef.current = null;
       currentMessagePageRef.current = 1;
       hasMoreMessagesRef.current = false;
+      messagesRef.current = [];
+      pendingOpenConversationRefreshRef.current = null;
       setMessages([]);
       setCurrentMessagePage(1);
       setHasMoreMessages(false);
+      setPendingNewMessages(0);
       return;
     }
     if (initializedConversationRef.current === selectedConversationId) return;
@@ -529,6 +647,8 @@ export default function ConversationsPage() {
     if (!container || !pending) return;
     if (pending === "bottom") {
       container.scrollTop = container.scrollHeight;
+    } else if ("preserveTop" in pending) {
+      container.scrollTop = pending.preserveTop;
     } else {
       container.scrollTop = pending.top + (container.scrollHeight - pending.height);
     }
@@ -539,6 +659,167 @@ export default function ConversationsPage() {
     () => conversations.find((item) => conversationKey(item) === selectedConversationId) ?? null,
     [conversations, selectedConversationId]
   );
+
+  async function refreshOpenConversationMessages(conversation: ConversationSummary) {
+    const conversationId = conversationKey(conversation);
+    if (conversationId !== selectedConversationIdRef.current
+      || initializedConversationRef.current !== conversationId
+    ) {
+      return;
+    }
+    if (messageRequestInFlightRef.current) {
+      pendingOpenConversationRefreshRef.current = conversation;
+      return;
+    }
+
+    const generation = messageLoadGenerationRef.current;
+    const container = messagesContainerRef.current;
+    const previousHeight = container?.scrollHeight ?? 0;
+    const previousTop = container?.scrollTop ?? 0;
+    const distanceToBottom = container
+      ? container.scrollHeight - container.scrollTop - container.clientHeight
+      : 0;
+    const wasNearBottom = !container || distanceToBottom <= LOAD_NEWER_MESSAGES_THRESHOLD_PX;
+    const currentMessages = messagesRef.current;
+    messageRequestInFlightRef.current = true;
+
+    try {
+      const response = await getConversationMessagesPage(conversation, 1);
+      if (generation !== messageLoadGenerationRef.current || selectedConversationIdRef.current !== conversationId) {
+        return;
+      }
+
+      const merged = mergeMessages(currentMessages, response.items);
+      const changed = merged.length !== currentMessages.length
+        || merged.some((message, index) => !currentMessages[index] || !sameMessage(message, currentMessages[index]));
+      if (!changed) {
+        return;
+      }
+
+      loadedMessagePagesRef.current.add(1);
+      pendingScrollAdjustmentRef.current = wasNearBottom
+        ? "bottom"
+        : { preserveTop: previousTop };
+      messagesRef.current = merged;
+      setMessages(merged);
+
+      const newMessages = countNewMessages(currentMessages, response.items);
+      if (wasNearBottom) {
+        setPendingNewMessages(0);
+      } else if (newMessages > 0) {
+        setPendingNewMessages((current) => Math.min(current + newMessages, 99));
+      }
+    } catch {
+      // Polling failure must preserve the current messages and scroll state.
+    } finally {
+      if (generation === messageLoadGenerationRef.current) {
+        messageRequestInFlightRef.current = false;
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!user || (isSuperAdmin && !selectedFranchiseId)) {
+      return;
+    }
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let backoffMs = POLLING_INTERVAL_MS;
+    pollingEffectActiveRef.current = true;
+
+    const clearTimer = () => {
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+    };
+
+    const scheduleNext = (delayMs: number) => {
+      clearTimer();
+      if (!cancelled && document.visibilityState === "visible") {
+        timer = setTimeout(() => {
+          void pollOnce();
+        }, delayMs);
+      }
+    };
+
+    const pollOnce = async () => {
+      if (cancelled || document.visibilityState !== "visible") {
+        return;
+      }
+      if (conversationPollingInFlightRef.current || conversationRequestInFlightRef.current) {
+        scheduleNext(POLLING_INTERVAL_MS);
+        return;
+      }
+
+      conversationPollingInFlightRef.current = true;
+      let nextDelayMs = POLLING_INTERVAL_MS;
+      try {
+        const response = await getConversationPage({
+          franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
+          status: selectedStatus || undefined
+        }, 1, CONVERSATION_PAGE_SIZE);
+        if (cancelled) {
+          return;
+        }
+
+        const current = conversationsRef.current;
+        const previousSelected = current.find((item) => conversationKey(item) === selectedConversationIdRef.current);
+        const merged = mergeConversations(current, response.items);
+        if (merged !== current) {
+          conversationsRef.current = merged;
+          setConversations(merged);
+        }
+
+        const refreshedSelected = merged.find((item) => conversationKey(item) === selectedConversationIdRef.current);
+        if (previousSelected && refreshedSelected && !sameConversationSummary(previousSelected, refreshedSelected)) {
+          await refreshOpenConversationMessages(refreshedSelected);
+        }
+        backoffMs = POLLING_INTERVAL_MS;
+      } catch {
+        nextDelayMs = Math.min(backoffMs * 2, POLLING_MAX_BACKOFF_MS);
+        backoffMs = nextDelayMs;
+      } finally {
+        conversationPollingInFlightRef.current = false;
+        if (pendingConversationReloadRef.current && pollingEffectActiveRef.current) {
+          pendingConversationReloadRef.current = false;
+          void loadConversationsRef.current();
+          return;
+        }
+        if (cancelled) {
+          return;
+        }
+        scheduleNext(nextDelayMs);
+      }
+    };
+
+    const handleVisibilityChange = () => {
+      clearTimer();
+      if (document.visibilityState === "visible") {
+        void pollOnce();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    if (pendingConversationReloadRef.current && !conversationPollingInFlightRef.current) {
+      pendingConversationReloadRef.current = false;
+      void loadConversationsRef.current();
+    }
+    if (document.visibilityState === "visible") {
+      scheduleNext(POLLING_INTERVAL_MS);
+    }
+
+    return () => {
+      cancelled = true;
+      pollingEffectActiveRef.current = false;
+      clearTimer();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  // The polling effect deliberately closes over the current filter and message loader.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isSuperAdmin, selectedFranchiseId, selectedStatus, user]);
+
   const groupedConversations = useMemo(() => {
     const groups = new Map<string, { key: string; label: string; items: ConversationSummary[] }>();
     conversations.forEach((conversation) => {
@@ -749,39 +1030,49 @@ export default function ConversationsPage() {
                       <span className="text-xs font-semibold text-text-secondary">{group.label}</span>
                       <span className="h-px flex-1 bg-line/70" />
                     </div>
-                    {group.items.map((conversation) => (
-                      <button
-                        key={conversationKey(conversation)}
-                        type="button"
-                        onClick={() => void selectConversation(conversation)}
-                        disabled={isMaterializingConversation}
-                        className={`flex min-w-0 w-full gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversationKey(conversation) ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"} disabled:cursor-wait disabled:opacity-70`}
-                        style={{ borderColor: "var(--color-border)" }}
-                      >
-                        <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                                {displayCustomerName(conversation.customerName)}
-                              </p>
-                              <div className="mt-1 flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                                <Phone size={14} className="shrink-0" />
-                                <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
+                    {group.items.map((conversation) => {
+                      const unreadCount = conversation.unReadCount ?? (conversation.read === false ? 1 : 0);
+                      return (
+                        <button
+                          key={conversationKey(conversation)}
+                          type="button"
+                          onClick={() => void selectConversation(conversation)}
+                          disabled={isMaterializingConversation}
+                          className={`flex min-w-0 w-full gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversationKey(conversation) ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"} disabled:cursor-wait disabled:opacity-70`}
+                          style={{ borderColor: "var(--color-border)" }}
+                        >
+                          <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0 flex-1">
+                                <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                                  {displayCustomerName(conversation.customerName)}
+                                </p>
+                                <div className="mt-1 flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                                  <Phone size={14} className="shrink-0" />
+                                  <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
+                                </div>
+                              </div>
+                              <div className="flex shrink-0 items-center gap-2">
+                                <span className="text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
+                                {unreadCount > 0 ? (
+                                  <span className="flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 text-2xs font-semibold text-white" aria-label={`${unreadCount} mensagens não lidas`}>
+                                    {unreadCount > 99 ? "99+" : unreadCount}
+                                  </span>
+                                ) : null}
                               </div>
                             </div>
-                            <span className="shrink-0 text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
+                            <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                              {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
+                            </p>
+                            <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
+                              <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
+                              {conversationStatusLabel(conversation.operationalStatus)}
+                            </p>
                           </div>
-                          <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                            {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
-                          </p>
-                          <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
-                            <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
-                            {conversationStatusLabel(conversation.operationalStatus)}
-                          </p>
-                        </div>
-                      </button>
-                    ))}
+                        </button>
+                      );
+                    })}
                   </section>
                 ))}
                 {isLoadingMoreConversations ? (
@@ -851,17 +1142,18 @@ export default function ConversationsPage() {
 
               <div className="h-full min-h-0 min-w-0">
                 <div className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto]">
-                  <div
-                    ref={messagesContainerRef}
-                    onScroll={(event) => {
-                      if (event.currentTarget.scrollTop <= LOAD_OLDER_THRESHOLD_PX) {
-                        void loadOlderMessages();
-                      }
-                    }}
-                    data-current-page={currentMessagePage}
-                    data-has-more={hasMoreMessages}
-                    className="grid h-[65dvh] min-h-0 content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain bg-bg-secondary px-4 py-5 scrollbar-thin sm:px-6 lg:h-auto"
-                  >
+                  <div className="relative min-h-0 overflow-hidden">
+                    <div
+                      ref={messagesContainerRef}
+                      onScroll={(event) => {
+                        if (event.currentTarget.scrollTop <= LOAD_OLDER_THRESHOLD_PX) {
+                          void loadOlderMessages();
+                        }
+                      }}
+                      data-current-page={currentMessagePage}
+                      data-has-more={hasMoreMessages}
+                      className="grid h-[65dvh] min-h-0 content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain bg-bg-secondary px-4 py-5 scrollbar-thin sm:h-full lg:h-auto"
+                    >
                     {isLoadingOlderMessages ? (
                       <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
                         <Loader2 size={14} className="animate-spin" />
@@ -913,6 +1205,22 @@ export default function ConversationsPage() {
                     ) : (
                       <EmptyState icon={MessageSquareText} title="Sem mensagens" description="Nao ha mensagens para esta conversa." />
                     )}
+                    </div>
+                    {pendingNewMessages > 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const container = messagesContainerRef.current;
+                          if (container) {
+                            container.scrollTo({ top: container.scrollHeight, behavior: "smooth" });
+                          }
+                          setPendingNewMessages(0);
+                        }}
+                        className="absolute bottom-4 right-5 rounded-full bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-soft-lg hover:bg-brand-700"
+                      >
+                        {pendingNewMessages === 1 ? "1 nova mensagem" : `${pendingNewMessages} novas mensagens`}
+                      </button>
+                    ) : null}
                   </div>
 
                   <div className="border-t bg-bg-primary p-3 sm:p-4" style={{ borderColor: "var(--color-border)" }}>

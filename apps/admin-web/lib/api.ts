@@ -369,6 +369,8 @@ export type ConversationSummary = {
   lastSyncedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  read?: boolean | null;
+  unReadCount?: number | null;
 };
 
 export type ConversationMessage = {

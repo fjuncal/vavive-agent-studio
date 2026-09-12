@@ -658,7 +658,9 @@ public class ConversationService {
             session.getLastMessageAt(),
             session.getLastSyncedAt(),
             session.getCreatedAt(),
-            session.getUpdatedAt()
+            session.getUpdatedAt(),
+            null,
+            null
         );
     }
 
@@ -782,7 +784,9 @@ public class ConversationService {
             remoteTime,
             now,
             createdAt,
-            updatedAt
+            updatedAt,
+            chat.read(),
+            chat.unReadCount()
         );
     }
 

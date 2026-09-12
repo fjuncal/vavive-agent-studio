@@ -111,6 +111,8 @@ class ConversationServiceTest {
         assertThat(result.getFirst().responsibleUserName()).isEqualTo("Frederico");
         assertThat(result.getFirst().customerPicture()).isEqualTo("https://cdn.gptmaker.ai/contacts/joao.jpg");
         assertThat(result.getFirst().chatId()).isEqualTo("chat-1");
+        assertThat(result.getFirst().read()).isTrue();
+        assertThat(result.getFirst().unReadCount()).isZero();
         assertThat(session.getCustomerName()).isEqualTo("Frederico");
         verify(sessionRepository, never()).save(any(ConversationSession.class));
     }

@@ -25,6 +25,8 @@ public record ConversationSummaryResponse(
     LocalDateTime lastMessageAt,
     LocalDateTime lastSyncedAt,
     LocalDateTime createdAt,
-    LocalDateTime updatedAt
+    LocalDateTime updatedAt,
+    Boolean read,
+    Integer unReadCount
 ) {
 }
