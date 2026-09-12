@@ -5,17 +5,19 @@
 :root {
   color-scheme: light;
   --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
-  --color-bg-tertiary: #f1f5f9;
+  --color-bg-secondary: #f1f5f3;
+  --color-bg-tertiary: #e9efec;
   --color-bg-elevated: #ffffff;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #64748b;
-  --color-text-tertiary: #94a3b8;
-  --color-border: #e2e8f0;
-  --color-border-strong: #cbd5e1;
-  --brand-gradient: linear-gradient(135deg, #22A587 0%, #16876E 100%);
-  --brand-gradient-subtle: linear-gradient(135deg, #EEF9F7 0%, #D7F0EA 100%);
-  --surface-gradient: linear-gradient(180deg, #FAFBFD 0%, #F5F7FB 100%);
+  --color-text-primary: #162521;
+  --color-text-secondary: #60706a;
+  --color-text-tertiary: #84918c;
+  --color-border: #dce5e1;
+  --color-border-strong: #c7d4cf;
+  --color-brand: #16876e;
+  --color-brand-strong: #116b59;
+  --brand-gradient: linear-gradient(135deg, #22a587 0%, #16876e 100%);
+  --brand-gradient-subtle: linear-gradient(135deg, #eef9f5 0%, #dff2eb 100%);
+  --surface-gradient: linear-gradient(180deg, #f8faf9 0%, #f1f5f3 100%);
   --glass-bg: rgba(255, 255, 255, 0.85);
   --glass-border: rgba(230, 234, 242, 0.8);
 }
@@ -61,9 +63,9 @@ select {
 
 @layer base {
   :focus-visible {
-    outline: 2px solid #22A587;
+    outline: 2px solid var(--color-brand);
     outline-offset: 2px;
-    border-radius: 8px;
+    border-radius: 10px;
   }
 
   input::placeholder,
@@ -93,7 +95,7 @@ select {
   }
 
   .gradient-brand {
-    background: var(--brand-gradient);
+    background: var(--color-brand);
   }
 
   .gradient-brand-subtle {
@@ -112,21 +114,21 @@ select {
   }
 
   .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white shadow-soft transition-all duration-200;
-    background: var(--brand-gradient);
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors duration-150;
+    background: var(--color-brand);
+    box-shadow: 0 1px 2px rgba(19, 34, 53, 0.12);
   }
 
   .btn-primary:hover {
-    @apply shadow-glow;
-    transform: translateY(-1px);
+    background: var(--color-brand-strong);
   }
 
   .btn-primary:active {
-    transform: translateY(0);
+    background: #0d5547;
   }
 
   .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition-all duration-200;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors duration-150;
     background: var(--color-bg-primary);
     color: var(--color-text-primary);
     border: 1px solid var(--color-border);
@@ -135,11 +137,10 @@ select {
   .btn-secondary:hover {
     background: var(--color-bg-tertiary);
     border-color: var(--color-border-strong);
-    transform: translateY(-1px);
   }
 
   .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200;
+    @apply inline-flex min-h-10 items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150;
     color: var(--color-text-secondary);
   }
 
@@ -149,14 +150,15 @@ select {
   }
 
   .input-field {
-    @apply w-full rounded-xl px-3.5 py-2.5 text-sm outline-none transition-all duration-200;
+    @apply min-h-10 w-full rounded-lg px-3.5 py-2.5 text-sm outline-none transition-colors duration-150;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
     color: var(--color-text-primary);
   }
 
   .input-field:focus {
-    @apply border-brand-500 ring-4 ring-brand-50;
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px rgba(22, 135, 110, 0.14);
   }
 
   .input-field:disabled {
@@ -165,43 +167,45 @@ select {
   }
 
   .card {
-    @apply rounded-2xl p-5 shadow-soft backdrop-blur-sm transition-colors duration-200;
+    @apply rounded-xl p-5 transition-colors duration-200;
     background: var(--color-bg-primary);
     border: 1px solid var(--color-border);
+    box-shadow: 0 1px 2px rgba(16, 43, 42, 0.035);
   }
 
   .card-interactive {
-    @apply card cursor-pointer transition-all duration-200;
+    @apply card cursor-pointer transition-colors duration-150;
   }
 
   .card-interactive:hover {
-    @apply shadow-soft-lg;
     border-color: var(--color-border-strong);
-    transform: translateY(-2px);
+    background: var(--color-bg-secondary);
   }
 
   .stat-card {
-    @apply card relative overflow-hidden;
+    @apply rounded-xl border p-5;
+    background: var(--color-bg-primary);
+    border-color: var(--color-border);
   }
 
-  .stat-card::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: var(--brand-gradient);
-    opacity: 0;
-    transition: opacity 0.2s;
+  .credits-pill {
+    @apply flex h-10 shrink-0 items-center gap-2 rounded-lg border px-2.5 text-left text-brand-700 transition-colors hover:bg-brand-50 dark:text-brand-300 dark:hover:bg-brand-900/20;
+    border-color: var(--color-border);
+    background: var(--color-bg-primary);
   }
 
-  .stat-card:hover::before {
-    opacity: 1;
+  .credits-pill-label {
+    @apply block text-[9px] font-semibold uppercase leading-3 tracking-[0.09em];
+    color: var(--color-text-tertiary);
+  }
+
+  .credits-pill-value {
+    @apply block truncate text-xs font-semibold leading-4;
+    color: var(--color-text-primary);
   }
 
   .section-title {
-    @apply text-xs font-semibold uppercase tracking-[0.18em];
+    @apply text-xs font-semibold;
     color: var(--color-text-tertiary);
   }
 
@@ -211,7 +215,7 @@ select {
   }
 
   .badge {
-    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1;
+    @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset;
   }
 
   .badge-success {
@@ -238,7 +242,7 @@ select {
   }
 
   .skeleton {
-    @apply animate-shimmer rounded-xl;
+    @apply animate-shimmer rounded-lg;
     background: linear-gradient(
       90deg,
       var(--color-bg-tertiary) 0%,

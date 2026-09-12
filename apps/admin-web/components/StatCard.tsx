@@ -42,14 +42,14 @@ export function StatCard({ label, value, hint, icon: Icon, trend, variant = "def
     <div className="stat-card group">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] truncate" style={{ color: "var(--color-text-tertiary)" }}>{label}</p>
-          <p className="mt-3 text-3xl font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>{value}</p>
+          <p className="truncate text-xs font-medium" style={{ color: "var(--color-text-secondary)" }}>{label}</p>
+          <p className="mt-2 text-3xl font-semibold tracking-[-0.035em] tabular-nums" style={{ color: "var(--color-text-primary)" }}>{value}</p>
         </div>
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${styles.iconBg} ${styles.iconText} transition-transform duration-200 group-hover:scale-110`}>
-          <Icon size={22} />
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${styles.iconBg} ${styles.iconText} transition-colors duration-150`}>
+          <Icon size={18} />
         </div>
       </div>
-      <div className="mt-4 flex items-center justify-between gap-2">
+      <div className="mt-3 flex items-center justify-between gap-2">
         <p className="text-xs truncate" style={{ color: "var(--color-text-secondary)" }}>{hint}</p>
         {trend && (
           <span className={`text-xs font-semibold ${trend.positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400"}`}>

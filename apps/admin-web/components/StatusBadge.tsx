@@ -61,11 +61,11 @@ export function StatusBadge({ status, size = "sm" }: { status: string; size?: "s
   return (
     <span
       className={clsx(
-        "inline-flex items-center rounded-full font-semibold ring-1 ring-inset",
+        "inline-flex items-center rounded-full font-medium ring-1 ring-inset",
         variant.bg,
         variant.text,
         variant.ring,
-        size === "sm" ? "px-2.5 py-0.5 text-xs" : "px-3 py-1 text-sm"
+        size === "sm" ? "px-2 py-0.5 text-2xs" : "px-2.5 py-1 text-xs"
       )}
     >
       {formatStatus(status)}

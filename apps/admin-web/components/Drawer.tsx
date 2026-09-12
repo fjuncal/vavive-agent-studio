@@ -41,22 +41,20 @@ export function Drawer({ isOpen, onClose }: DrawerProps) {
 
       {/* Drawer */}
       <div
-        className={`fixed left-0 top-0 z-50 h-full w-64 transform transition-transform duration-300 lg:hidden ${
+        className={`fixed left-0 top-0 z-50 h-full w-[17rem] transform transition-transform duration-200 lg:hidden ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
-        style={{ background: "var(--color-bg-primary)" }}
+        style={{ background: "#102b2a" }}
       >
         <div className="flex h-full flex-col">
-          <div className="flex items-center justify-between p-4">
-            <span className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
-              Menu
-            </span>
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <span className="text-sm font-semibold text-white">Menu</span>
             <button
               onClick={onClose}
-              className="rounded-lg p-2 transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+              className="rounded-lg p-2 text-white/65 transition-colors hover:bg-white/10 hover:text-white"
               aria-label="Fechar menu"
             >
-              <X size={20} style={{ color: "var(--color-text-secondary)" }} />
+              <X size={20} />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">

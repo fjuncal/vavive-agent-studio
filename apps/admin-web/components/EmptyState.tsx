@@ -13,8 +13,8 @@ export function EmptyState({
   action?: { label: string; href: string };
 }) {
   return (
-    <div className="card text-center py-12 px-6">
-      <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400 mb-4">
+    <div className="flex min-h-40 flex-col items-center justify-center px-6 py-10 text-center">
+      <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400">
         <Icon size={24} />
       </div>
       <h3 className="text-base font-semibold" style={{ color: "var(--color-text-primary)" }}>{title}</h3>

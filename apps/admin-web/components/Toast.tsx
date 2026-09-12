@@ -70,13 +70,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-3 max-w-sm">
+      <div className="fixed bottom-4 right-4 z-50 flex max-w-sm flex-col gap-2">
         {toasts.map((toast) => {
           const Icon = icons[toast.type];
           return (
             <div
               key={toast.id}
-              className={`card flex items-start gap-3 p-4 shadow-lg animate-in ${styles[toast.type]}`}
+              className={`flex items-start gap-3 rounded-xl border bg-bg-primary p-3.5 shadow-soft-sm ${styles[toast.type]}`}
               role="alert"
             >
               <Icon size={20} className={`shrink-0 ${iconStyles[toast.type]}`} />

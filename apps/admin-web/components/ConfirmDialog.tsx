@@ -54,9 +54,9 @@ export function ConfirmDialog({
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
         onClick={isSubmitting ? undefined : onCancel}
       />
-      <div className="card relative w-full max-w-md p-6 shadow-soft-lg animate-scale-in">
+      <div className="card relative w-full max-w-md p-6 shadow-soft-sm animate-scale-in">
         {variant === "danger" && (
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
+          <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-rose-50 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400">
             <AlertTriangle size={24} />
           </div>
         )}

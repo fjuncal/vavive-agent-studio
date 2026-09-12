@@ -2,11 +2,27 @@
 
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/components/ThemeProvider";
-import { Bell, LogOut, Search, Menu, Sun, Moon } from "lucide-react";
+import { LogOut, Menu, Sun, Moon } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { WorkspaceCreditsPill } from "@/components/WorkspaceCreditsPill";
+
+const routeLabels: Record<string, string> = {
+  dashboard: "Visão geral",
+  conversas: "Central de atendimento",
+  franquias: "Gestão de franquias",
+  agentes: "Assistentes",
+  canais: "Canais",
+  contatos: "Contatos",
+  leads: "Leads",
+  "notificacoes-whatsapp": "Notificações WhatsApp",
+  configuracoes: "Configurações"
+};
 
 export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user, logout } = useAuth();
   const { toggleTheme, isDark } = useTheme();
+  const pathname = usePathname();
+  const routeLabel = routeLabels[pathname.split("/").filter(Boolean)[0] ?? "dashboard"] ?? "Vavive Agent Studio";
   const initials = user?.name
     ?.split(" ")
     .map((part) => part[0])
@@ -16,52 +32,37 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
 
   return (
     <header
-      className="sticky top-0 z-30 border-b backdrop-blur-2xl"
+      className="sticky top-0 z-30 shrink-0 border-b bg-bg-primary"
       style={{
-        borderColor: "var(--color-border)",
-        background: "var(--glass-bg)"
+        borderColor: "var(--color-border)"
       }}
     >
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto flex h-14 max-w-[1800px] items-center justify-between gap-3 px-3 sm:px-5 lg:px-6">
         <button
+          type="button"
           onClick={onMenuClick}
-          className="lg:hidden flex items-center justify-center w-10 h-10 rounded-xl transition-colors hover:bg-gray-100 dark:hover:bg-gray-800"
+          className="flex h-10 w-10 items-center justify-center rounded-lg transition-colors hover:bg-bg-tertiary lg:hidden"
           aria-label="Abrir menu"
         >
           <Menu size={20} style={{ color: "var(--color-text-primary)" }} />
         </button>
 
-        <div
-          className="hidden min-w-0 flex-1 items-center gap-3 rounded-xl border px-3.5 py-2 text-sm shadow-sm sm:flex hover:shadow-md transition-all duration-200 cursor-pointer"
-          style={{
-            borderColor: "var(--color-border)",
-            background: "var(--color-bg-primary)",
-            color: "var(--color-text-tertiary)"
-          }}
-        >
-          <Search size={17} />
-          <span>Buscar lead, franquia ou assistente...</span>
-          <kbd
-            className="ml-auto hidden rounded-lg border px-2 py-0.5 text-2xs font-medium lg:block"
-            style={{
-              borderColor: "var(--color-border)",
-              background: "var(--color-bg-tertiary)",
-              color: "var(--color-text-tertiary)"
-            }}
-          >
-            Ctrl K
-          </kbd>
+        <div className="hidden min-w-0 flex-1 sm:block">
+          <p className="truncate text-sm font-semibold text-text-primary">{routeLabel}</p>
+          <p className="truncate text-2xs text-text-tertiary">{user?.franchise?.name ?? "Administração da rede"}</p>
         </div>
 
         <div className="flex flex-1 items-center justify-between gap-3 sm:flex-none sm:justify-end">
-          <div className="lg:hidden">
-            <p className="text-sm font-bold" style={{ color: "var(--color-text-primary)" }}>Assistente Vavive</p>
-            <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Gestao</p>
+          <div className="min-w-0 flex-1 sm:hidden">
+            <p className="truncate text-sm font-semibold text-text-primary">{routeLabel}</p>
           </div>
 
+          <WorkspaceCreditsPill />
+
           <button
+            type="button"
             onClick={toggleTheme}
-            className="flex h-10 w-10 items-center justify-center rounded-xl border transition-all duration-200 hover:shadow-sm"
+            className="flex h-10 w-10 items-center justify-center rounded-lg border transition-colors duration-150 hover:bg-bg-tertiary"
             style={{
               borderColor: "var(--color-border)",
               background: "var(--color-bg-primary)",
@@ -72,26 +73,13 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             {isDark ? <Sun size={17} /> : <Moon size={17} />}
           </button>
 
-          <button
-            className="hidden h-10 w-10 items-center justify-center rounded-xl border shadow-sm transition-all duration-200 hover:shadow-md sm:flex"
-            style={{
-              borderColor: "var(--color-border)",
-              background: "var(--color-bg-primary)",
-              color: "var(--color-text-secondary)"
-            }}
-            aria-label="Notificacoes"
-          >
-            <Bell size={17} />
-          </button>
-
           <div
-            className="flex items-center gap-3 rounded-xl border py-1 pl-1 pr-2 shadow-sm"
+            className="flex items-center gap-2 rounded-lg py-1 pl-1 pr-1"
             style={{
-              borderColor: "var(--color-border)",
-              background: "var(--color-bg-primary)"
+              background: "var(--color-bg-tertiary)"
             }}
           >
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-100 text-sm font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
               {initials}
             </div>
             <div className="hidden sm:block">
@@ -105,7 +93,7 @@ export function Header({ onMenuClick }: { onMenuClick?: () => void }) {
             <button
               type="button"
               onClick={logout}
-              className="flex h-9 w-9 items-center justify-center rounded-lg transition-all duration-200 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
+              className="flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-150 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-900/20"
               style={{ color: "var(--color-text-tertiary)" }}
               aria-label="Sair"
             >

@@ -29,9 +29,9 @@ function QuickAction({ icon: Icon, label, href, description }: {
   description: string;
 }) {
   return (
-    <Link href={href} className="card-interactive flex items-start gap-4">
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 transition-transform duration-200 group-hover:scale-110">
-        <Icon size={22} />
+    <Link href={href} className="card-interactive group flex items-start gap-3.5">
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-100">
+        <Icon size={19} />
       </div>
       <div>
         <h3 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{label}</h3>
@@ -92,9 +92,9 @@ export default function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label={isSuperAdmin ? "Franquias bloqueadas" : "Progresso do assistente"}
-          value={String(isSuperAdmin ? summary?.blockedFranchises ?? 0 : `${summary?.completionPercentage ?? 0}%`)}
-          hint={isSuperAdmin ? "Sem workspace ou sem setup" : summary?.setupStatus?.replaceAll("_", " ") ?? "Nao iniciado"}
+          label={isSuperAdmin ? "Franquias bloqueadas" : "Leads ativos"}
+          value={String(isSuperAdmin ? summary?.blockedFranchises ?? 0 : summary?.activeLeads ?? 0)}
+          hint={isSuperAdmin ? "Sem workspace ou sem setup" : `${summary?.totalLeads ?? 0} leads no total`}
           icon={ShieldAlert}
           variant={isSuperAdmin && (summary?.blockedFranchises ?? 0) > 0 ? "warning" : "default"}
         />
@@ -121,7 +121,7 @@ export default function DashboardPage() {
       </section>
 
       {!isSuperAdmin && (
-        <section className="card">
+        <section className="overflow-hidden rounded-xl border border-border bg-bg-primary p-5">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Saldo operacional</h2>
@@ -133,17 +133,17 @@ export default function DashboardPage() {
               <Coins size={22} />
             </div>
           </div>
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Total</p>
+          <div className="mt-5 grid divide-y border-y border-border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <div className="px-4 py-3">
+              <p className="text-xs font-medium" style={{ color: "var(--color-text-tertiary)" }}>Total</p>
               <p className="mt-2 text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{creditNumbers.total.toLocaleString()}</p>
             </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Usados</p>
+            <div className="px-4 py-3">
+              <p className="text-xs font-medium" style={{ color: "var(--color-text-tertiary)" }}>Usados</p>
               <p className="mt-2 text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{creditNumbers.used.toLocaleString()}</p>
             </div>
-            <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
-              <p className="text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: "var(--color-text-tertiary)" }}>Disponiveis</p>
+            <div className="px-4 py-3">
+              <p className="text-xs font-medium" style={{ color: "var(--color-text-tertiary)" }}>Disponíveis</p>
               <p className="mt-2 text-xl font-semibold" style={{ color: "var(--color-text-primary)" }}>{creditNumbers.remaining.toLocaleString()}</p>
             </div>
           </div>

@@ -7,7 +7,15 @@ import { Drawer } from "@/components/Drawer";
 import { useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
-export function AppShell({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
+export function AppShell({
+  children,
+  wide = false,
+  fullHeight = false
+}: {
+  children: React.ReactNode;
+  wide?: boolean;
+  fullHeight?: boolean;
+}) {
   const { isLoading, token } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -27,7 +35,10 @@ export function AppShell({ children, wide = false }: { children: React.ReactNode
   }
 
   return (
-    <div className="min-h-screen" style={{ background: "var(--color-bg-secondary)" }}>
+    <div
+      className={fullHeight ? "h-[100dvh] overflow-hidden" : "min-h-[100dvh]"}
+      style={{ background: "var(--color-bg-secondary)" }}
+    >
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar />
@@ -37,9 +48,9 @@ export function AppShell({ children, wide = false }: { children: React.ReactNode
       <Drawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
 
       {/* Main content */}
-      <div className="lg:pl-72">
+      <div className={fullHeight ? "flex h-full min-h-0 flex-col lg:pl-[15.5rem]" : "lg:pl-[15.5rem]"}>
         <Header onMenuClick={() => setIsDrawerOpen(true)} />
-        <main className={`mx-auto flex w-full flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 animate-in ${wide ? "max-w-[1600px]" : "max-w-7xl"}`}>
+        <main className={`mx-auto flex w-full flex-col px-3 py-3 sm:px-5 sm:py-4 lg:px-6 ${fullHeight ? "min-h-0 flex-1 overflow-hidden" : "gap-5"} ${wide ? "max-w-[1800px]" : "max-w-[1480px]"}`}>
           {children}
         </main>
       </div>

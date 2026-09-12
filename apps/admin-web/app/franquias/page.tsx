@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
+import { StatCard as SharedStatCard } from "@/components/StatCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { formatCreditsStatus, getCreditsNumbers } from "@/lib/credits";
@@ -11,40 +12,6 @@ import { getFranchises, getWorkspaceMapping, type FranchiseSummary, type Workspa
 import { Building2, Link2, PlugZap, Plus, ArrowRight, CheckCircle2, AlertCircle, Clock, Coins } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-
-function StatCard({ label, value, description, icon: Icon, variant = "default" }: {
-  label: string;
-  value: number;
-  description: string;
-  icon: typeof Building2;
-  variant?: "default" | "success" | "warning";
-}) {
-  const variantStyles = {
-    default: "",
-    success: "bg-emerald-50 dark:bg-emerald-900/30",
-    warning: "bg-amber-50 dark:bg-amber-900/30"
-  };
-  const iconStyles = {
-    default: "bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400",
-    success: "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400",
-    warning: "bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400"
-  };
-
-  return (
-    <article className={`card group ${variantStyles[variant]}`} {...(variant === "default" ? { style: { background: "var(--color-bg-secondary)" } } : {})}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] truncate" style={{ color: "var(--color-text-tertiary)" }}>{label}</p>
-          <p className="mt-3 text-3xl font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>{value}</p>
-        </div>
-        <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${iconStyles[variant]} transition-transform duration-200 group-hover:scale-110`}>
-          <Icon size={22} />
-        </div>
-      </div>
-      <p className="mt-4 text-xs" style={{ color: "var(--color-text-secondary)" }}>{description}</p>
-    </article>
-  );
-}
 
 export default function FranchisesPage() {
   const { user } = useAuth();
@@ -100,10 +67,10 @@ export default function FranchisesPage() {
 
       {isSuperAdmin && (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Franquias ativas" value={activeCount} description="Com workspace e assistente conectados." icon={CheckCircle2} variant="success" />
-          <StatCard label="Sem assistente" value={withoutAgentCount} description="Workspace conectado, assistente pendente." icon={Building2} variant="warning" />
-          <StatCard label="Pendentes" value={pendingCount} description="Aguardando configuracao da matriz." icon={Clock} variant="warning" />
-          <StatCard label="Workspaces livres" value={unlinkedWorkspaceCount} description={isLoadingMapping ? "Carregando..." : "Disponiveis para vincular."} icon={PlugZap} />
+          <SharedStatCard label="Franquias ativas" value={String(activeCount)} hint="Com workspace e assistente conectados." icon={CheckCircle2} variant="success" />
+          <SharedStatCard label="Sem assistente" value={String(withoutAgentCount)} hint="Workspace conectado, assistente pendente." icon={Building2} variant="warning" />
+          <SharedStatCard label="Pendentes" value={String(pendingCount)} hint="Aguardando configuração da matriz." icon={Clock} variant="warning" />
+          <SharedStatCard label="Workspaces livres" value={String(unlinkedWorkspaceCount)} hint={isLoadingMapping ? "Carregando..." : "Disponíveis para vincular."} icon={PlugZap} />
         </section>
       )}
 

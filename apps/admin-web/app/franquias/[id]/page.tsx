@@ -28,7 +28,7 @@ import {
   type GptMakerWorkspaceOption,
   type WorkspaceCredits
 } from "@/lib/api";
-import { ArrowRight, Bot, Building2, Coins, Loader2, MessageCircle, MessageCircleMore, PlugZap, Radio, Settings, Trash2, Unlink, UserRound } from "lucide-react";
+import { ArrowRight, Bot, Building2, Coins, Loader2, MessageCircleMore, PlugZap, Radio, Settings, Trash2, Unlink, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -317,15 +317,14 @@ export default function FranchiseDetailPage() {
                 </div>
                 <div>
                   <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Assistente Vavive</h2>
-                  <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Progresso do setup e publicacoes.</p>
+                  <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Status e publicações do assistente.</p>
                 </div>
               </div>
               <div className="grid gap-3">
                 <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>
                   <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>Status</p>
-                  <div className="mt-2 flex items-center justify-between gap-3">
+                  <div className="mt-2 flex items-center gap-3">
                     <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>{setup?.setupStatus?.replaceAll("_", " ") ?? "Nao iniciado"}</p>
-                    <span className="text-sm font-medium text-brand-600">{setup?.completionPercentage ?? 0}%</span>
                   </div>
                 </div>
                 <div className="rounded-xl px-4 py-3" style={{ background: "var(--color-bg-secondary)" }}>

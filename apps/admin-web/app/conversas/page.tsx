@@ -1,11 +1,15 @@
 "use client";
 
 import { AppShell } from "@/components/AppShell";
+import { ContactAvatar, displayCustomerName } from "@/components/ContactAvatar";
+import { ConversationListItem } from "@/components/ConversationListItem";
 import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { resolveConversationMessageTarget } from "@/lib/conversation-message-routing";
+import { nextConversationPage, shouldLoadNextConversationPage } from "@/lib/conversation-scroll";
+import { countNewCustomerMessages, isCustomerMessageRole } from "@/lib/conversation-unread";
 import {
   completeConversation,
   getConversationPage,
@@ -21,8 +25,8 @@ import {
   type ConversationSummary,
   type FranchiseSummary
 } from "@/lib/api";
-import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, Phone, Send, UserRound, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, Phone, Send, X } from "lucide-react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const MESSAGE_PAGE_SIZE = 30;
 const CONVERSATION_PAGE_SIZE = 50;
@@ -31,16 +35,6 @@ const POLLING_MAX_BACKOFF_MS = 60_000;
 const LOAD_OLDER_THRESHOLD_PX = 120;
 const LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX = 160;
 const LOAD_NEWER_MESSAGES_THRESHOLD_PX = 160;
-
-function formatDate(value?: string | null) {
-  if (!value) {
-    return "Agora";
-  }
-  return new Intl.DateTimeFormat("pt-BR", {
-    dateStyle: "short",
-    timeStyle: "short"
-  }).format(new Date(value));
-}
 
 function normalizeTimestamp(value?: number | null) {
   if (!value) {
@@ -68,36 +62,6 @@ function formatMessageTime(value?: number | null) {
 
 function titleizeDayLabel(label: string) {
   return label.replace(/(^|[-\s])\p{L}/gu, (segment) => segment.toUpperCase());
-}
-
-function formatMessageDayLabel(value?: number | null) {
-  const timestamp = normalizeTimestamp(value);
-  if (!timestamp) {
-    return "Sem data";
-  }
-
-  const messageDate = new Date(timestamp);
-  const now = new Date();
-  if (isSameDay(messageDate, now)) {
-    return "Hoje";
-  }
-
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (isSameDay(messageDate, yesterday)) {
-    return "Ontem";
-  }
-
-  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(messageDate);
-  if (Math.abs(now.getTime() - messageDate.getTime()) < 7 * 24 * 60 * 60 * 1000) {
-    return titleizeDayLabel(weekday);
-  }
-
-  return `${titleizeDayLabel(weekday)} Â· ${new Intl.DateTimeFormat("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric"
-  }).format(messageDate)}`;
 }
 
 function formatConversationDayLabel(value?: number | null) {
@@ -139,6 +103,8 @@ function sortConversationsByRecent(items: ConversationSummary[]) {
 }
 
 function sameConversationSummary(left: ConversationSummary, right: ConversationSummary) {
+  // Provider-side updatedAt/read/unReadCount may change without changing the
+  // inbox data that needs to be rendered or refreshed.
   return left.id === right.id
     && left.chatId === right.chatId
     && left.franchiseId === right.franchiseId
@@ -158,10 +124,7 @@ function sameConversationSummary(left: ConversationSummary, right: ConversationS
     && left.handoffStatus === right.handoffStatus
     && left.humanTakeoverActive === right.humanTakeoverActive
     && left.lastMessageAt === right.lastMessageAt
-    && left.createdAt === right.createdAt
-    && left.updatedAt === right.updatedAt
-    && left.read === right.read
-    && left.unReadCount === right.unReadCount;
+    && left.createdAt === right.createdAt;
 }
 
 function conversationKey(conversation: ConversationSummary) {
@@ -238,46 +201,20 @@ function conversationGroupLabel(value?: string | null) {
   }).format(date);
 }
 
-function displayCustomerName(value?: string | null) {
-  const trimmed = value?.trim();
-  return trimmed && trimmed.toLowerCase() !== "desconhecido" ? trimmed : "Contato sem nome";
-}
-
-function contactInitials(value?: string | null) {
-  const name = displayCustomerName(value);
-  if (name === "Contato sem nome") return null;
-  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
-}
-
-function ContactAvatar({ name, src, size = "md" }: { name?: string | null; src?: string | null; size?: "sm" | "md" | "lg" }) {
-  const [imageFailed, setImageFailed] = useState(false);
-  const sizeClass = size === "lg" ? "h-12 w-12 text-sm" : size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-xs";
-  const initials = contactInitials(name);
-
-  useEffect(() => setImageFailed(false), [src]);
-
-  if (src && !imageFailed) {
-    return <img src={src} alt="" className={`${sizeClass} shrink-0 rounded-full object-cover ring-1 ring-black/5`} onError={() => setImageFailed(true)} />;
-  }
-
-  return (
-    <span className={`${sizeClass} flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-800 dark:bg-brand-900/40 dark:text-brand-200`} aria-hidden="true">
-      {initials || <UserRound size={size === "lg" ? 20 : 16} />}
-    </span>
-  );
-}
-
-function conversationStatusLabel(status?: string | null) {
-  switch (status?.toLowerCase()) {
-    case "em_atendimento_humano": return "Atendimento humano";
-    case "concluida": return "Conversa encerrada";
-    case "venda_concluida": return "Venda concluída";
-    default: return "IA atendendo";
-  }
-}
-
 function messageIdentity(message: ConversationMessage) {
   return message.id || [message.time, message.role, message.type, message.text].join(":");
+}
+
+function summaryTimestamp(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const timestamp = new Date(value).getTime();
+  return Number.isNaN(timestamp) ? null : timestamp;
+}
+
+function conversationMessageChanged(previous: ConversationSummary, next: ConversationSummary) {
+  return previous.lastMessageAt !== next.lastMessageAt || previous.lastResponse !== next.lastResponse;
 }
 
 function sameMessage(left: ConversationMessage, right: ConversationMessage) {
@@ -306,11 +243,6 @@ function mergeMessages(current: ConversationMessage[], incoming: ConversationMes
     const rightTime = normalizeTimestamp(right.time) ?? 0;
     return leftTime - rightTime;
   });
-}
-
-function countNewMessages(current: ConversationMessage[], incoming: ConversationMessage[]) {
-  const known = new Set(current.map(messageIdentity));
-  return incoming.reduce((count, message) => count + (known.has(messageIdentity(message)) ? 0 : 1), 0);
 }
 
 function prependAndSortMessages(current: ConversationMessage[], older: ConversationMessage[]) {
@@ -351,6 +283,8 @@ export default function ConversationsPage() {
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [currentMessagePage, setCurrentMessagePage] = useState(1);
   const [pendingNewMessages, setPendingNewMessages] = useState(0);
+  const [humanUnreadByChat, setHumanUnreadByChat] = useState<Record<string, number>>({});
+  const [isMobileChatOpen, setIsMobileChatOpen] = useState(false);
   const conversationsContainerRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const conversationsRef = useRef<ConversationSummary[]>([]);
@@ -362,6 +296,7 @@ export default function ConversationsPage() {
   const conversationPollingInFlightRef = useRef(false);
   const pendingConversationReloadRef = useRef(false);
   const loadConversationsRef = useRef<() => Promise<void>>(async () => undefined);
+  const loadMoreConversationsRef = useRef<() => Promise<void>>(async () => undefined);
   const pollingEffectActiveRef = useRef(false);
   const conversationMaterializationInFlightRef = useRef(false);
   const conversationLoadGenerationRef = useRef(0);
@@ -372,6 +307,10 @@ export default function ConversationsPage() {
   const messageLoadGenerationRef = useRef(0);
   const initializedConversationRef = useRef<string | null>(null);
   const pendingOpenConversationRefreshRef = useRef<ConversationSummary | null>(null);
+  const humanUnreadByChatRef = useRef<Record<string, number>>({});
+  const humanUnreadBaselinesRef = useRef(new Map<string, { lastMessageAt: number | null; messageIds: Set<string> }>());
+  const humanUnreadRequestsRef = useRef(new Set<string>());
+  const humanUnreadGenerationRef = useRef(new Map<string, number>());
   const pendingScrollAdjustmentRef = useRef<
     { height: number; top: number }
     | { preserveTop: number }
@@ -383,10 +322,70 @@ export default function ConversationsPage() {
   selectedConversationIdRef.current = selectedConversationId;
   messagesRef.current = messages;
 
-  function selectConversation(conversation: ConversationSummary) {
-    setError(null);
-    setSelectedConversationId(conversationKey(conversation));
+  function setHumanUnreadCount(key: string, count: number) {
+    const normalized = Math.max(0, Math.floor(count));
+    const current = humanUnreadByChatRef.current[key] ?? 0;
+    if (current === normalized) {
+      return;
+    }
+    const next = { ...humanUnreadByChatRef.current };
+    if (normalized === 0) {
+      delete next[key];
+    } else {
+      next[key] = normalized;
+    }
+    humanUnreadByChatRef.current = next;
+    setHumanUnreadByChat(next);
   }
+
+  function initializeHumanUnreadBaseline(conversation: ConversationSummary) {
+    const key = conversationKey(conversation);
+    if (!humanUnreadBaselinesRef.current.has(key)) {
+      humanUnreadBaselinesRef.current.set(key, {
+        lastMessageAt: summaryTimestamp(conversation.lastMessageAt),
+        messageIds: new Set()
+      });
+    }
+  }
+
+  function resetHumanUnreadBaseline(conversation: ConversationSummary) {
+    const key = conversationKey(conversation);
+    setHumanUnreadCount(key, 0);
+    humanUnreadGenerationRef.current.set(key, (humanUnreadGenerationRef.current.get(key) ?? 0) + 1);
+    humanUnreadBaselinesRef.current.set(key, {
+      lastMessageAt: summaryTimestamp(conversation.lastMessageAt),
+      messageIds: new Set()
+    });
+  }
+
+  function syncHumanUnreadMode(previous: ConversationSummary | undefined, next: ConversationSummary) {
+    if (!next.humanTakeoverActive || (previous && !previous.humanTakeoverActive && next.humanTakeoverActive)) {
+      resetHumanUnreadBaseline(next);
+      return;
+    }
+    initializeHumanUnreadBaseline(next);
+  }
+
+  function updateHumanUnreadBaselineFromMessages(conversation: ConversationSummary, incoming: ConversationMessage[]) {
+    const customerMessageIds = new Set(
+      incoming.filter((message) => isCustomerMessageRole(message.role)).map(messageIdentity)
+    );
+    const newestMessageTime = incoming
+      .map((message) => normalizeTimestamp(message.time))
+      .filter((value): value is number => value !== null)
+      .reduce((latest, value) => Math.max(latest, value), 0);
+    humanUnreadBaselinesRef.current.set(conversationKey(conversation), {
+      lastMessageAt: summaryTimestamp(conversation.lastMessageAt) ?? (newestMessageTime || null),
+      messageIds: customerMessageIds
+    });
+  }
+
+  const selectConversation = useCallback((conversation: ConversationSummary) => {
+    const key = conversationKey(conversation);
+    setError(null);
+    setSelectedConversationId(key);
+    setIsMobileChatOpen(true);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -441,6 +440,13 @@ export default function ConversationsPage() {
       currentConversationPageRef.current = response.page;
       hasMoreConversationsRef.current = response.hasMore;
       setHasMoreConversations(response.hasMore);
+      const previousItems = conversationsRef.current;
+      nextItems.forEach((item) => {
+        syncHumanUnreadMode(
+          previousItems.find((previous) => conversationKey(previous) === conversationKey(item)),
+          item
+        );
+      });
       conversationsRef.current = nextItems;
       setConversations(nextItems);
       const selectedStillPresent = Boolean(selectedConversationId)
@@ -469,7 +475,7 @@ export default function ConversationsPage() {
     if (!user || conversationRequestInFlightRef.current || conversationPollingInFlightRef.current || !hasMoreConversationsRef.current) {
       return;
     }
-    const page = currentConversationPageRef.current + 1;
+    const page = nextConversationPage(currentConversationPageRef.current);
     const generation = conversationLoadGenerationRef.current;
     conversationRequestInFlightRef.current = true;
     setIsLoadingMoreConversations(true);
@@ -482,6 +488,7 @@ export default function ConversationsPage() {
       currentConversationPageRef.current = response.page;
       hasMoreConversationsRef.current = response.hasMore;
       setHasMoreConversations(response.hasMore);
+      response.items.forEach(initializeHumanUnreadBaseline);
       setConversations((current) => {
         const merged = mergeConversations(current, response.items);
         conversationsRef.current = merged;
@@ -502,6 +509,8 @@ export default function ConversationsPage() {
     }
   }
 
+  loadMoreConversationsRef.current = loadMoreConversations;
+
   useEffect(() => {
     if (!user) {
       return;
@@ -513,7 +522,17 @@ export default function ConversationsPage() {
     if (isLoading || isLoadingMoreConversations || conversations.length > 0 || !hasMoreConversations) {
       return;
     }
-    void loadMoreConversations();
+    void loadMoreConversationsRef.current();
+  }, [conversations.length, hasMoreConversations, isLoading, isLoadingMoreConversations]);
+
+  useLayoutEffect(() => {
+    const container = conversationsContainerRef.current;
+    if (!container || isLoading || isLoadingMoreConversations || !hasMoreConversations || conversations.length === 0) {
+      return;
+    }
+    if (container.scrollHeight <= container.clientHeight + LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX) {
+      void loadMoreConversationsRef.current();
+    }
   }, [conversations.length, hasMoreConversations, isLoading, isLoadingMoreConversations]);
 
   function getConversationMessagesPage(conversation: ConversationSummary, page: number) {
@@ -555,6 +574,8 @@ export default function ConversationsPage() {
       if (generation !== messageLoadGenerationRef.current) return;
       loadedMessagePagesRef.current.add(1);
       pendingScrollAdjustmentRef.current = "bottom";
+      updateHumanUnreadBaselineFromMessages(conversation, response.items);
+      setHumanUnreadCount(conversationId, 0);
       messagesRef.current = response.items;
       setMessages(response.items);
       currentMessagePageRef.current = 1;
@@ -631,6 +652,7 @@ export default function ConversationsPage() {
       hasMoreMessagesRef.current = false;
       messagesRef.current = [];
       pendingOpenConversationRefreshRef.current = null;
+      setIsMobileChatOpen(false);
       setMessages([]);
       setCurrentMessagePage(1);
       setHasMoreMessages(false);
@@ -660,6 +682,59 @@ export default function ConversationsPage() {
     [conversations, selectedConversationId]
   );
 
+  async function detectHumanUnread(previous: ConversationSummary, next: ConversationSummary) {
+    const key = conversationKey(next);
+    if (!next.humanTakeoverActive) {
+      resetHumanUnreadBaseline(next);
+      return;
+    }
+
+    if (!previous.humanTakeoverActive) {
+      resetHumanUnreadBaseline(next);
+      return;
+    }
+
+    if (key === selectedConversationIdRef.current || !conversationMessageChanged(previous, next) || humanUnreadRequestsRef.current.has(key)) {
+      return;
+    }
+
+    humanUnreadRequestsRef.current.add(key);
+    const requestGeneration = humanUnreadGenerationRef.current.get(key) ?? 0;
+    const baseline = humanUnreadBaselinesRef.current.get(key) ?? {
+      lastMessageAt: summaryTimestamp(previous.lastMessageAt),
+      messageIds: new Set<string>()
+    };
+
+    try {
+      const response = await getConversationMessagesPage(next, 1);
+      const customerMessages = response.items.filter((message) => isCustomerMessageRole(message.role));
+      const previousTimestamp = baseline.lastMessageAt ?? summaryTimestamp(previous.lastMessageAt);
+      const newCustomerMessages = customerMessages.filter((message) => {
+        const messageTime = normalizeTimestamp(message.time);
+        if (messageTime === null || previousTimestamp === null) {
+          return false;
+        }
+        return messageTime > previousTimestamp
+          || (messageTime === previousTimestamp && baseline.messageIds.size > 0 && !baseline.messageIds.has(messageIdentity(message)));
+      });
+
+      const currentConversation = conversationsRef.current.find((item) => conversationKey(item) === key);
+      if (!currentConversation?.humanTakeoverActive || (humanUnreadGenerationRef.current.get(key) ?? 0) !== requestGeneration) {
+        return;
+      }
+      updateHumanUnreadBaselineFromMessages(next, response.items);
+      if (selectedConversationIdRef.current === key) {
+        setHumanUnreadCount(key, 0);
+      } else if (newCustomerMessages.length > 0) {
+        setHumanUnreadCount(key, (humanUnreadByChatRef.current[key] ?? 0) + newCustomerMessages.length);
+      }
+    } catch {
+      // A transient message request failure must not fabricate an unread count.
+    } finally {
+      humanUnreadRequestsRef.current.delete(key);
+    }
+  }
+
   async function refreshOpenConversationMessages(conversation: ConversationSummary) {
     const conversationId = conversationKey(conversation);
     if (conversationId !== selectedConversationIdRef.current
@@ -674,7 +749,6 @@ export default function ConversationsPage() {
 
     const generation = messageLoadGenerationRef.current;
     const container = messagesContainerRef.current;
-    const previousHeight = container?.scrollHeight ?? 0;
     const previousTop = container?.scrollTop ?? 0;
     const distanceToBottom = container
       ? container.scrollHeight - container.scrollTop - container.clientHeight
@@ -689,6 +763,8 @@ export default function ConversationsPage() {
         return;
       }
 
+      updateHumanUnreadBaselineFromMessages(conversation, response.items);
+      setHumanUnreadCount(conversationId, 0);
       const merged = mergeMessages(currentMessages, response.items);
       const changed = merged.length !== currentMessages.length
         || merged.some((message, index) => !currentMessages[index] || !sameMessage(message, currentMessages[index]));
@@ -703,7 +779,7 @@ export default function ConversationsPage() {
       messagesRef.current = merged;
       setMessages(merged);
 
-      const newMessages = countNewMessages(currentMessages, response.items);
+      const newMessages = countNewCustomerMessages(currentMessages, response.items);
       if (wasNearBottom) {
         setPendingNewMessages(0);
       } else if (newMessages > 0) {
@@ -765,14 +841,22 @@ export default function ConversationsPage() {
         }
 
         const current = conversationsRef.current;
+        const selectedKey = selectedConversationIdRef.current;
         const previousSelected = current.find((item) => conversationKey(item) === selectedConversationIdRef.current);
+        response.items.forEach((incoming) => {
+          initializeHumanUnreadBaseline(incoming);
+          const previous = current.find((item) => conversationKey(item) === conversationKey(incoming));
+          if (previous && !sameConversationSummary(previous, incoming)) {
+            void detectHumanUnread(previous, incoming);
+          }
+        });
         const merged = mergeConversations(current, response.items);
         if (merged !== current) {
           conversationsRef.current = merged;
           setConversations(merged);
         }
 
-        const refreshedSelected = merged.find((item) => conversationKey(item) === selectedConversationIdRef.current);
+        const refreshedSelected = merged.find((item) => conversationKey(item) === selectedKey);
         if (previousSelected && refreshedSelected && !sameConversationSummary(previousSelected, refreshedSelected)) {
           await refreshOpenConversationMessages(refreshedSelected);
         }
@@ -932,6 +1016,9 @@ export default function ConversationsPage() {
         ? { ...conversationForMessages, id: conversationId }
         : conversationForMessages;
       const result = await action(conversationId);
+      if (conversationForMessages) {
+        setHumanUnreadCount(conversationKey(conversationForMessages), 0);
+      }
       setSuccess(result.message);
       setManualMessage("");
       setSaleSummary("");
@@ -959,8 +1046,8 @@ export default function ConversationsPage() {
   }
 
   return (
-    <AppShell wide>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <AppShell wide fullHeight>
+      <div className="flex shrink-0 flex-col gap-3 pb-3 lg:flex-row lg:items-end lg:justify-between">
         <PageHeader
           eyebrow="Atendimento"
           title="Conversas"
@@ -973,7 +1060,7 @@ export default function ConversationsPage() {
               Ferramentas de teste
               <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
             </summary>
-            <div className="absolute right-0 z-20 mt-2 grid w-[min(20rem,calc(100vw-2rem))] gap-3 rounded-2xl border bg-bg-primary p-4 shadow-soft-lg" style={{ borderColor: "var(--color-border)" }}>
+            <div className="absolute right-0 z-20 mt-2 grid w-[min(20rem,calc(100vw-2rem))] gap-3 rounded-xl border bg-bg-primary p-4 shadow-soft-sm" style={{ borderColor: "var(--color-border)" }}>
               <div>
                 <p className="text-sm font-semibold text-text-primary">Nova conversa de teste</p>
                 <p className="mt-1 text-xs leading-5 text-text-secondary">Abra uma conversa GPTMaker sem ocupar a fila de contatos.</p>
@@ -988,21 +1075,25 @@ export default function ConversationsPage() {
         ) : null}
       </div>
 
-      {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
-      {success ? <p className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</p> : null}
+      {error ? <p className="mb-3 shrink-0 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-sm text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-300">{error}</p> : null}
+      {success ? <p className="mb-3 shrink-0 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/40 dark:text-emerald-300">{success}</p> : null}
 
-      <section className="grid min-w-0 items-start gap-4 overflow-x-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
-        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-20 lg:self-start">
+      <section className="grid min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border border-border bg-bg-primary shadow-soft-sm lg:grid-cols-[340px_minmax(0,1fr)] xl:grid-cols-[370px_minmax(0,1fr)]">
+        <aside className={`${isMobileChatOpen ? "hidden lg:flex" : "flex"} min-h-0 min-w-0 flex-col bg-[#f8faf9] dark:bg-slate-900 lg:border-r lg:border-border`}>
           {isSuperAdmin ? (
-            <section className="card overflow-hidden p-4">
+            <section className="shrink-0 border-b border-border p-3">
               <select className="input-field" aria-label="Franquia" value={selectedFranchiseId} onChange={(event) => setSelectedFranchiseId(event.target.value)}>
                 {franchises.map((franchise) => <option key={franchise.id} value={franchise.id}>{franchise.name}</option>)}
               </select>
             </section>
           ) : null}
 
-          <section className="card min-w-0 overflow-hidden p-4">
-            <div className="grid gap-3">
+          <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="shrink-0 border-b border-border px-3 py-3">
+              <div className="mb-2 flex items-center justify-between gap-3 px-1">
+                <p className="text-xs font-semibold text-text-primary">Caixa de entrada</p>
+                <span className="text-2xs tabular-nums text-text-tertiary">{conversations.length} carregadas</span>
+              </div>
               <select className="input-field" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
                 {statusOptions.map((status) => (
                   <option key={status.value || "all"} value={status.value}>{status.label}</option>
@@ -1011,68 +1102,33 @@ export default function ConversationsPage() {
             </div>
 
             {isLoading ? (
-              <p className="mt-4 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando conversas...</p>
+              <p className="px-4 py-5 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando conversas...</p>
             ) : conversations.length ? (
               <div
                 ref={conversationsContainerRef}
                 onScroll={(event) => {
                   const container = event.currentTarget;
-                  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
-                  if (distanceToBottom <= LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX) {
-                    void loadMoreConversations();
+                  if (shouldLoadNextConversationPage(container, LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX)) {
+                    void loadMoreConversationsRef.current();
                   }
                 }}
-                className="mt-3 max-h-[calc(100dvh-24rem)] min-h-[18rem] overflow-x-hidden overflow-y-auto scrollbar-thin"
+                className="min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-1.5 scrollbar-thin"
               >
                 {groupedConversations.map((group) => (
                   <section key={group.key} aria-label={group.label}>
-                    <div className="sticky top-0 z-10 flex items-center gap-2 bg-bg-primary/95 px-3 py-2 backdrop-blur-sm">
-                      <span className="text-xs font-semibold text-text-secondary">{group.label}</span>
-                      <span className="h-px flex-1 bg-line/70" />
+                    <div className="sticky top-0 z-10 flex items-center gap-2 bg-[#f8faf9]/95 px-3 py-2 backdrop-blur-sm dark:bg-slate-900/95">
+                      <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-text-tertiary">{group.label}</span>
                     </div>
-                    {group.items.map((conversation) => {
-                      const unreadCount = conversation.unReadCount ?? (conversation.read === false ? 1 : 0);
-                      return (
-                        <button
-                          key={conversationKey(conversation)}
-                          type="button"
-                          onClick={() => void selectConversation(conversation)}
-                          disabled={isMaterializingConversation}
-                          className={`flex min-w-0 w-full gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversationKey(conversation) ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"} disabled:cursor-wait disabled:opacity-70`}
-                          style={{ borderColor: "var(--color-border)" }}
-                        >
-                          <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                                  {displayCustomerName(conversation.customerName)}
-                                </p>
-                                <div className="mt-1 flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                                  <Phone size={14} className="shrink-0" />
-                                  <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
-                                </div>
-                              </div>
-                              <div className="flex shrink-0 items-center gap-2">
-                                <span className="text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
-                                {unreadCount > 0 ? (
-                                  <span className="flex min-w-5 items-center justify-center rounded-full bg-brand-600 px-1.5 py-0.5 text-2xs font-semibold text-white" aria-label={`${unreadCount} mensagens não lidas`}>
-                                    {unreadCount > 99 ? "99+" : unreadCount}
-                                  </span>
-                                ) : null}
-                              </div>
-                            </div>
-                            <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                              {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
-                            </p>
-                            <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
-                              <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
-                              {conversationStatusLabel(conversation.operationalStatus)}
-                            </p>
-                          </div>
-                        </button>
-                      );
-                    })}
+                    {group.items.map((conversation) => (
+                      <ConversationListItem
+                        key={conversationKey(conversation)}
+                        conversation={conversation}
+                        isSelected={selectedConversationId === conversationKey(conversation)}
+                        humanUnreadCount={humanUnreadByChat[conversationKey(conversation)] ?? 0}
+                        disabled={isMaterializingConversation}
+                        onSelect={selectConversation}
+                      />
+                    ))}
                   </section>
                 ))}
                 {isLoadingMoreConversations ? (
@@ -1093,14 +1149,22 @@ export default function ConversationsPage() {
           </section>
         </aside>
 
-        <section className="card min-w-0 overflow-hidden p-0 lg:h-[calc(100dvh-13.5rem)] lg:min-h-[32rem]">
+        <section className={`${isMobileChatOpen ? "block" : "hidden lg:block"} min-h-0 min-w-0 overflow-hidden bg-bg-primary`}>
           {selectedConversation ? (
             <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
-              <div className="grid min-w-0 gap-4 border-b border-line/80 px-4 py-3 sm:px-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+              <div className="grid min-w-0 gap-3 border-b border-border bg-bg-primary px-4 py-3 sm:px-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
                 <div className="flex min-w-0 items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setIsMobileChatOpen(false)}
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-bg-tertiary lg:hidden"
+                    aria-label="Voltar para a lista de conversas"
+                  >
+                    <ChevronDown size={18} className="rotate-90" />
+                  </button>
                   <ContactAvatar name={selectedConversation.customerName} src={selectedConversation.customerPicture} size="lg" />
                   <div className="min-w-0">
-                  <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                  <h2 className="truncate text-base font-semibold sm:text-lg" style={{ color: "var(--color-text-primary)" }}>
                     {displayCustomerName(selectedConversation.customerName)}
                   </h2>
                   <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
@@ -1108,7 +1172,7 @@ export default function ConversationsPage() {
                       <Phone size={14} className="shrink-0" />
                       {selectedConversation.customerPhone || "Sem telefone"}
                     </span>
-                    <span className="inline-flex items-center gap-2">
+                    <span className="hidden items-center gap-2 sm:inline-flex">
                       <Building2 size={14} className="shrink-0" />
                       {selectedConversation.franchiseName}
                     </span>
@@ -1152,7 +1216,7 @@ export default function ConversationsPage() {
                       }}
                       data-current-page={currentMessagePage}
                       data-has-more={hasMoreMessages}
-                      className="grid h-[65dvh] min-h-0 content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain bg-bg-secondary px-4 py-5 scrollbar-thin sm:h-full lg:h-auto"
+                      className="grid h-full min-h-0 content-start gap-4 overflow-x-hidden overflow-y-auto overscroll-contain bg-[#f2f6f4] px-4 py-4 scrollbar-thin dark:bg-slate-950 sm:px-6 sm:py-5"
                     >
                     {isLoadingOlderMessages ? (
                       <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
@@ -1169,11 +1233,11 @@ export default function ConversationsPage() {
                       groupedMessages.map((group) => (
                         <section key={group.label} className="grid gap-3">
                           <div className="flex items-center gap-3">
-                            <div className="h-px flex-1 bg-line/80" />
-                            <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "var(--color-text-tertiary)" }}>
+                            <div className="h-px flex-1 bg-border" />
+                            <p className="text-2xs font-medium text-text-tertiary">
                               {group.label}
                             </p>
-                            <div className="h-px flex-1 bg-line/80" />
+                            <div className="h-px flex-1 bg-border" />
                           </div>
                           {group.items.map((message) => {
                             const role = message.role?.toUpperCase();
@@ -1188,7 +1252,7 @@ export default function ConversationsPage() {
                             return (
                               <div key={message.id} className={`flex gap-2 ${isCustomerMessage ? "justify-start" : "justify-end"}`}>
                                 {isCustomerMessage ? <ContactAvatar name={selectedConversation.customerName} src={selectedConversation.customerPicture} size="sm" /> : null}
-                                <article className={`max-w-[min(82%,44rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-6 shadow-soft-sm ${isCustomerMessage ? "rounded-tl-md bg-bg-primary text-text-primary" : isHumanMessage ? "rounded-tr-md bg-ink text-white" : "rounded-tr-md bg-brand-100 text-brand-900 dark:bg-brand-900/50 dark:text-brand-50"}`}>
+                                <article className={`max-w-[min(82%,44rem)] rounded-2xl px-4 py-2.5 text-sm leading-6 ${isCustomerMessage ? "rounded-tl-md border border-border bg-bg-primary text-text-primary shadow-sm" : isHumanMessage ? "rounded-tr-md bg-[#173b39] text-white" : "rounded-tr-md bg-brand-100 text-brand-900 dark:bg-brand-900/60 dark:text-brand-50"}`}>
                                   <div className="mb-0.5 flex items-center gap-1.5 text-2xs font-medium opacity-70">
                                     {!isCustomerMessage && !isHumanMessage ? <Bot size={12} /> : null}
                                     <span>{isHumanMessage ? `Enviado por ${authorName}` : authorName}</span>
@@ -1209,6 +1273,7 @@ export default function ConversationsPage() {
                     {pendingNewMessages > 0 ? (
                       <button
                         type="button"
+                        aria-live="polite"
                         onClick={() => {
                           const container = messagesContainerRef.current;
                           if (container) {
@@ -1216,17 +1281,17 @@ export default function ConversationsPage() {
                           }
                           setPendingNewMessages(0);
                         }}
-                        className="absolute bottom-4 right-5 rounded-full bg-brand-600 px-3 py-2 text-xs font-semibold text-white shadow-soft-lg hover:bg-brand-700"
+                        className="absolute bottom-4 right-4 rounded-lg border border-brand-200 bg-bg-primary px-3 py-2 text-xs font-semibold text-brand-700 shadow-soft-sm transition-colors hover:bg-brand-50 dark:border-brand-800 dark:bg-ink dark:text-brand-200 dark:hover:bg-brand-900/40"
                       >
                         {pendingNewMessages === 1 ? "1 nova mensagem" : `${pendingNewMessages} novas mensagens`}
                       </button>
                     ) : null}
                   </div>
 
-                  <div className="border-t bg-bg-primary p-3 sm:p-4" style={{ borderColor: "var(--color-border)" }}>
-                    <div className="flex items-end gap-2 rounded-2xl border bg-bg-secondary p-2" style={{ borderColor: "var(--color-border)" }}>
-                      <textarea className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-text-primary outline-none" placeholder={selectedConversation.humanTakeoverActive ? "Digite uma mensagem..." : "Assuma o atendimento para responder"} value={manualMessage} disabled={!selectedConversation.humanTakeoverActive || isConversationClosed} onChange={(event) => setManualMessage(event.target.value)} />
-                      <button type="button" aria-label="Enviar mensagem" onClick={() => void runAction((conversationId) => sendConversationManualMessage(conversationId, { message: manualMessage }))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || !manualMessage.trim() || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+                  <div className="shrink-0 border-t bg-bg-primary p-3 sm:px-5 sm:py-3" style={{ borderColor: "var(--color-border)" }}>
+                    <div className="flex items-end gap-2 rounded-xl border bg-bg-primary p-1.5 shadow-sm" style={{ borderColor: "var(--color-border-strong)" }}>
+                      <textarea className="max-h-32 min-h-10 flex-1 resize-none bg-transparent px-2 py-1.5 text-sm leading-5 text-text-primary outline-none" placeholder={selectedConversation.humanTakeoverActive ? "Digite uma mensagem..." : "Assuma o atendimento para responder"} value={manualMessage} disabled={!selectedConversation.humanTakeoverActive || isConversationClosed} onChange={(event) => setManualMessage(event.target.value)} />
+                      <button type="button" aria-label="Enviar mensagem" onClick={() => void runAction((conversationId) => sendConversationManualMessage(conversationId, { message: manualMessage }))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || !manualMessage.trim() || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
                         {isActionLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                       </button>
                     </div>
@@ -1244,7 +1309,7 @@ export default function ConversationsPage() {
       {isSaleDialogOpen && selectedConversation ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsSaleDialogOpen(false)} />
-          <section role="dialog" aria-modal="true" aria-labelledby="sale-dialog-title" className="card relative z-10 w-full max-w-lg p-6 shadow-soft-lg">
+          <section role="dialog" aria-modal="true" aria-labelledby="sale-dialog-title" className="card relative z-10 w-full max-w-lg p-6 shadow-soft-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 id="sale-dialog-title" className="text-lg font-semibold text-text-primary">Concluir venda</h2>
