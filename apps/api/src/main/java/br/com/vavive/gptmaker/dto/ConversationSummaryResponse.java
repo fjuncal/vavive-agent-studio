@@ -5,6 +5,7 @@ import java.util.UUID;
 
 public record ConversationSummaryResponse(
     UUID id,
+    String chatId,
     UUID franchiseId,
     String franchiseName,
     String agentName,

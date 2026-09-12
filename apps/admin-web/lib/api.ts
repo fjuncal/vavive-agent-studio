@@ -347,7 +347,8 @@ export type FranchiseAssistantConfiguration = {
 };
 
 export type ConversationSummary = {
-  id: string;
+  id?: string | null;
+  chatId?: string | null;
   franchiseId: string;
   franchiseName: string;
   agentName?: string | null;
@@ -389,6 +390,13 @@ export type ConversationMessage = {
 
 export type ConversationMessagePage = {
   items: ConversationMessage[];
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
+};
+
+export type ConversationPage = {
+  items: ConversationSummary[];
   page: number;
   pageSize: number;
   hasMore: boolean;
@@ -890,9 +898,35 @@ export function getConversations(filters: { franchiseId?: string; status?: strin
   return apiFetch<ConversationSummary[]>(`/conversations${suffix}`);
 }
 
+export function getConversationPage(
+  filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string } = {},
+  page = 1,
+  pageSize = 50
+) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (filters.franchiseId) params.set("franchiseId", filters.franchiseId);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.channel) params.set("channel", filters.channel);
+  if (filters.responsible) params.set("responsible", filters.responsible);
+  return apiFetch<ConversationPage>(`/conversations?${params.toString()}`);
+}
+
+export function materializeConversation(payload: { franchiseId?: string; chatId: string }) {
+  return apiFetch<ConversationSummary>("/conversations/materialize", {
+    method: "POST",
+    body: JSON.stringify(payload)
+  });
+}
+
 export function getConversationMessages(id: string, page = 1, pageSize = 30) {
   const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
   return apiFetch<ConversationMessagePage>(`/conversations/${id}/messages?${params.toString()}`);
+}
+
+export function getRemoteConversationMessages(chatId: string, franchiseId?: string, page = 1, pageSize = 30) {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (franchiseId) params.set("franchiseId", franchiseId);
+  return apiFetch<ConversationMessagePage>(`/conversations/remote/${encodeURIComponent(chatId)}/messages?${params.toString()}`);
 }
 
 export function startHumanTakeover(id: string) {

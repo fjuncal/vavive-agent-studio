@@ -1,6 +1,7 @@
 package br.com.vavive.gptmaker.repository;
 
 import br.com.vavive.gptmaker.domain.entity.ConversationSession;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -10,6 +11,8 @@ public interface ConversationSessionRepository extends JpaRepository<Conversatio
     List<ConversationSession> findByFranchiseId(UUID franchiseId);
 
     List<ConversationSession> findByFranchiseIdOrderByUpdatedAtDesc(UUID franchiseId);
+
+    List<ConversationSession> findByFranchiseIdAndChatIdIn(UUID franchiseId, Collection<String> chatIds);
 
     Optional<ConversationSession> findByIdAndFranchiseId(UUID id, UUID franchiseId);
 

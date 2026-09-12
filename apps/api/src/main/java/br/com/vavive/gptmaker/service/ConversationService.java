@@ -13,6 +13,7 @@ import br.com.vavive.gptmaker.dto.ConversationHandoffEventResponse;
 import br.com.vavive.gptmaker.dto.ConversationManualMessageRequest;
 import br.com.vavive.gptmaker.dto.ConversationMessageResponse;
 import br.com.vavive.gptmaker.dto.ConversationMessagePageResponse;
+import br.com.vavive.gptmaker.dto.ConversationPageResponse;
 import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
@@ -34,16 +35,21 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
+import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class ConversationService {
+    private static final int MAX_CHAT_PAGE_SIZE = 100;
     private static final int MAX_MESSAGE_PAGE_SIZE = 100;
     private static final int CHAT_SYNC_PAGE = 1;
     private static final int CHAT_SYNC_PAGE_SIZE = 50;
@@ -56,6 +62,7 @@ public class ConversationService {
     private final GptMakerClient gptMakerClient;
     private final WhatsappHandoffService whatsappHandoffService;
     private final AppRuntimeProperties runtimeProperties;
+    private final ReentrantLock[] operationalSessionLocks = new ReentrantLock[64];
 
     public ConversationService(
         ConversationSessionRepository conversationSessionRepository,
@@ -75,36 +82,100 @@ public class ConversationService {
         this.gptMakerClient = gptMakerClient;
         this.whatsappHandoffService = whatsappHandoffService;
         this.runtimeProperties = runtimeProperties;
+        for (int index = 0; index < operationalSessionLocks.length; index++) {
+            operationalSessionLocks[index] = new ReentrantLock();
+        }
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> list(UUID franchiseId, String status, String channel, String responsible) {
         User user = currentUserService.requireCurrentUser();
-        Map<String, String> customerPictures = Map.of();
-        if (liveInboxEnabled()) {
-            if (user.getRole() == UserRole.SUPER_ADMIN) {
-                if (franchiseId != null) {
-                    customerPictures = syncFranchise(requireFranchise(franchiseId));
-                }
-            } else {
-                customerPictures = syncFranchiseSilently(currentUserService.requireFranchise(user));
+        Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
+            ? (franchiseId == null ? null : requireFranchise(franchiseId))
+            : currentUserService.requireFranchise(user);
+
+        List<ConversationSummaryResponse> remoteItems = List.of();
+        if (liveInboxEnabled() && franchise != null) {
+            remoteItems = syncFranchisePage(franchise, CHAT_SYNC_PAGE, CHAT_SYNC_PAGE_SIZE).items();
+        }
+
+        List<ConversationSession> base = user.getRole() == UserRole.SUPER_ADMIN
+            ? (franchise == null
+                ? conversationSessionRepository.findAll()
+                : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()))
+            : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId());
+        List<ConversationSummaryResponse> localItems = deduplicateSessions(base).stream()
+            .map(item -> toSummary(item, null))
+            .toList();
+        return filterSummaries(mergeSummaries(localItems, remoteItems), status, channel, responsible);
+    }
+
+    @Transactional(readOnly = true)
+    public ConversationPageResponse listPage(
+        UUID franchiseId,
+        String status,
+        String channel,
+        String responsible,
+        int page,
+        int pageSize
+    ) {
+        validateConversationPagination(page, pageSize);
+        User user = currentUserService.requireCurrentUser();
+        Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
+            ? (franchiseId == null ? null : requireFranchise(franchiseId))
+            : currentUserService.requireFranchise(user);
+
+        if (liveInboxEnabled() && franchise != null) {
+            ConversationSyncPage synced = syncFranchisePage(franchise, page, pageSize);
+            if (page == 1 && synced.items().isEmpty()) {
+                return localConversationPage(
+                    conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()),
+                    status,
+                    channel,
+                    responsible,
+                    page,
+                    pageSize
+                );
             }
+            List<ConversationSummaryResponse> filtered = filterSummaries(synced.items(), status, channel, responsible);
+            return new ConversationPageResponse(
+                filtered,
+                page,
+                pageSize,
+                synced.hasMore()
+            );
         }
 
         List<ConversationSession> base = user.getRole() == UserRole.SUPER_ADMIN
             ? (franchiseId == null
                 ? conversationSessionRepository.findAll()
-                : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(requireFranchise(franchiseId).getId()))
-            : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(currentUserService.requireFranchise(user).getId());
+                : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()))
+            : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId());
+        return localConversationPage(base, status, channel, responsible, page, pageSize);
+    }
 
-        Map<String, String> picturesByConversation = customerPictures;
-        return deduplicateSessions(base).stream()
-            .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.getOperationalStatus()))
-            .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.getChannelType()))
-            .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.getResponsibleUserName()))
-            .sorted(Comparator.comparing(ConversationSession::getUpdatedAt).reversed())
-            .map(item -> toSummary(item, picturesByConversation.get(conversationIdentity(item))))
+    @Transactional
+    public ConversationSummaryResponse materialize(UUID franchiseId, String chatId) {
+        OperationalSession operationalSession = getOrCreateOperationalSession(franchiseId, chatId);
+        return toSummary(operationalSession.session(), operationalSession.customerPicture());
+    }
+
+    private ConversationPageResponse localConversationPage(
+        List<ConversationSession> base,
+        String status,
+        String channel,
+        String responsible,
+        int page,
+        int pageSize
+    ) {
+        List<ConversationSession> filtered = filterSessions(base, status, channel, responsible);
+        long requestedFromIndex = (long) (page - 1) * pageSize;
+        int fromIndex = requestedFromIndex >= filtered.size() ? filtered.size() : (int) requestedFromIndex;
+        int toIndex = Math.min(fromIndex + pageSize, filtered.size());
+        List<ConversationSummaryResponse> items = filtered.subList(fromIndex, toIndex).stream()
+            .map(item -> toSummary(item, null))
             .toList();
+        return new ConversationPageResponse(items, page, pageSize, toIndex < filtered.size());
     }
 
     @Transactional(readOnly = true)
@@ -181,6 +252,23 @@ public class ConversationService {
             ));
         }
         return new ConversationMessagePageResponse(localMessages, page, pageSize, false);
+    }
+
+    @Transactional(readOnly = true)
+    public ConversationMessagePageResponse listRemoteMessages(UUID franchiseId, String chatId, int page, int pageSize) {
+        validateMessagePagination(page, pageSize);
+        Franchise franchise = resolveConversationFranchise(franchiseId);
+        String normalizedChatId = normalizeChatId(chatId);
+        requireRemoteChat(franchise, normalizedChatId);
+
+        try {
+            List<ConversationMessageResponse> remoteMessages = gptMakerClient.listChatMessages(normalizedChatId, page, pageSize).stream()
+                .map(this::toMessageResponse)
+                .toList();
+            return messagePage(normalizedChatId, remoteMessages, page, pageSize);
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
     }
 
     @Transactional
@@ -442,6 +530,92 @@ public class ConversationService {
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Franquia nao encontrada"));
     }
 
+    private Franchise resolveConversationFranchise(UUID franchiseId) {
+        User user = currentUserService.requireCurrentUser();
+        if (user.getRole() != UserRole.SUPER_ADMIN) {
+            return currentUserService.requireFranchise(user);
+        }
+        if (franchiseId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Selecione a franquia para acessar esta conversa.");
+        }
+        return requireFranchise(franchiseId);
+    }
+
+    private OperationalSession getOrCreateOperationalSession(UUID franchiseId, String chatId) {
+        String normalizedChatId = normalizeChatId(chatId);
+        Franchise franchise = resolveConversationFranchise(franchiseId);
+        ReentrantLock lock = operationalSessionLocks[lockIndex(franchise.getId(), normalizedChatId)];
+        lock.lock();
+        boolean releaseAfterTransaction = false;
+        try {
+            ConversationSession existing = conversationSessionRepository
+                .findFirstByFranchiseIdAndChatId(franchise.getId(), normalizedChatId)
+                .orElse(null);
+            if (existing != null) {
+                return new OperationalSession(existing, null);
+            }
+
+            if (!liveInboxEnabled() || franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta conversa ainda nao possui uma integracao GPTMaker disponivel.");
+            }
+
+            GptMakerChatResponse chat = requireRemoteChat(franchise, normalizedChatId);
+            ConversationSession session = updateSessionFromChat(franchise, chat, null);
+            ConversationSession saved = conversationSessionRepository.save(session);
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCompletion(int status) {
+                        lock.unlock();
+                    }
+                });
+                releaseAfterTransaction = true;
+            }
+            return new OperationalSession(saved, safeExternalImageUrl(chat.picture()));
+        } finally {
+            if (!releaseAfterTransaction) {
+                lock.unlock();
+            }
+        }
+    }
+
+    private GptMakerChatResponse requireRemoteChat(Franchise franchise, String chatId) {
+        if (chatId == null || chatId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chat GPTMaker nao informado.");
+        }
+        if (!liveInboxEnabled() || franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta conversa ainda nao possui uma integracao GPTMaker disponivel.");
+        }
+        try {
+            GptMakerChatResponse chat = gptMakerClient.findChat(franchise.getWorkspaceId(), chatId);
+            if (chat == null || !belongsToFranchiseAgent(franchise, chat)) {
+                throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Conversa nao encontrada no workspace GPTMaker informado.");
+            }
+            return chat;
+        } catch (GptMakerIntegrationException exception) {
+            throw new ResponseStatusException(statusFor(exception), exception.getMessage());
+        }
+    }
+
+    private String normalizeChatId(String chatId) {
+        if (chatId == null || chatId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chat GPTMaker nao informado.");
+        }
+        return chatId.trim();
+    }
+
+    private int lockIndex(UUID franchiseId, String chatId) {
+        return (Objects.hash(franchiseId, chatId) & Integer.MAX_VALUE) % operationalSessionLocks.length;
+    }
+
+    private boolean belongsToFranchiseAgent(Franchise franchise, GptMakerChatResponse chat) {
+        String allowedAgentId = franchise.getAgentId();
+        if (allowedAgentId == null || allowedAgentId.isBlank()) {
+            return true;
+        }
+        return chat.agentId() != null && allowedAgentId.equals(chat.agentId());
+    }
+
     private ConversationSession requireAccessibleConversation(UUID conversationId) {
         User user = currentUserService.requireCurrentUser();
         if (user.getRole() == UserRole.SUPER_ADMIN) {
@@ -464,6 +638,7 @@ public class ConversationService {
     private ConversationSummaryResponse toSummary(ConversationSession session, String customerPicture) {
         return new ConversationSummaryResponse(
             session.getId(),
+            session.getChatId(),
             session.getFranchise().getId(),
             session.getFranchise().getName(),
             session.getAgentName(),
@@ -487,77 +662,181 @@ public class ConversationService {
         );
     }
 
-    private Map<String, String> syncFranchiseSilently(Franchise franchise) {
-        try {
-            return syncFranchise(franchise);
-        } catch (ResponseStatusException ignored) {
-            return Map.of();
-        }
-    }
-
-    private Map<String, String> syncFranchise(Franchise franchise) {
+    private ConversationSyncPage syncFranchisePage(Franchise franchise, int page, int pageSize) {
         if (!liveInboxEnabled()) {
-            return Map.of();
+            return new ConversationSyncPage(List.of(), false);
         }
         if (franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
-            return Map.of();
+            return new ConversationSyncPage(List.of(), false);
         }
         try {
-            LocalDateTime now = LocalDateTime.now();
-            Map<String, String> customerPictures = new LinkedHashMap<>();
-            List<ConversationSession> existingSessions = conversationSessionRepository.findByFranchiseId(franchise.getId());
-            Map<String, ConversationSession> sessionsByIdentity = new LinkedHashMap<>();
-            existingSessions.stream()
-                .sorted(Comparator.comparing(ConversationSession::getUpdatedAt).reversed())
-                .forEach(session -> sessionsByIdentity.putIfAbsent(conversationIdentity(session), session));
-            for (var chat : gptMakerClient.listChats(franchise.getWorkspaceId(), CHAT_SYNC_PAGE, CHAT_SYNC_PAGE_SIZE)) {
-                ConversationSession session = sessionsByIdentity.get(remoteConversationIdentity(chat.id(), null, "chat-" + chat.id()));
-                if (session == null && chat.id() != null && !chat.id().isBlank()) {
-                    session = conversationSessionRepository.findFirstByFranchiseIdAndChatId(franchise.getId(), chat.id()).orElse(null);
-                }
-                if (session == null) {
-                    session = new ConversationSession(
-                        franchise,
-                        chat.agentId() != null ? chat.agentId() : franchise.getAgentId(),
-                        chat.agentName() != null ? chat.agentName() : franchise.getAgentName(),
-                        "chat-" + chat.id(),
-                        "desconhecido",
-                        chat.whatsappPhone(),
-                        chat.conversation(),
-                        chat.conversation(),
-                        chat.id(),
-                        null
-                    );
-                }
-                session.setAgentName(firstNonBlank(chat.agentName(), franchise.getAgentName()));
-                boolean hasHumanOperator = chat.humanTalk()
-                    || (chat.userId() != null && !chat.userId().isBlank());
-                session.setResponsibleUserName(firstNonBlank(
-                    chat.messageUserName(),
-                    hasHumanOperator ? chat.userName() : null,
-                    session.getResponsibleUserName()
-                ));
-                session.setCustomerName(resolveCustomerName(chat, session, franchise, hasHumanOperator));
-                session.setCustomerPhone(firstNonBlank(chat.whatsappPhone(), session.getCustomerPhone()));
-                session.setLastResponse(firstNonBlank(chat.conversation(), session.getLastResponse()));
-                session.setChannelType(normalizeChannel(chat.type(), chat.conversationType()));
-                session.setHumanTakeoverActive(chat.humanTalk());
-                session.setOperationalStatus(mapOperationalStatus(chat.humanTalk(), chat.finished()));
-                session.setSyncStatus("sincronizada");
-                session.setLastMessageAt(toLocalDateTime(chat.time()));
-                session.setLastSyncedAt(now);
-                ConversationSession savedSession = conversationSessionRepository.save(session);
-                String identity = conversationIdentity(savedSession);
-                sessionsByIdentity.put(identity, savedSession);
-                String customerPicture = safeExternalImageUrl(chat.picture());
-                if (customerPicture != null) {
-                    customerPictures.put(identity, customerPicture);
-                }
+            List<GptMakerChatResponse> chats = gptMakerClient.listChats(franchise.getWorkspaceId(), page, pageSize);
+            List<String> chatIds = chats.stream()
+                .map(GptMakerChatResponse::id)
+                .filter(id -> id != null && !id.isBlank())
+                .toList();
+            Map<String, ConversationSession> sessionsByChatId = new LinkedHashMap<>();
+            if (!chatIds.isEmpty()) {
+                conversationSessionRepository.findByFranchiseIdAndChatIdIn(franchise.getId(), chatIds).stream()
+                    .sorted(Comparator.comparing(ConversationService::sessionSortTimestamp, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .forEach(session -> sessionsByChatId.putIfAbsent(session.getChatId(), session));
             }
-            return Map.copyOf(customerPictures);
+            List<ConversationSummaryResponse> summaries = new ArrayList<>();
+            for (var chat : chats) {
+                summaries.add(toRemoteSummary(franchise, chat, sessionsByChatId.get(chat.id())));
+            }
+            boolean hasMore = !chats.isEmpty();
+            log.debug("GPTMaker chat list page={} pageSize={} count={} hasMore={} franchiseId={}",
+                page, pageSize, chats.size(), hasMore, franchise.getId());
+            return new ConversationSyncPage(
+                List.copyOf(summaries),
+                hasMore
+            );
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
+    }
+
+    private ConversationSession updateSessionFromChat(
+        Franchise franchise,
+        GptMakerChatResponse chat,
+        ConversationSession existing
+    ) {
+        ConversationSession session = existing;
+        if (session == null) {
+            session = new ConversationSession(
+                franchise,
+                chat.agentId() != null ? chat.agentId() : franchise.getAgentId(),
+                chat.agentName() != null ? chat.agentName() : franchise.getAgentName(),
+                "chat-" + chat.id(),
+                "desconhecido",
+                chat.whatsappPhone(),
+                chat.conversation(),
+                chat.conversation(),
+                chat.id(),
+                null
+            );
+        }
+        session.setAgentName(firstNonBlank(chat.agentName(), franchise.getAgentName()));
+        boolean hasHumanOperator = chat.humanTalk()
+            || (chat.userId() != null && !chat.userId().isBlank());
+        session.setResponsibleUserName(firstNonBlank(
+            chat.messageUserName(),
+            hasHumanOperator ? chat.userName() : null,
+            session.getResponsibleUserName()
+        ));
+        session.setCustomerName(resolveCustomerName(chat, session, franchise, hasHumanOperator));
+        session.setCustomerPhone(firstNonBlank(chat.whatsappPhone(), session.getCustomerPhone()));
+        session.setLastResponse(firstNonBlank(chat.conversation(), session.getLastResponse()));
+        session.setChannelType(normalizeChannel(chat.type(), chat.conversationType()));
+        session.setHumanTakeoverActive(chat.humanTalk());
+        session.setOperationalStatus(mapOperationalStatus(chat.humanTalk(), chat.finished()));
+        session.setSyncStatus("sincronizada");
+        session.setLastMessageAt(toLocalDateTime(chat.time()));
+        session.setLastSyncedAt(LocalDateTime.now());
+        return session;
+    }
+
+    private ConversationSummaryResponse toRemoteSummary(
+        Franchise franchise,
+        GptMakerChatResponse chat,
+        ConversationSession existing
+    ) {
+        boolean hasHumanOperator = chat.humanTalk()
+            || (chat.userId() != null && !chat.userId().isBlank());
+        String agentName = firstNonBlank(chat.agentName(), franchise.getAgentName());
+        String responsibleUserName = firstNonBlank(
+            chat.messageUserName(),
+            hasHumanOperator ? chat.userName() : null,
+            existing == null ? null : existing.getResponsibleUserName()
+        );
+        String customerName = resolveCustomerName(chat, existing, franchise, hasHumanOperator);
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime remoteTime = firstNonNull(toLocalDateTime(chat.time()), toLocalDateTime(chat.createdAt()));
+        LocalDateTime createdAt = existing == null
+            ? firstNonNull(firstNonNull(toLocalDateTime(chat.createdAt()), remoteTime), now)
+            : existing.getCreatedAt();
+        LocalDateTime updatedAt = existing == null
+            ? firstNonNull(remoteTime, firstNonNull(createdAt, now))
+            : existing.getUpdatedAt();
+
+        return new ConversationSummaryResponse(
+            existing == null ? null : existing.getId(),
+            chat.id(),
+            franchise.getId(),
+            franchise.getName(),
+            agentName,
+            customerName,
+            firstNonBlank(chat.whatsappPhone(), existing == null ? null : existing.getCustomerPhone()),
+            safeExternalImageUrl(chat.picture()),
+            existing == null ? chat.conversation() : existing.getFirstPrompt(),
+            firstNonBlank(chat.conversation(), existing == null ? null : existing.getLastResponse()),
+            normalizeChannel(chat.type(), chat.conversationType()),
+            mapOperationalStatus(chat.humanTalk(), chat.finished()),
+            responsibleUserName,
+            "sincronizada",
+            existing == null ? null : existing.getClosedReason(),
+            existing == null ? null : existing.getSaleOutcome(),
+            existing == null ? null : existing.getHandoffStatus(),
+            chat.humanTalk(),
+            remoteTime,
+            now,
+            createdAt,
+            updatedAt
+        );
+    }
+
+    private LocalDateTime firstNonNull(LocalDateTime first, LocalDateTime second) {
+        return first != null ? first : second;
+    }
+
+    private List<ConversationSummaryResponse> filterSummaries(
+        List<ConversationSummaryResponse> summaries,
+        String status,
+        String channel,
+        String responsible
+    ) {
+        return summaries.stream()
+            .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.operationalStatus()))
+            .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.channelType()))
+            .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.responsibleUserName()))
+            .sorted(Comparator.comparing(this::summarySortTimestamp, Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
+    }
+
+    private List<ConversationSummaryResponse> mergeSummaries(
+        List<ConversationSummaryResponse> localItems,
+        List<ConversationSummaryResponse> remoteItems
+    ) {
+        Map<String, ConversationSummaryResponse> merged = new LinkedHashMap<>();
+        localItems.forEach(item -> merged.put(summaryIdentity(item), item));
+        remoteItems.forEach(item -> merged.put(summaryIdentity(item), item));
+        return List.copyOf(merged.values());
+    }
+
+    private String summaryIdentity(ConversationSummaryResponse summary) {
+        if (summary.chatId() != null && !summary.chatId().isBlank()) {
+            return "chat:" + summary.franchiseId() + ":" + summary.chatId();
+        }
+        return "session:" + summary.id();
+    }
+
+    private LocalDateTime summarySortTimestamp(ConversationSummaryResponse summary) {
+        return firstNonNull(summary.lastMessageAt(), firstNonNull(summary.updatedAt(), summary.createdAt()));
+    }
+
+    private List<ConversationSession> filterSessions(
+        List<ConversationSession> sessions,
+        String status,
+        String channel,
+        String responsible
+    ) {
+        return deduplicateSessions(sessions).stream()
+            .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.getOperationalStatus()))
+            .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.getChannelType()))
+            .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.getResponsibleUserName()))
+            .sorted(Comparator.comparing(ConversationService::sessionSortTimestamp, Comparator.nullsLast(Comparator.reverseOrder())))
+            .toList();
     }
 
     private List<ConversationSession> deduplicateSessions(List<ConversationSession> sessions) {
@@ -575,6 +854,27 @@ public class ConversationService {
         if (pageSize < 1 || pageSize > MAX_MESSAGE_PAGE_SIZE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tamanho da pagina deve estar entre 1 e " + MAX_MESSAGE_PAGE_SIZE + ".");
         }
+    }
+
+    private void validateConversationPagination(int page, int pageSize) {
+        if (page < 1) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A pagina deve ser maior ou igual a 1.");
+        }
+        if (pageSize < 1 || pageSize > MAX_CHAT_PAGE_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O tamanho da pagina deve estar entre 1 e " + MAX_CHAT_PAGE_SIZE + ".");
+        }
+    }
+
+    private record ConversationSyncPage(
+        List<ConversationSummaryResponse> items,
+        boolean hasMore
+    ) {
+    }
+
+    private record OperationalSession(
+        ConversationSession session,
+        String customerPicture
+    ) {
     }
 
     private ConversationMessagePageResponse messagePage(
@@ -709,14 +1009,14 @@ public class ConversationService {
         boolean hasHumanOperator
     ) {
         String resolved = firstUsableCustomerName(
-            session.getCustomerName(),
+            session == null ? null : session.getCustomerName(),
             chat.title(),
             chat.name(),
             hasHumanOperator ? null : chat.userName(),
             chat.agentName(),
             franchise.getAgentName(),
             chat.messageUserName(),
-            session.getResponsibleUserName()
+            firstNonBlank(chat.userName(), session == null ? null : session.getResponsibleUserName())
         );
         return resolved != null ? resolved : "desconhecido";
     }

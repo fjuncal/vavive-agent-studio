@@ -25,7 +25,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import feign.FeignException;
 import feign.RetryableException;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
@@ -38,6 +40,7 @@ public class GptMakerClient {
     private static final String WORKSPACE_AGENT_LIMIT_MESSAGE = "Este workspace ja atingiu o limite de agentes no GPTMaker. Escolha outro workspace ou remova um agente diretamente no GPTMaker.";
     private static final String WORKSPACES_ENDPOINT = "/v2/workspaces";
     private static final String AGENTS_ENDPOINT_TEMPLATE = "/v2/workspace/%s/agents";
+    private static final int CHAT_LOOKUP_PAGE_SIZE = 50;
     private static final Logger log = LoggerFactory.getLogger(GptMakerClient.class);
 
     private final GptMakerProperties properties;
@@ -576,6 +579,10 @@ public class GptMakerClient {
     }
 
     public List<GptMakerChatResponse> listChats(String workspaceId, int page, int pageSize) {
+        return listChats(workspaceId, page, pageSize, null);
+    }
+
+    public List<GptMakerChatResponse> listChats(String workspaceId, int page, int pageSize, String query) {
         String endpoint = "/v2/workspace/%s/chats".formatted(workspaceId == null ? "" : workspaceId);
         if (workspaceId == null || workspaceId.isBlank()) {
             throw new GptMakerIntegrationException("INVALID_WORKSPACE", "Workspace GPTMaker nao informado.", null, null, endpoint, null);
@@ -587,13 +594,47 @@ public class GptMakerClient {
             throw new GptMakerIntegrationException("MISSING_TOKEN", MISSING_TOKEN_MESSAGE, null, null, endpoint, null);
         }
         try {
-            ResponseEntity<String> response = feignClient.listChats(workspaceId, null, page, pageSize, null);
+            ResponseEntity<String> response = feignClient.listChats(workspaceId, null, page, pageSize, query);
             JsonNode payload = parseBody(response.getBody(), endpoint, response.getStatusCode().value());
             return parseChats(payload, endpoint);
         } catch (RetryableException exception) {
             throw new GptMakerIntegrationException("GPTMAKER_UNAVAILABLE", "Nao foi possivel listar chats do GPTMaker agora.", sanitize(exception.getMessage()), null, endpoint, null);
         } catch (FeignException exception) {
             throw toIntegrationException(exception, "Nao foi possivel listar os chats do GPTMaker.", endpoint);
+        }
+    }
+
+    public GptMakerChatResponse findChat(String workspaceId, String chatId) {
+        if (chatId == null || chatId.isBlank()) {
+            throw new GptMakerIntegrationException("INVALID_CHAT", "Chat GPTMaker nao informado.", null, null, "/v2/workspace/chats", null);
+        }
+        String normalizedChatId = chatId.trim();
+        Set<String> visitedChatIds = new HashSet<>();
+        for (int page = 1; ; page++) {
+            List<GptMakerChatResponse> chats = listChats(workspaceId, page, CHAT_LOOKUP_PAGE_SIZE);
+            log.debug("GPTMaker chat lookup workspaceId={} chatId={} page={} count={}",
+                sanitize(workspaceId), sanitize(normalizedChatId), page, chats.size());
+
+            GptMakerChatResponse matchingChat = chats.stream()
+                .filter(chat -> chat.id() != null && normalizedChatId.equals(chat.id().trim()))
+                .findFirst()
+                .orElse(null);
+            if (matchingChat != null) {
+                return matchingChat;
+            }
+
+            if (chats.isEmpty()) {
+                return null;
+            }
+
+            boolean foundNewChatId = chats.stream()
+                .map(GptMakerChatResponse::id)
+                .filter(id -> id != null && !id.isBlank())
+                .map(String::trim)
+                .anyMatch(visitedChatIds::add);
+            if (!foundNewChatId) {
+                return null;
+            }
         }
     }
 

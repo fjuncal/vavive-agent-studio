@@ -5,11 +5,14 @@ import { EmptyState } from "@/components/EmptyState";
 import { PageHeader } from "@/components/PageHeader";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
+import { resolveConversationMessageTarget } from "@/lib/conversation-message-routing";
 import {
   completeConversation,
+  getConversationPage,
   getConversationMessages,
-  getConversations,
+  getRemoteConversationMessages,
   getFranchises,
+  materializeConversation,
   sendConversationManualMessage,
   startHumanTakeover,
   stopHumanTakeover,
@@ -22,7 +25,9 @@ import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const MESSAGE_PAGE_SIZE = 30;
+const CONVERSATION_PAGE_SIZE = 50;
 const LOAD_OLDER_THRESHOLD_PX = 120;
+const LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX = 160;
 
 function formatDate(value?: string | null) {
   if (!value) {
@@ -130,6 +135,69 @@ function sortConversationsByRecent(items: ConversationSummary[]) {
   });
 }
 
+function conversationKey(conversation: ConversationSummary) {
+  if (conversation.chatId) {
+    return `chat:${conversation.franchiseId}:${conversation.chatId}`;
+  }
+  if (conversation.id) {
+    return `session:${conversation.id}`;
+  }
+  return `remote:${conversation.franchiseId}:${conversation.customerPhone || conversation.customerName || "unknown"}`;
+}
+
+function mergeConversations(current: ConversationSummary[], incoming: ConversationSummary[]) {
+  const unique = new Map<string, ConversationSummary>();
+  [...current, ...incoming].forEach((conversation) => unique.set(conversationKey(conversation), conversation));
+  return sortConversationsByRecent(Array.from(unique.values()));
+}
+
+function conversationDate(value?: string | null) {
+  if (!value) {
+    return null;
+  }
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function localDayStart(value: Date) {
+  return Date.UTC(value.getFullYear(), value.getMonth(), value.getDate());
+}
+
+function conversationGroupKey(value?: string | null) {
+  const date = conversationDate(value);
+  if (!date) {
+    return "sem-data";
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function conversationGroupLabel(value?: string | null) {
+  const date = conversationDate(value);
+  if (!date) {
+    return "Sem data";
+  }
+
+  const today = localDayStart(new Date());
+  const conversationDay = localDayStart(date);
+  const dayDifference = Math.floor((today - conversationDay) / (24 * 60 * 60 * 1000));
+
+  if (dayDifference === 0) {
+    return "Hoje";
+  }
+  if (dayDifference === 1) {
+    return "Ontem";
+  }
+  if (dayDifference >= 2 && dayDifference < 7) {
+    return titleizeDayLabel(new Intl.DateTimeFormat("pt-BR", { weekday: "long" }).format(date));
+  }
+
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  }).format(date);
+}
+
 function displayCustomerName(value?: string | null) {
   const trimmed = value?.trim();
   return trimmed && trimmed.toLowerCase() !== "desconhecido" ? trimmed : "Contato sem nome";
@@ -210,9 +278,18 @@ export default function ConversationsPage() {
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const [isLoadingMoreConversations, setIsLoadingMoreConversations] = useState(false);
+  const [isMaterializingConversation, setIsMaterializingConversation] = useState(false);
+  const [hasMoreConversations, setHasMoreConversations] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [currentMessagePage, setCurrentMessagePage] = useState(1);
+  const conversationsContainerRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const currentConversationPageRef = useRef(0);
+  const hasMoreConversationsRef = useRef(true);
+  const conversationRequestInFlightRef = useRef(false);
+  const conversationMaterializationInFlightRef = useRef(false);
+  const conversationLoadGenerationRef = useRef(0);
   const loadedMessagePagesRef = useRef(new Set<number>());
   const currentMessagePageRef = useRef(1);
   const hasMoreMessagesRef = useRef(false);
@@ -220,6 +297,11 @@ export default function ConversationsPage() {
   const messageLoadGenerationRef = useRef(0);
   const initializedConversationRef = useRef<string | null>(null);
   const pendingScrollAdjustmentRef = useRef<{ height: number; top: number } | "bottom" | null>(null);
+
+  function selectConversation(conversation: ConversationSummary) {
+    setError(null);
+    setSelectedConversationId(conversationKey(conversation));
+  }
 
   useEffect(() => {
     if (!user) {
@@ -245,24 +327,82 @@ export default function ConversationsPage() {
     if (!user) {
       return;
     }
+    const generation = ++conversationLoadGenerationRef.current;
+    currentConversationPageRef.current = 0;
+    hasMoreConversationsRef.current = true;
+    conversationRequestInFlightRef.current = true;
     setIsLoading(true);
+    setIsLoadingMoreConversations(false);
+    setHasMoreConversations(true);
     setError(null);
     try {
-      const items = sortConversationsByRecent(await getConversations({
+      const response = await getConversationPage({
         franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
         status: selectedStatus || undefined
-      }));
-      setConversations(items);
-      setSelectedConversationId((current) => {
-        if (current && items.some((item) => item.id === current)) {
-          return current;
-        }
-        return items[0]?.id || "";
-      });
+      }, 1, CONVERSATION_PAGE_SIZE);
+      if (generation !== conversationLoadGenerationRef.current) return;
+      const items = sortConversationsByRecent(response.items);
+      const existingSelected = conversations.find((item) => conversationKey(item) === selectedConversationId);
+      const canPreserveSelected = existingSelected
+        && (!isSuperAdmin || !selectedFranchiseId || existingSelected.franchiseId === selectedFranchiseId)
+        && (!selectedStatus || existingSelected.operationalStatus === selectedStatus);
+      const nextItems = canPreserveSelected && !items.some((item) => conversationKey(item) === conversationKey(existingSelected))
+        ? mergeConversations(items, [existingSelected])
+        : items;
+      currentConversationPageRef.current = response.page;
+      hasMoreConversationsRef.current = response.hasMore;
+      setHasMoreConversations(response.hasMore);
+      setConversations(nextItems);
+      const selectedStillPresent = Boolean(selectedConversationId)
+        && nextItems.some((item) => conversationKey(item) === selectedConversationId);
+      setSelectedConversationId(selectedStillPresent ? selectedConversationId : "");
+      if (!selectedStillPresent && nextItems[0]) {
+        setSelectedConversationId(conversationKey(nextItems[0]));
+      }
     } catch (requestError) {
+      if (generation !== conversationLoadGenerationRef.current) return;
+      currentConversationPageRef.current = 0;
+      hasMoreConversationsRef.current = false;
+      setHasMoreConversations(false);
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar conversas.");
     } finally {
-      setIsLoading(false);
+      if (generation === conversationLoadGenerationRef.current) {
+        conversationRequestInFlightRef.current = false;
+        setIsLoading(false);
+      }
+    }
+  }
+
+  async function loadMoreConversations() {
+    if (!user || conversationRequestInFlightRef.current || !hasMoreConversationsRef.current) {
+      return;
+    }
+    const page = currentConversationPageRef.current + 1;
+    const generation = conversationLoadGenerationRef.current;
+    conversationRequestInFlightRef.current = true;
+    setIsLoadingMoreConversations(true);
+    try {
+      const response = await getConversationPage({
+        franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
+        status: selectedStatus || undefined
+      }, page, CONVERSATION_PAGE_SIZE);
+      if (generation !== conversationLoadGenerationRef.current) return;
+      currentConversationPageRef.current = response.page;
+      hasMoreConversationsRef.current = response.hasMore;
+      setHasMoreConversations(response.hasMore);
+      setConversations((current) => mergeConversations(current, response.items));
+    } catch (requestError) {
+      if (generation !== conversationLoadGenerationRef.current) return;
+      if (conversations.length === 0) {
+        hasMoreConversationsRef.current = false;
+        setHasMoreConversations(false);
+      }
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar mais conversas.");
+    } finally {
+      if (generation === conversationLoadGenerationRef.current) {
+        conversationRequestInFlightRef.current = false;
+        setIsLoadingMoreConversations(false);
+      }
     }
   }
 
@@ -273,7 +413,32 @@ export default function ConversationsPage() {
     void loadConversations();
   }, [selectedFranchiseId, selectedStatus, user]);
 
-  async function loadInitialMessages(conversationId: string) {
+  useEffect(() => {
+    if (isLoading || isLoadingMoreConversations || conversations.length > 0 || !hasMoreConversations) {
+      return;
+    }
+    void loadMoreConversations();
+  }, [conversations.length, hasMoreConversations, isLoading, isLoadingMoreConversations]);
+
+  function getConversationMessagesPage(conversation: ConversationSummary, page: number) {
+    const target = resolveConversationMessageTarget(conversation);
+    if (!target) {
+      return Promise.reject(new Error("Conversa sem identificador GPTMaker."));
+    }
+
+    if (target.type === "remote") {
+      return getRemoteConversationMessages(
+        target.chatId,
+        isSuperAdmin ? selectedFranchiseId || undefined : undefined,
+        page,
+        MESSAGE_PAGE_SIZE
+      );
+    }
+    return getConversationMessages(target.id, page, MESSAGE_PAGE_SIZE);
+  }
+
+  async function loadInitialMessages(conversation: ConversationSummary) {
+    const conversationId = conversationKey(conversation);
     const generation = ++messageLoadGenerationRef.current;
     initializedConversationRef.current = conversationId;
     loadedMessagePagesRef.current = new Set();
@@ -287,7 +452,7 @@ export default function ConversationsPage() {
     setIsLoadingMessages(true);
     setIsLoadingOlderMessages(false);
     try {
-      const response = await getConversationMessages(conversationId, 1, MESSAGE_PAGE_SIZE);
+      const response = await getConversationMessagesPage(conversation, 1);
       if (generation !== messageLoadGenerationRef.current) return;
       loadedMessagePagesRef.current.add(1);
       pendingScrollAdjustmentRef.current = "bottom";
@@ -301,6 +466,7 @@ export default function ConversationsPage() {
       setMessages([]);
       hasMoreMessagesRef.current = false;
       setHasMoreMessages(false);
+      setError("Nao foi possivel carregar as mensagens desta conversa.");
     } finally {
       if (generation === messageLoadGenerationRef.current) {
         messageRequestInFlightRef.current = false;
@@ -310,7 +476,8 @@ export default function ConversationsPage() {
   }
 
   async function loadOlderMessages() {
-    if (!selectedConversationId || messageRequestInFlightRef.current || !hasMoreMessagesRef.current) return;
+    const conversation = conversations.find((item) => conversationKey(item) === selectedConversationId);
+    if (!conversation || messageRequestInFlightRef.current || !hasMoreMessagesRef.current) return;
     const page = currentMessagePageRef.current + 1;
     if (loadedMessagePagesRef.current.has(page)) return;
 
@@ -322,7 +489,7 @@ export default function ConversationsPage() {
     messageRequestInFlightRef.current = true;
     setIsLoadingOlderMessages(true);
     try {
-      const response = await getConversationMessages(selectedConversationId, page, MESSAGE_PAGE_SIZE);
+      const response = await getConversationMessagesPage(conversation, page);
       if (generation !== messageLoadGenerationRef.current) return;
       loadedMessagePagesRef.current.add(page);
       currentMessagePageRef.current = page;
@@ -341,7 +508,8 @@ export default function ConversationsPage() {
   }
 
   useEffect(() => {
-    if (!selectedConversationId) {
+    const conversation = conversations.find((item) => conversationKey(item) === selectedConversationId);
+    if (!conversation) {
       messageLoadGenerationRef.current += 1;
       initializedConversationRef.current = null;
       currentMessagePageRef.current = 1;
@@ -352,8 +520,8 @@ export default function ConversationsPage() {
       return;
     }
     if (initializedConversationRef.current === selectedConversationId) return;
-    void loadInitialMessages(selectedConversationId);
-  }, [selectedConversationId]);
+    void loadInitialMessages(conversation);
+  }, [conversations, selectedConversationId]);
 
   useLayoutEffect(() => {
     const container = messagesContainerRef.current;
@@ -368,9 +536,27 @@ export default function ConversationsPage() {
   }, [messages]);
 
   const selectedConversation = useMemo(
-    () => conversations.find((item) => item.id === selectedConversationId) ?? null,
+    () => conversations.find((item) => conversationKey(item) === selectedConversationId) ?? null,
     [conversations, selectedConversationId]
   );
+  const groupedConversations = useMemo(() => {
+    const groups = new Map<string, { key: string; label: string; items: ConversationSummary[] }>();
+    conversations.forEach((conversation) => {
+      const timestamp = conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt;
+      const key = conversationGroupKey(timestamp);
+      const current = groups.get(key);
+      if (current) {
+        current.items.push(conversation);
+        return;
+      }
+      groups.set(key, {
+        key,
+        label: conversationGroupLabel(timestamp),
+        items: [conversation]
+      });
+    });
+    return Array.from(groups.values());
+  }, [conversations]);
   const groupedMessages = useMemo(() => {
     const sortedMessages = [...messages].sort((left, right) => {
       const leftTime = normalizeTimestamp(left.time) ?? 0;
@@ -390,6 +576,7 @@ export default function ConversationsPage() {
     }, []);
   }, [messages]);
   const isConversationClosed = selectedConversation?.operationalStatus === "concluida" || selectedConversation?.operationalStatus === "venda_concluida";
+  const canOperateConversation = Boolean(selectedConversation?.id || selectedConversation?.chatId);
 
   async function handleTestAgent() {
     const franchiseId = isSuperAdmin ? selectedFranchiseId : user?.franchise?.id;
@@ -412,18 +599,64 @@ export default function ConversationsPage() {
     }
   }
 
-  async function runAction(action: () => Promise<{ message: string }>) {
+  async function ensureOperationalConversationId() {
+    if (!selectedConversation) {
+      throw new Error("Selecione uma conversa.");
+    }
+    if (selectedConversation.id) {
+      return selectedConversation.id;
+    }
+    if (!selectedConversation.chatId) {
+      throw new Error("Conversa sem chat GPTMaker para executar esta acao.");
+    }
+    if (conversationMaterializationInFlightRef.current) {
+      throw new Error("Aguarde a materializacao da conversa.");
+    }
+
+    conversationMaterializationInFlightRef.current = true;
+    setIsMaterializingConversation(true);
+    try {
+      const materialized = await materializeConversation({
+        franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
+        chatId: selectedConversation.chatId
+      });
+      if (!materialized.id) {
+        throw new Error("O backend nao retornou identificador da conversa.");
+      }
+      setConversations((current) => current.map((item) => (
+        conversationKey(item) === conversationKey(selectedConversation)
+          ? {
+              ...item,
+              ...materialized,
+              customerPicture: materialized.customerPicture || item.customerPicture
+            }
+          : item
+      )));
+      setSelectedConversationId(conversationKey(materialized));
+      return materialized.id;
+    } finally {
+      conversationMaterializationInFlightRef.current = false;
+      setIsMaterializingConversation(false);
+    }
+  }
+
+  async function runAction(action: (conversationId: string) => Promise<{ message: string }>) {
     setIsActionLoading(true);
     setError(null);
     setSuccess(null);
     try {
-      const result = await action();
+      const conversationForMessages = selectedConversation;
+      const conversationId = await ensureOperationalConversationId();
+      const operationalConversation = conversationForMessages && !conversationForMessages.id
+        ? { ...conversationForMessages, id: conversationId }
+        : conversationForMessages;
+      const result = await action(conversationId);
       setSuccess(result.message);
       setManualMessage("");
       setSaleSummary("");
       await loadConversations();
-      if (selectedConversationId) {
-        await loadInitialMessages(selectedConversationId);
+      if (operationalConversation) {
+        await loadInitialMessages(operationalConversation);
       }
       return true;
     } catch (requestError) {
@@ -435,8 +668,8 @@ export default function ConversationsPage() {
   }
 
   async function handleCompleteSale() {
-    if (!selectedConversation || !saleSummary.trim()) return;
-    const completed = await runAction(() => completeConversation(selectedConversation.id, {
+    if (!canOperateConversation || !saleSummary.trim()) return;
+    const completed = await runAction((conversationId) => completeConversation(conversationId, {
       outcome: "VENDA_CONCLUIDA",
       closedReason: "Venda fechada",
       saleSummary
@@ -499,40 +732,70 @@ export default function ConversationsPage() {
             {isLoading ? (
               <p className="mt-4 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando conversas...</p>
             ) : conversations.length ? (
-              <div className="mt-3 grid max-h-[calc(100dvh-24rem)] min-h-[18rem] overflow-x-hidden overflow-y-auto scrollbar-thin">
-                {conversations.map((conversation) => (
-                  <button
-                    key={conversation.id}
-                    type="button"
-                    onClick={() => setSelectedConversationId(conversation.id)}
-                    className={`flex min-w-0 gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversation.id ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"}`}
-                    style={{ borderColor: "var(--color-border)" }}
-                  >
-                    <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
-                    <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
-                          {displayCustomerName(conversation.customerName)}
-                        </p>
-                        <div className="mt-1 flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
-                          <Phone size={14} className="shrink-0" />
-                          <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
+              <div
+                ref={conversationsContainerRef}
+                onScroll={(event) => {
+                  const container = event.currentTarget;
+                  const distanceToBottom = container.scrollHeight - container.scrollTop - container.clientHeight;
+                  if (distanceToBottom <= LOAD_NEWER_CONVERSATIONS_THRESHOLD_PX) {
+                    void loadMoreConversations();
+                  }
+                }}
+                className="mt-3 max-h-[calc(100dvh-24rem)] min-h-[18rem] overflow-x-hidden overflow-y-auto scrollbar-thin"
+              >
+                {groupedConversations.map((group) => (
+                  <section key={group.key} aria-label={group.label}>
+                    <div className="sticky top-0 z-10 flex items-center gap-2 bg-bg-primary/95 px-3 py-2 backdrop-blur-sm">
+                      <span className="text-xs font-semibold text-text-secondary">{group.label}</span>
+                      <span className="h-px flex-1 bg-line/70" />
+                    </div>
+                    {group.items.map((conversation) => (
+                      <button
+                        key={conversationKey(conversation)}
+                        type="button"
+                        onClick={() => void selectConversation(conversation)}
+                        disabled={isMaterializingConversation}
+                        className={`flex min-w-0 w-full gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversationKey(conversation) ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"} disabled:cursor-wait disabled:opacity-70`}
+                        style={{ borderColor: "var(--color-border)" }}
+                      >
+                        <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                                {displayCustomerName(conversation.customerName)}
+                              </p>
+                              <div className="mt-1 flex items-center gap-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                                <Phone size={14} className="shrink-0" />
+                                <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
+                              </div>
+                            </div>
+                            <span className="shrink-0 text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
+                          </div>
+                          <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
+                            {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
+                          </p>
+                          <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
+                            <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
+                            {conversationStatusLabel(conversation.operationalStatus)}
+                          </p>
                         </div>
-                      </div>
-                      <span className="shrink-0 text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
-                    </div>
-                    <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
-                      {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
-                    </p>
-                    <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
-                      <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
-                      {conversationStatusLabel(conversation.operationalStatus)}
-                    </p>
-                    </div>
-                  </button>
+                      </button>
+                    ))}
+                  </section>
                 ))}
+                {isLoadingMoreConversations ? (
+                  <div className="flex items-center justify-center gap-2 px-3 py-3 text-xs text-text-tertiary">
+                    <Loader2 size={14} className="animate-spin" />
+                    Carregando conversas antigas...
+                  </div>
+                ) : null}
               </div>
+            ) : isLoadingMoreConversations ? (
+              <p className="mt-4 flex items-center justify-center gap-2 text-sm text-text-tertiary">
+                <Loader2 size={15} className="animate-spin" />
+                Carregando conversas...
+              </p>
             ) : (
               <EmptyState icon={MessageSquareText} title="Nenhuma conversa" description="Quando houver conversas sincronizadas, elas aparecerao aqui." />
             )}
@@ -571,16 +834,16 @@ export default function ConversationsPage() {
                   </div>
                 </div>
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => void runAction(() => startHumanTakeover(selectedConversation.id))} disabled={isActionLoading || selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
+                  <button type="button" onClick={() => void runAction((conversationId) => startHumanTakeover(conversationId))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
                     Assumir
                   </button>
-                  <button type="button" onClick={() => void runAction(() => stopHumanTakeover(selectedConversation.id))} disabled={isActionLoading || !selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
+                  <button type="button" onClick={() => void runAction((conversationId) => stopHumanTakeover(conversationId))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || !selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
                     Devolver para IA
                   </button>
-                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isConversationClosed} className="btn-ghost px-3 py-2 text-xs disabled:opacity-50">
+                  <button type="button" onClick={() => void runAction((conversationId) => completeConversation(conversationId, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || isConversationClosed} className="btn-ghost px-3 py-2 text-xs disabled:opacity-50">
                     Encerrar
                   </button>
-                  <button type="button" onClick={() => setIsSaleDialogOpen(true)} disabled={isActionLoading || isConversationClosed} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
+                  <button type="button" onClick={() => setIsSaleDialogOpen(true)} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || isConversationClosed} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
                     Concluir venda
                   </button>
                 </div>
@@ -655,7 +918,7 @@ export default function ConversationsPage() {
                   <div className="border-t bg-bg-primary p-3 sm:p-4" style={{ borderColor: "var(--color-border)" }}>
                     <div className="flex items-end gap-2 rounded-2xl border bg-bg-secondary p-2" style={{ borderColor: "var(--color-border)" }}>
                       <textarea className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-text-primary outline-none" placeholder={selectedConversation.humanTakeoverActive ? "Digite uma mensagem..." : "Assuma o atendimento para responder"} value={manualMessage} disabled={!selectedConversation.humanTakeoverActive || isConversationClosed} onChange={(event) => setManualMessage(event.target.value)} />
-                      <button type="button" aria-label="Enviar mensagem" onClick={() => void runAction(() => sendConversationManualMessage(selectedConversation.id, { message: manualMessage }))} disabled={isActionLoading || !manualMessage.trim() || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+                      <button type="button" aria-label="Enviar mensagem" onClick={() => void runAction((conversationId) => sendConversationManualMessage(conversationId, { message: manualMessage }))} disabled={isActionLoading || isMaterializingConversation || !canOperateConversation || !manualMessage.trim() || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
                         {isActionLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                       </button>
                     </div>

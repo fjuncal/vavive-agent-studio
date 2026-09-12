@@ -6,6 +6,7 @@ import br.com.vavive.gptmaker.dto.ConversationHandoffEventResponse;
 import br.com.vavive.gptmaker.dto.ConversationManualMessageRequest;
 import br.com.vavive.gptmaker.dto.ConversationMessagePageResponse;
 import br.com.vavive.gptmaker.dto.ConversationSummaryResponse;
+import br.com.vavive.gptmaker.dto.MaterializeConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationRequest;
 import br.com.vavive.gptmaker.dto.SendAgentConversationResponse;
 import br.com.vavive.gptmaker.dto.StartHumanTakeoverResponse;
@@ -32,13 +33,30 @@ public class ConversationController {
     }
 
     @GetMapping("/conversations")
-    public List<ConversationSummaryResponse> list(
+    public Object list(
         @RequestParam(required = false) UUID franchiseId,
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String channel,
-        @RequestParam(required = false) String responsible
+        @RequestParam(required = false) String responsible,
+        @RequestParam(required = false) Integer page,
+        @RequestParam(required = false) Integer pageSize
     ) {
+        if (page != null || pageSize != null) {
+            return conversationService.listPage(
+                franchiseId,
+                status,
+                channel,
+                responsible,
+                page == null ? 1 : page,
+                pageSize == null ? 50 : pageSize
+            );
+        }
         return conversationService.list(franchiseId, status, channel, responsible);
+    }
+
+    @PostMapping("/conversations/materialize")
+    public ConversationSummaryResponse materialize(@Valid @RequestBody MaterializeConversationRequest request) {
+        return conversationService.materialize(request.franchiseId(), request.chatId());
     }
 
     @GetMapping("/conversations/{id}/messages")
@@ -48,6 +66,16 @@ public class ConversationController {
         @RequestParam(defaultValue = "30") int pageSize
     ) {
         return conversationService.listMessages(id, page, pageSize);
+    }
+
+    @GetMapping("/conversations/remote/{chatId}/messages")
+    public ConversationMessagePageResponse listRemoteMessages(
+        @PathVariable String chatId,
+        @RequestParam(required = false) UUID franchiseId,
+        @RequestParam(defaultValue = "1") int page,
+        @RequestParam(defaultValue = "30") int pageSize
+    ) {
+        return conversationService.listRemoteMessages(franchiseId, chatId, page, pageSize);
     }
 
     @PutMapping("/conversations/{id}/start-human")
