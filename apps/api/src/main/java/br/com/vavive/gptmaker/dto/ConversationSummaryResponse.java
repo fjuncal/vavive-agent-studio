@@ -10,6 +10,7 @@ public record ConversationSummaryResponse(
     String agentName,
     String customerName,
     String customerPhone,
+    String customerPicture,
     String firstPrompt,
     String lastResponse,
     String channelType,

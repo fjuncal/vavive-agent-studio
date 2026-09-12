@@ -35,6 +35,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -45,6 +47,7 @@ public class ConversationService {
     private static final int MAX_MESSAGE_PAGE_SIZE = 100;
     private static final int CHAT_SYNC_PAGE = 1;
     private static final int CHAT_SYNC_PAGE_SIZE = 50;
+    private static final Logger log = LoggerFactory.getLogger(ConversationService.class);
     private final ConversationSessionRepository conversationSessionRepository;
     private final ConversationHandoffEventRepository handoffEventRepository;
     private final FranchiseRepository franchiseRepository;
@@ -77,13 +80,14 @@ public class ConversationService {
     @Transactional
     public List<ConversationSummaryResponse> list(UUID franchiseId, String status, String channel, String responsible) {
         User user = currentUserService.requireCurrentUser();
+        Map<String, String> customerPictures = Map.of();
         if (liveInboxEnabled()) {
             if (user.getRole() == UserRole.SUPER_ADMIN) {
                 if (franchiseId != null) {
-                    syncFranchise(requireFranchise(franchiseId));
+                    customerPictures = syncFranchise(requireFranchise(franchiseId));
                 }
             } else {
-                syncFranchiseSilently(currentUserService.requireFranchise(user));
+                customerPictures = syncFranchiseSilently(currentUserService.requireFranchise(user));
             }
         }
 
@@ -93,12 +97,13 @@ public class ConversationService {
                 : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(requireFranchise(franchiseId).getId()))
             : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(currentUserService.requireFranchise(user).getId());
 
+        Map<String, String> picturesByConversation = customerPictures;
         return deduplicateSessions(base).stream()
             .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.getOperationalStatus()))
             .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.getChannelType()))
             .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.getResponsibleUserName()))
             .sorted(Comparator.comparing(ConversationSession::getUpdatedAt).reversed())
-            .map(this::toSummary)
+            .map(item -> toSummary(item, picturesByConversation.get(conversationIdentity(item))))
             .toList();
     }
 
@@ -112,9 +117,12 @@ public class ConversationService {
                     .map(this::toMessageResponse)
                     .toList();
                 if (!remoteMessages.isEmpty()) {
-                    return messagePage(remoteMessages, page, pageSize);
+                    return messagePage(session.getChatId(), remoteMessages, page, pageSize);
                 }
+                logMessagePage(session.getChatId(), page, pageSize, remoteMessages, false);
             } catch (GptMakerIntegrationException ignored) {
+                log.warn("GPTMaker messages request failed chatId={} page={} pageSize={} code={}",
+                    session.getChatId(), page, pageSize, ignored.getErrorCode());
             }
         }
 
@@ -453,7 +461,7 @@ public class ConversationService {
         return session;
     }
 
-    private ConversationSummaryResponse toSummary(ConversationSession session) {
+    private ConversationSummaryResponse toSummary(ConversationSession session, String customerPicture) {
         return new ConversationSummaryResponse(
             session.getId(),
             session.getFranchise().getId(),
@@ -461,6 +469,7 @@ public class ConversationService {
             session.getAgentName(),
             displayCustomerName(session),
             session.getCustomerPhone(),
+            customerPicture,
             session.getFirstPrompt(),
             session.getLastResponse(),
             session.getChannelType(),
@@ -478,22 +487,24 @@ public class ConversationService {
         );
     }
 
-    private void syncFranchiseSilently(Franchise franchise) {
+    private Map<String, String> syncFranchiseSilently(Franchise franchise) {
         try {
-            syncFranchise(franchise);
+            return syncFranchise(franchise);
         } catch (ResponseStatusException ignored) {
+            return Map.of();
         }
     }
 
-    private void syncFranchise(Franchise franchise) {
+    private Map<String, String> syncFranchise(Franchise franchise) {
         if (!liveInboxEnabled()) {
-            return;
+            return Map.of();
         }
         if (franchise.getWorkspaceId() == null || franchise.getWorkspaceId().isBlank()) {
-            return;
+            return Map.of();
         }
         try {
             LocalDateTime now = LocalDateTime.now();
+            Map<String, String> customerPictures = new LinkedHashMap<>();
             List<ConversationSession> existingSessions = conversationSessionRepository.findByFranchiseId(franchise.getId());
             Map<String, ConversationSession> sessionsByIdentity = new LinkedHashMap<>();
             existingSessions.stream()
@@ -510,7 +521,7 @@ public class ConversationService {
                         chat.agentId() != null ? chat.agentId() : franchise.getAgentId(),
                         chat.agentName() != null ? chat.agentName() : franchise.getAgentName(),
                         "chat-" + chat.id(),
-                        firstNonBlank(chat.userName(), chat.title(), chat.name(), "desconhecido"),
+                        "desconhecido",
                         chat.whatsappPhone(),
                         chat.conversation(),
                         chat.conversation(),
@@ -519,19 +530,31 @@ public class ConversationService {
                     );
                 }
                 session.setAgentName(firstNonBlank(chat.agentName(), franchise.getAgentName()));
-                session.setCustomerName(resolveCustomerName(chat, session, franchise));
+                boolean hasHumanOperator = chat.humanTalk()
+                    || (chat.userId() != null && !chat.userId().isBlank());
+                session.setResponsibleUserName(firstNonBlank(
+                    chat.messageUserName(),
+                    hasHumanOperator ? chat.userName() : null,
+                    session.getResponsibleUserName()
+                ));
+                session.setCustomerName(resolveCustomerName(chat, session, franchise, hasHumanOperator));
                 session.setCustomerPhone(firstNonBlank(chat.whatsappPhone(), session.getCustomerPhone()));
                 session.setLastResponse(firstNonBlank(chat.conversation(), session.getLastResponse()));
                 session.setChannelType(normalizeChannel(chat.type(), chat.conversationType()));
                 session.setHumanTakeoverActive(chat.humanTalk());
                 session.setOperationalStatus(mapOperationalStatus(chat.humanTalk(), chat.finished()));
-                session.setResponsibleUserName(chat.messageUserName());
                 session.setSyncStatus("sincronizada");
                 session.setLastMessageAt(toLocalDateTime(chat.time()));
                 session.setLastSyncedAt(now);
                 ConversationSession savedSession = conversationSessionRepository.save(session);
-                sessionsByIdentity.put(conversationIdentity(savedSession), savedSession);
+                String identity = conversationIdentity(savedSession);
+                sessionsByIdentity.put(identity, savedSession);
+                String customerPicture = safeExternalImageUrl(chat.picture());
+                if (customerPicture != null) {
+                    customerPictures.put(identity, customerPicture);
+                }
             }
+            return Map.copyOf(customerPictures);
         } catch (GptMakerIntegrationException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, exception.getMessage());
         }
@@ -554,8 +577,43 @@ public class ConversationService {
         }
     }
 
-    private ConversationMessagePageResponse messagePage(List<ConversationMessageResponse> items, int page, int pageSize) {
-        return new ConversationMessagePageResponse(items, page, pageSize, items.size() == pageSize);
+    private ConversationMessagePageResponse messagePage(
+        String chatId,
+        List<ConversationMessageResponse> items,
+        int page,
+        int pageSize
+    ) {
+        // GPTMaker may return a short non-terminal page (for example 28 items for
+        // pageSize=30 while page 2 still contains older messages). The first empty
+        // page is the only safe terminal signal available because the API exposes
+        // neither totalPages nor totalElements.
+        boolean hasMore = !items.isEmpty();
+        logMessagePage(chatId, page, pageSize, items, hasMore);
+        return new ConversationMessagePageResponse(items, page, pageSize, hasMore);
+    }
+
+    private void logMessagePage(
+        String chatId,
+        int page,
+        int pageSize,
+        List<ConversationMessageResponse> items,
+        boolean hasMore
+    ) {
+        if (!log.isDebugEnabled()) {
+            return;
+        }
+        Long oldest = items.stream()
+            .map(ConversationMessageResponse::time)
+            .filter(java.util.Objects::nonNull)
+            .min(Long::compareTo)
+            .orElse(null);
+        Long newest = items.stream()
+            .map(ConversationMessageResponse::time)
+            .filter(java.util.Objects::nonNull)
+            .max(Long::compareTo)
+            .orElse(null);
+        log.debug("GPTMaker chat messages chatId={} page={} pageSize={} count={} oldest={} newest={} hasMore={}",
+            chatId, page, pageSize, items.size(), oldest, newest, hasMore);
     }
 
     private ConversationMessageResponse toMessageResponse(
@@ -644,29 +702,36 @@ public class ConversationService {
         return customerName;
     }
 
-    private String resolveCustomerName(GptMakerChatResponse chat, ConversationSession session, Franchise franchise) {
+    private String resolveCustomerName(
+        GptMakerChatResponse chat,
+        ConversationSession session,
+        Franchise franchise,
+        boolean hasHumanOperator
+    ) {
         String resolved = firstUsableCustomerName(
-            firstNonBlank(chat.title(), chat.userName(), chat.name()),
-            chat.userName(),
+            session.getCustomerName(),
             chat.title(),
             chat.name(),
-            session.getCustomerName()
-        , chat.agentName(), franchise.getAgentName(), chat.messageUserName(), session.getResponsibleUserName());
+            hasHumanOperator ? null : chat.userName(),
+            chat.agentName(),
+            franchise.getAgentName(),
+            chat.messageUserName(),
+            session.getResponsibleUserName()
+        );
         return resolved != null ? resolved : "desconhecido";
     }
 
     private String firstUsableCustomerName(
-        String primaryCandidate,
-        String userName,
+        String existingName,
         String title,
         String name,
-        String existingName,
+        String userName,
         String agentName,
         String franchiseAgentName,
         String messageUserName,
         String responsibleUserName
     ) {
-        for (String candidate : new String[] { primaryCandidate, userName, title, name, existingName }) {
+        for (String candidate : new String[] { existingName, title, name, userName }) {
             if (isUsableCustomerName(candidate, agentName, franchiseAgentName, messageUserName, responsibleUserName)) {
                 return candidate.trim();
             }
@@ -698,6 +763,14 @@ public class ConversationService {
             }
         }
         return false;
+    }
+
+    private String safeExternalImageUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.startsWith("https://") || trimmed.startsWith("http://") ? trimmed : null;
     }
 
     private boolean isClosed(ConversationSession session) {

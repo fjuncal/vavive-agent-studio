@@ -353,6 +353,7 @@ export type ConversationSummary = {
   agentName?: string | null;
   customerName?: string | null;
   customerPhone?: string | null;
+  customerPicture?: string | null;
   firstPrompt?: string | null;
   lastResponse?: string | null;
   channelType?: string | null;

@@ -160,7 +160,7 @@ class GptMakerClientTest {
     void listChatsUsesExplicitPagination() {
         TrackingFeignClient feignClient = new TrackingFeignClient();
         feignClient.chatsPayload = """
-            [{"id":"chat-1","agentId":"agent-1","conversation":"Ola","time":123}]
+            [{"id":"chat-1","agentId":"agent-1","conversation":"Ola","picture":"https://cdn.gptmaker.ai/contact.jpg","userPicture":"https://cdn.gptmaker.ai/operator.jpg","avatar":"https://cdn.gptmaker.ai/assistant.jpg","time":123}]
             """;
         GptMakerClient client = new GptMakerClient(
             new GptMakerProperties("https://api.gptmaker.ai", "token-123", false),
@@ -172,6 +172,9 @@ class GptMakerClientTest {
 
         assertEquals(1, chats.size());
         assertEquals("chat-1", chats.getFirst().id());
+        assertEquals("https://cdn.gptmaker.ai/contact.jpg", chats.getFirst().picture());
+        assertEquals("https://cdn.gptmaker.ai/operator.jpg", chats.getFirst().userPicture());
+        assertEquals("https://cdn.gptmaker.ai/assistant.jpg", chats.getFirst().avatar());
         assertEquals(1, feignClient.lastChatsPage);
         assertEquals(50, feignClient.lastChatsPageSize);
     }

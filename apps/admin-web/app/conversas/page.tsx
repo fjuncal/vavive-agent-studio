@@ -7,7 +7,6 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import {
   completeConversation,
-  getConversationHandoffs,
   getConversationMessages,
   getConversations,
   getFranchises,
@@ -15,12 +14,11 @@ import {
   startHumanTakeover,
   stopHumanTakeover,
   testAgentConversation,
-  type ConversationHandoffEvent,
   type ConversationMessage,
   type ConversationSummary,
   type FranchiseSummary
 } from "@/lib/api";
-import { Bot, Building2, Loader2, MessageSquareText, Phone, Send, ShieldCheck } from "lucide-react";
+import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, Phone, Send, UserRound, X } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const MESSAGE_PAGE_SIZE = 30;
@@ -134,7 +132,40 @@ function sortConversationsByRecent(items: ConversationSummary[]) {
 
 function displayCustomerName(value?: string | null) {
   const trimmed = value?.trim();
-  return trimmed ? trimmed : "desconhecido";
+  return trimmed && trimmed.toLowerCase() !== "desconhecido" ? trimmed : "Contato sem nome";
+}
+
+function contactInitials(value?: string | null) {
+  const name = displayCustomerName(value);
+  if (name === "Contato sem nome") return null;
+  return name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase();
+}
+
+function ContactAvatar({ name, src, size = "md" }: { name?: string | null; src?: string | null; size?: "sm" | "md" | "lg" }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const sizeClass = size === "lg" ? "h-12 w-12 text-sm" : size === "sm" ? "h-9 w-9 text-xs" : "h-10 w-10 text-xs";
+  const initials = contactInitials(name);
+
+  useEffect(() => setImageFailed(false), [src]);
+
+  if (src && !imageFailed) {
+    return <img src={src} alt="" className={`${sizeClass} shrink-0 rounded-full object-cover ring-1 ring-black/5`} onError={() => setImageFailed(true)} />;
+  }
+
+  return (
+    <span className={`${sizeClass} flex shrink-0 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-800 dark:bg-brand-900/40 dark:text-brand-200`} aria-hidden="true">
+      {initials || <UserRound size={size === "lg" ? 20 : 16} />}
+    </span>
+  );
+}
+
+function conversationStatusLabel(status?: string | null) {
+  switch (status?.toLowerCase()) {
+    case "em_atendimento_humano": return "Atendimento humano";
+    case "concluida": return "Conversa encerrada";
+    case "venda_concluida": return "Venda concluída";
+    default: return "IA atendendo";
+  }
 }
 
 function messageIdentity(message: ConversationMessage) {
@@ -168,10 +199,10 @@ export default function ConversationsPage() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [handoffs, setHandoffs] = useState<ConversationHandoffEvent[]>([]);
   const [testPrompt, setTestPrompt] = useState("");
   const [manualMessage, setManualMessage] = useState("");
   const [saleSummary, setSaleSummary] = useState("");
+  const [isSaleDialogOpen, setIsSaleDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -316,22 +347,12 @@ export default function ConversationsPage() {
       currentMessagePageRef.current = 1;
       hasMoreMessagesRef.current = false;
       setMessages([]);
-      setHandoffs([]);
       setCurrentMessagePage(1);
       setHasMoreMessages(false);
       return;
     }
     if (initializedConversationRef.current === selectedConversationId) return;
     void loadInitialMessages(selectedConversationId);
-    const generation = messageLoadGenerationRef.current;
-    setHandoffs([]);
-    getConversationHandoffs(selectedConversationId)
-      .then((items) => {
-        if (generation === messageLoadGenerationRef.current) setHandoffs(items);
-      })
-      .catch(() => {
-        if (generation === messageLoadGenerationRef.current) setHandoffs([]);
-      });
   }, [selectedConversationId]);
 
   useLayoutEffect(() => {
@@ -403,47 +424,70 @@ export default function ConversationsPage() {
       await loadConversations();
       if (selectedConversationId) {
         await loadInitialMessages(selectedConversationId);
-        setHandoffs(await getConversationHandoffs(selectedConversationId));
       }
+      return true;
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel concluir a acao.");
+      return false;
     } finally {
       setIsActionLoading(false);
     }
   }
 
+  async function handleCompleteSale() {
+    if (!selectedConversation || !saleSummary.trim()) return;
+    const completed = await runAction(() => completeConversation(selectedConversation.id, {
+      outcome: "VENDA_CONCLUIDA",
+      closedReason: "Venda fechada",
+      saleSummary
+    }));
+    if (completed) setIsSaleDialogOpen(false);
+  }
+
   return (
-    <AppShell>
-      <PageHeader
-        eyebrow="Atendimento"
-        title="Inbox operacional"
-        description={isSuperAdmin ? "Conversas reais, fila humana e handoff comercial por franquia." : "Fila de atendimento da sua franquia."}
-      />
+    <AppShell wide>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <PageHeader
+          eyebrow="Atendimento"
+          title="Conversas"
+          description={isSuperAdmin ? "Atendimento das franquias em uma unica fila." : "Atenda clientes da sua franquia em tempo real."}
+        />
+        {isSuperAdmin ? (
+          <details className="group relative self-start lg:self-end">
+            <summary className="btn-secondary cursor-pointer list-none px-3 py-2 text-xs">
+              <Send size={14} />
+              Ferramentas de teste
+              <ChevronDown size={14} className="transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="absolute right-0 z-20 mt-2 grid w-[min(20rem,calc(100vw-2rem))] gap-3 rounded-2xl border bg-bg-primary p-4 shadow-soft-lg" style={{ borderColor: "var(--color-border)" }}>
+              <div>
+                <p className="text-sm font-semibold text-text-primary">Nova conversa de teste</p>
+                <p className="mt-1 text-xs leading-5 text-text-secondary">Abra uma conversa GPTMaker sem ocupar a fila de contatos.</p>
+              </div>
+              <textarea className="input-field min-h-20" placeholder="Mensagem inicial do cliente" value={testPrompt} onChange={(event) => setTestPrompt(event.target.value)} />
+              <button type="button" onClick={() => void handleTestAgent()} disabled={isSubmitting} className="btn-primary w-full py-2 text-xs">
+                {isSubmitting ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                Criar conversa
+              </button>
+            </div>
+          </details>
+        ) : null}
+      </div>
 
       {error ? <p className="rounded-2xl bg-rose-50 dark:bg-rose-950/40 px-4 py-3 text-sm text-rose-700 dark:text-rose-300">{error}</p> : null}
       {success ? <p className="rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{success}</p> : null}
 
-      <section className="grid min-w-0 items-start gap-5 overflow-x-hidden 2xl:grid-cols-[400px_minmax(0,1fr)]">
-        <aside className="grid min-w-0 gap-5 2xl:sticky 2xl:top-6 2xl:self-start">
-          <section className="card overflow-hidden p-5">
-            <h2 className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Nova conversa de teste</h2>
-            <div className="mt-4 grid gap-3">
-              {isSuperAdmin ? (
-                <select className="input-field" value={selectedFranchiseId} onChange={(event) => setSelectedFranchiseId(event.target.value)}>
-                  {franchises.map((franchise) => (
-                    <option key={franchise.id} value={franchise.id}>{franchise.name}</option>
-                  ))}
-                </select>
-              ) : null}
-              <textarea className="input-field min-h-[110px]" placeholder="Mensagem inicial do cliente" value={testPrompt} onChange={(event) => setTestPrompt(event.target.value)} />
-              <button type="button" onClick={() => void handleTestAgent()} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                Criar conversa
-              </button>
-            </div>
-          </section>
+      <section className="grid min-w-0 items-start gap-4 overflow-x-hidden lg:grid-cols-[340px_minmax(0,1fr)]">
+        <aside className="grid min-w-0 gap-4 lg:sticky lg:top-20 lg:self-start">
+          {isSuperAdmin ? (
+            <section className="card overflow-hidden p-4">
+              <select className="input-field" aria-label="Franquia" value={selectedFranchiseId} onChange={(event) => setSelectedFranchiseId(event.target.value)}>
+                {franchises.map((franchise) => <option key={franchise.id} value={franchise.id}>{franchise.name}</option>)}
+              </select>
+            </section>
+          ) : null}
 
-          <section className="card min-w-0 overflow-hidden p-5">
+          <section className="card min-w-0 overflow-hidden p-4">
             <div className="grid gap-3">
               <select className="input-field" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
                 {statusOptions.map((status) => (
@@ -455,17 +499,17 @@ export default function ConversationsPage() {
             {isLoading ? (
               <p className="mt-4 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando conversas...</p>
             ) : conversations.length ? (
-              <div className="mt-4 grid max-h-[calc(100vh-18rem)] min-h-0 gap-3 overflow-x-hidden overflow-y-auto pr-1">
+              <div className="mt-3 grid max-h-[calc(100dvh-24rem)] min-h-[18rem] overflow-x-hidden overflow-y-auto scrollbar-thin">
                 {conversations.map((conversation) => (
                   <button
                     key={conversation.id}
                     type="button"
                     onClick={() => setSelectedConversationId(conversation.id)}
-                    className={`min-w-0 overflow-hidden rounded-2xl border p-4 text-left transition ${selectedConversationId === conversation.id ? "border-brand-500 shadow-sm" : "hover:opacity-95"}`}
-                    style={selectedConversationId === conversation.id
-                      ? { background: "rgba(34, 165, 135, 0.12)" }
-                      : { borderColor: "var(--color-border)", background: "var(--color-bg-primary)" }}
+                    className={`flex min-w-0 gap-3 border-b px-3 py-3.5 text-left transition-colors ${selectedConversationId === conversation.id ? "bg-brand-50 dark:bg-brand-900/20" : "hover:bg-bg-secondary"}`}
+                    style={{ borderColor: "var(--color-border)" }}
                   >
+                    <ContactAvatar name={conversation.customerName} src={conversation.customerPicture} />
+                    <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
@@ -476,23 +520,16 @@ export default function ConversationsPage() {
                           <span className="truncate">{conversation.customerPhone || "Sem telefone"}</span>
                         </div>
                       </div>
-                      <div className="shrink-0">
-                        <StatusBadge status={conversation.operationalStatus} />
-                      </div>
+                      <span className="shrink-0 text-2xs text-text-tertiary">{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</span>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-                      <span className="inline-flex min-w-0 items-center gap-1 rounded-full px-2 py-1" style={{ background: "var(--color-bg-secondary)" }}>
-                        <Building2 size={12} className="shrink-0" />
-                        <span className="truncate">{conversation.franchiseName}</span>
-                      </span>
-                      <span className="inline-flex items-center rounded-full px-2 py-1 uppercase tracking-[0.12em]" style={{ background: "var(--color-bg-secondary)" }}>
-                        {conversation.channelType || "WEBCHAT"}
-                      </span>
-                    </div>
-                    <p className="mt-3 line-clamp-2 break-words text-sm leading-6" style={{ color: "var(--color-text-secondary)" }}>
+                    <p className="mt-2 truncate text-xs" style={{ color: "var(--color-text-secondary)" }}>
                       {conversation.lastResponse || conversation.firstPrompt || "Sem mensagens."}
                     </p>
-                    <p className="mt-3 text-xs" style={{ color: "var(--color-text-tertiary)" }}>{formatDate(conversation.lastMessageAt || conversation.updatedAt)}</p>
+                    <p className="mt-2 flex items-center gap-1.5 text-2xs text-text-tertiary">
+                      <span className={`h-1.5 w-1.5 rounded-full ${conversation.humanTakeoverActive ? "bg-amber-500" : conversation.operationalStatus === "concluida" || conversation.operationalStatus === "venda_concluida" ? "bg-slate-400" : "bg-brand-500"}`} />
+                      {conversationStatusLabel(conversation.operationalStatus)}
+                    </p>
+                    </div>
                   </button>
                 ))}
               </div>
@@ -502,11 +539,13 @@ export default function ConversationsPage() {
           </section>
         </aside>
 
-        <section className="card min-w-0 overflow-hidden p-5">
+        <section className="card min-w-0 overflow-hidden p-0 lg:h-[calc(100dvh-13.5rem)] lg:min-h-[32rem]">
           {selectedConversation ? (
-            <div className="grid gap-5">
-              <div className="grid min-w-0 gap-4 border-b border-line/80 pb-4 xl:grid-cols-[minmax(0,1fr)_minmax(300px,420px)] xl:items-start">
-                <div className="min-w-0">
+            <div className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]">
+              <div className="grid min-w-0 gap-4 border-b border-line/80 px-4 py-3 sm:px-5 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center">
+                <div className="flex min-w-0 items-center gap-3">
+                  <ContactAvatar name={selectedConversation.customerName} src={selectedConversation.customerPicture} size="lg" />
+                  <div className="min-w-0">
                   <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>
                     {displayCustomerName(selectedConversation.customerName)}
                   </h2>
@@ -520,30 +559,35 @@ export default function ConversationsPage() {
                       {selectedConversation.franchiseName}
                     </span>
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
                     <StatusBadge status={selectedConversation.operationalStatus} />
                     {selectedConversation.channelType ? <StatusBadge status={selectedConversation.channelType} /> : null}
-                    {selectedConversation.handoffStatus ? <StatusBadge status={selectedConversation.handoffStatus} /> : null}
+                    {selectedConversation.humanTakeoverActive ? (
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                        {selectedConversation.responsibleUserName ? `Atendimento assumido por ${selectedConversation.responsibleUserName}` : "Atendimento humano ativo"}
+                      </span>
+                    ) : null}
+                  </div>
                   </div>
                 </div>
-                <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
-                  <button type="button" onClick={() => void runAction(() => startHumanTakeover(selectedConversation.id))} disabled={isActionLoading || selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
-                    Assumir humano
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void runAction(() => startHumanTakeover(selectedConversation.id))} disabled={isActionLoading || selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
+                    Assumir
                   </button>
-                  <button type="button" onClick={() => void runAction(() => stopHumanTakeover(selectedConversation.id))} disabled={isActionLoading || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
+                  <button type="button" onClick={() => void runAction(() => stopHumanTakeover(selectedConversation.id))} disabled={isActionLoading || !selectedConversation.humanTakeoverActive || isConversationClosed} className="btn-secondary px-3 py-2 text-xs disabled:opacity-50">
                     Devolver para IA
                   </button>
-                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isConversationClosed} className="flex min-h-11 w-full items-center justify-center rounded-xl px-3 py-2 text-center text-sm font-semibold leading-tight break-words disabled:opacity-60" style={{ background: "var(--color-bg-primary)", color: "var(--color-text-primary)", border: "1px solid var(--color-border)" }}>
-                    Concluir atendimento
+                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "CONCLUIDA", closedReason: "Atendimento encerrado" }))} disabled={isActionLoading || isConversationClosed} className="btn-ghost px-3 py-2 text-xs disabled:opacity-50">
+                    Encerrar
                   </button>
-                  <button type="button" onClick={() => void runAction(() => completeConversation(selectedConversation.id, { outcome: "VENDA_CONCLUIDA", closedReason: "Venda fechada", saleSummary }))} disabled={isActionLoading || isConversationClosed || !saleSummary.trim()} className="flex min-h-11 w-full items-center justify-center rounded-xl bg-ink px-3 py-2 text-center text-sm font-semibold leading-tight break-words text-white disabled:opacity-60">
+                  <button type="button" onClick={() => setIsSaleDialogOpen(true)} disabled={isActionLoading || isConversationClosed} className="btn-primary px-3 py-2 text-xs disabled:opacity-50">
                     Concluir venda
                   </button>
                 </div>
               </div>
 
-              <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
-                <div className="grid min-w-0 gap-4">
+              <div className="h-full min-h-0 min-w-0">
+                <div className="grid h-full min-h-0 min-w-0 grid-rows-[minmax(0,1fr)_auto]">
                   <div
                     ref={messagesContainerRef}
                     onScroll={(event) => {
@@ -553,7 +597,7 @@ export default function ConversationsPage() {
                     }}
                     data-current-page={currentMessagePage}
                     data-has-more={hasMoreMessages}
-                    className="grid h-[calc(100vh-16rem)] min-h-[24rem] content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain pr-1 scrollbar-thin"
+                    className="grid h-[65dvh] min-h-0 content-start gap-5 overflow-x-hidden overflow-y-auto overscroll-contain bg-bg-secondary px-4 py-5 scrollbar-thin sm:px-6 lg:h-auto"
                   >
                     {isLoadingOlderMessages ? (
                       <div className="flex items-center justify-center gap-2 py-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
@@ -577,19 +621,26 @@ export default function ConversationsPage() {
                             <div className="h-px flex-1 bg-line/80" />
                           </div>
                           {group.items.map((message) => {
-                            const isCustomerMessage = message.role?.toUpperCase() === "USER";
+                            const role = message.role?.toUpperCase();
+                            const isCustomerMessage = role === "USER";
+                            const isHumanMessage = role === "HUMAN";
                             const authorName = isCustomerMessage
                               ? displayCustomerName(selectedConversation.customerName)
-                              : message.userName || selectedConversation.agentName || "Atendimento";
+                              : isHumanMessage
+                                ? message.userName || "Atendimento humano"
+                                : message.userName || selectedConversation.agentName || "Assistente Vavive";
 
                             return (
-                              <div key={message.id} className={`grid gap-1 ${isCustomerMessage ? "" : "justify-items-end"}`}>
-                                <p className={`px-1 text-xs ${isCustomerMessage ? "" : "text-right"}`} style={{ color: "var(--color-text-tertiary)" }}>
-                                  {formatMessageTime(message.time) || "Agora"}
-                                </p>
-                                <article className={`w-fit max-w-[min(85%,42rem)] overflow-hidden rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm ${isCustomerMessage ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200" : "bg-ink text-white"}`}>
-                                  <p className="mb-1 text-xs font-medium opacity-70">{authorName}</p>
-                                  <p className="break-words whitespace-pre-wrap">{message.text || ""}</p>
+                              <div key={message.id} className={`flex gap-2 ${isCustomerMessage ? "justify-start" : "justify-end"}`}>
+                                {isCustomerMessage ? <ContactAvatar name={selectedConversation.customerName} src={selectedConversation.customerPicture} size="sm" /> : null}
+                                <article className={`max-w-[min(82%,44rem)] rounded-2xl px-3.5 py-2.5 text-sm leading-6 shadow-soft-sm ${isCustomerMessage ? "rounded-tl-md bg-bg-primary text-text-primary" : isHumanMessage ? "rounded-tr-md bg-ink text-white" : "rounded-tr-md bg-brand-100 text-brand-900 dark:bg-brand-900/50 dark:text-brand-50"}`}>
+                                  <div className="mb-0.5 flex items-center gap-1.5 text-2xs font-medium opacity-70">
+                                    {!isCustomerMessage && !isHumanMessage ? <Bot size={12} /> : null}
+                                    <span>{isHumanMessage ? `Enviado por ${authorName}` : authorName}</span>
+                                    <span aria-hidden="true">·</span>
+                                    <time>{formatMessageTime(message.time) || "Agora"}</time>
+                                  </div>
+                                  <p className="whitespace-pre-wrap break-words">{message.text || ""}</p>
                                 </article>
                               </div>
                             );
@@ -601,47 +652,16 @@ export default function ConversationsPage() {
                     )}
                   </div>
 
-                  <div className="card p-4">
-                    <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Mensagem manual</p>
-                    <textarea className="input-field mt-3 min-h-[96px] w-full" placeholder="Responder como atendimento humano" value={manualMessage} onChange={(event) => setManualMessage(event.target.value)} />
-                    <div className="mt-3 flex justify-end">
-                      <button type="button" onClick={() => void runAction(() => sendConversationManualMessage(selectedConversation.id, { message: manualMessage }))} disabled={isActionLoading || !manualMessage.trim() || !selectedConversation.humanTakeoverActive} className="inline-flex items-center gap-2 rounded-xl bg-ink px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
-                        <Send size={16} />
-                        Enviar mensagem
+                  <div className="border-t bg-bg-primary p-3 sm:p-4" style={{ borderColor: "var(--color-border)" }}>
+                    <div className="flex items-end gap-2 rounded-2xl border bg-bg-secondary p-2" style={{ borderColor: "var(--color-border)" }}>
+                      <textarea className="max-h-32 min-h-11 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-text-primary outline-none" placeholder={selectedConversation.humanTakeoverActive ? "Digite uma mensagem..." : "Assuma o atendimento para responder"} value={manualMessage} disabled={!selectedConversation.humanTakeoverActive || isConversationClosed} onChange={(event) => setManualMessage(event.target.value)} />
+                      <button type="button" aria-label="Enviar mensagem" onClick={() => void runAction(() => sendConversationManualMessage(selectedConversation.id, { message: manualMessage }))} disabled={isActionLoading || !manualMessage.trim() || !selectedConversation.humanTakeoverActive || isConversationClosed} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40">
+                        {isActionLoading ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <aside className="grid gap-4">
-                  <section className="card p-4">
-                    <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Resumo comercial</p>
-                    <textarea className="input-field mt-3 min-h-[140px] w-full" placeholder="Resumo que sera enviado ao WhatsApp do franqueado" value={saleSummary} onChange={(event) => setSaleSummary(event.target.value)} />
-                  </section>
-
-                  <section className="card p-4">
-                    <div className="flex items-center gap-2">
-                      <ShieldCheck size={16} className="text-brand-700" />
-                      <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Auditoria de handoff</p>
-                    </div>
-                    {handoffs.length ? (
-                      <div className="mt-4 grid gap-3">
-                        {handoffs.map((handoff) => (
-                          <div key={handoff.id} className="rounded-xl px-3 py-3 text-sm" style={{ background: "var(--color-bg-secondary)", color: "var(--color-text-secondary)" }}>
-                            <div className="flex items-start justify-between gap-3">
-                              <span className="font-medium" style={{ color: "var(--color-text-primary)" }}>{handoff.deliveryStatus}</span>
-                              <span className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>{formatDate(handoff.sentAt)}</span>
-                            </div>
-                            <p className="mt-2 whitespace-pre-line">{handoff.summary || "Sem resumo"}</p>
-                            {handoff.deliveryError ? <p className="mt-2 text-rose-600 dark:text-rose-400">{handoff.deliveryError}</p> : null}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <EmptyState icon={Bot} title="Sem handoff" description="Nenhum handoff comercial foi registrado ainda." />
-                    )}
-                  </section>
-                </aside>
               </div>
             </div>
           ) : (
@@ -649,6 +669,29 @@ export default function ConversationsPage() {
           )}
         </section>
       </section>
+
+      {isSaleDialogOpen && selectedConversation ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button type="button" aria-label="Fechar" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setIsSaleDialogOpen(false)} />
+          <section role="dialog" aria-modal="true" aria-labelledby="sale-dialog-title" className="card relative z-10 w-full max-w-lg p-6 shadow-soft-lg">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 id="sale-dialog-title" className="text-lg font-semibold text-text-primary">Concluir venda</h2>
+                <p className="mt-1 text-sm text-text-secondary">Registre o resumo comercial de {displayCustomerName(selectedConversation.customerName)}.</p>
+              </div>
+              <button type="button" aria-label="Fechar dialogo" onClick={() => setIsSaleDialogOpen(false)} className="btn-ghost h-9 w-9 p-0"><X size={18} /></button>
+            </div>
+            <textarea autoFocus className="input-field mt-5 min-h-36" placeholder="Resumo da venda" value={saleSummary} onChange={(event) => setSaleSummary(event.target.value)} />
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" className="btn-secondary" onClick={() => setIsSaleDialogOpen(false)}>Cancelar</button>
+              <button type="button" className="btn-primary" disabled={isActionLoading || !saleSummary.trim()} onClick={() => void handleCompleteSale()}>
+                {isActionLoading ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
+                Confirmar venda
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </AppShell>
   );
 }

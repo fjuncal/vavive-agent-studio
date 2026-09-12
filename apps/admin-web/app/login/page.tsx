@@ -2,15 +2,16 @@
 
 import { login } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { Bot, LockKeyhole, Mail, Sparkles, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, LockKeyhole, Mail, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
   const { clearSession, refreshMe, setSession } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -35,145 +36,138 @@ export default function LoginPage() {
     }
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     await submitCredentials(email, password);
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-4 py-10" style={{ background: "var(--color-bg-secondary)" }}>
-      <div className="w-full max-w-[440px] animate-in">
-        {/* Logo */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-ink shadow-soft-lg relative">
-            <Sparkles size={28} className="text-white" />
-            <div className="absolute inset-0 rounded-2xl bg-brand-500/20 animate-pulse-soft" />
-          </div>
-          <h1 className="mt-6 text-2xl font-bold tracking-tight" style={{ color: "var(--color-text-primary)" }}>Vavive Agent Studio</h1>
-          <p className="mt-2 text-sm" style={{ color: "var(--color-text-secondary)" }}>Gestão de franquias, agentes e atendimentos.</p>
-        </div>
+    <main className="relative min-h-screen overflow-hidden bg-bg-secondary">
+      <div className="pointer-events-none absolute -right-32 -top-32 h-80 w-80 rounded-full bg-brand-100/70 blur-3xl" />
+      <div className="pointer-events-none absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-brand-50 blur-3xl" />
 
-        {/* Login Form */}
-        <section className="card p-8">
-          <form className="grid gap-5" onSubmit={handleSubmit}>
-            <label className="grid gap-2">
-              <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Email</span>
-              <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-all duration-200 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-50" style={{ background: "var(--color-bg-primary)", border: "1px solid var(--color-border)" }}>
-                <Mail size={18} className="shrink-0" style={{ color: "var(--color-text-tertiary)" }} />
-                <input
-                  className="w-full outline-none text-sm bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  style={{ color: "var(--color-text-primary)" }}
-                  placeholder="seu@email.com"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  disabled={isSubmitting}
-                  required
-                  type="email"
-                  autoComplete="email"
-                />
+      <div className="relative mx-auto grid min-h-screen w-full max-w-[1360px] lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="relative hidden overflow-hidden bg-ink px-12 py-12 text-white lg:flex lg:flex-col lg:justify-between xl:px-20">
+          <div className="absolute -right-24 top-20 h-72 w-72 rounded-full border border-white/10" />
+          <div className="absolute -right-8 top-36 h-56 w-56 rounded-full border border-brand-300/20" />
+          <div className="absolute bottom-12 left-12 h-24 w-24 rounded-3xl bg-brand-500/20 blur-2xl" />
+
+          <div className="relative">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-500 text-white shadow-glow">
+                <Sparkles size={21} />
               </div>
-            </label>
-
-            <label className="grid gap-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium" style={{ color: "var(--color-text-primary)" }}>Senha</span>
-                <button type="button" className="text-xs text-brand-600 hover:text-brand-700 transition-colors">
-                  Esqueceu?
-                </button>
+              <div>
+                <p className="text-sm font-semibold tracking-[0.18em] text-brand-200">VAVIVE</p>
+                <p className="text-xs text-white/55">Agent Studio</p>
               </div>
-              <div className="flex items-center gap-2.5 rounded-xl px-3.5 py-3 transition-all duration-200 focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-50" style={{ background: "var(--color-bg-primary)", border: "1px solid var(--color-border)" }}>
-                <LockKeyhole size={18} className="shrink-0" style={{ color: "var(--color-text-tertiary)" }} />
-                <input
-                  type="password"
-                  className="w-full outline-none text-sm bg-transparent placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  style={{ color: "var(--color-text-primary)" }}
-                  placeholder="Sua senha"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={isSubmitting}
-                  required
-                  autoComplete="current-password"
-                />
-              </div>
-            </label>
-
-            {error && (
-              <div className="rounded-xl bg-rose-50 dark:bg-rose-950/50 border border-rose-100 dark:border-rose-900 px-4 py-3 text-sm text-rose-700 dark:text-rose-300 animate-in flex items-center gap-2">
-                <div className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 dark:bg-rose-900">
-                  <span className="text-xs font-bold text-rose-600 dark:text-rose-400">!</span>
-                </div>
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              className="btn-primary w-full py-3 mt-2"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 size={18} className="animate-spin" />
-                  Entrando...
-                </>
-              ) : (
-                "Entrar"
-              )}
-            </button>
-          </form>
-
-          {/* Test Credentials */}
-          <div className="mt-8 pt-6 border-t" style={{ borderColor: "var(--color-border)" }}>
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] mb-4" style={{ color: "var(--color-text-tertiary)" }}>Acessos de teste</p>
-            <div className="grid gap-2.5">
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => {
-                  setEmail("admin@vavive.com");
-                  setPassword("admin123");
-                  void submitCredentials("admin@vavive.com", "admin123");
-                }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 disabled:opacity-60 dark:hover:bg-white/5"
-                style={{ background: "var(--color-bg-primary)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-50 dark:bg-brand-950 text-brand-600 dark:text-brand-400">
-                  <Sparkles size={16} />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Administrador</p>
-                  <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Acesso completo à rede</p>
-                </div>
-              </button>
-              <button
-                type="button"
-                disabled={isSubmitting}
-                onClick={() => {
-                  setEmail("franquia@vavive.com");
-                  setPassword("admin123");
-                  void submitCredentials("franquia@vavive.com", "admin123");
-                }}
-                className="flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-medium transition-all duration-200 disabled:opacity-60 dark:hover:bg-white/5"
-                style={{ background: "var(--color-bg-primary)", border: "1px solid var(--color-border)", color: "var(--color-text-primary)" }}
-              >
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 dark:bg-amber-950 text-amber-600 dark:text-amber-400">
-                  <Bot size={16} />
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold" style={{ color: "var(--color-text-primary)" }}>Franquia</p>
-                  <p className="text-xs" style={{ color: "var(--color-text-secondary)" }}>Acesso à unidade</p>
-                </div>
-              </button>
             </div>
+
+            <div className="mt-28 max-w-xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand-300">Central de atendimento</p>
+              <h1 className="mt-5 text-4xl font-semibold leading-tight tracking-[-0.03em] xl:text-5xl">
+                Conversas mais humanas, operações mais simples.
+              </h1>
+              <p className="mt-6 max-w-md text-base leading-7 text-white/65">
+                Acompanhe agentes, franquias e atendimentos em um só lugar, com a clareza que sua equipe precisa para agir rápido.
+              </p>
+            </div>
+          </div>
+
+          <div className="relative flex items-center gap-3 text-xs text-white/45">
+            <span className="h-2 w-2 rounded-full bg-brand-400 shadow-[0_0_0_5px_rgba(69,181,163,0.12)]" />
+            Ambiente protegido para sua equipe
           </div>
         </section>
 
-        {/* Footer */}
-        <p className="mt-6 text-center text-xs" style={{ color: "var(--color-text-tertiary)" }}>
-          Vavive Agent Studio &mdash; Plataforma de gestão
-        </p>
+        <section className="flex items-center justify-center px-5 py-10 sm:px-10 lg:px-14 xl:px-20">
+          <div className="w-full max-w-md animate-in">
+            <div className="mb-10 lg:hidden">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-ink text-white shadow-soft">
+                  <Sparkles size={21} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold tracking-[0.18em] text-brand-700">VAVIVE</p>
+                  <p className="text-xs text-text-tertiary">Agent Studio</p>
+                </div>
+              </div>
+            </div>
+
+            <header>
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">Área restrita</p>
+              <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] text-text-primary">Bem-vindo de volta</h2>
+              <p className="mt-3 text-sm leading-6 text-text-secondary">Entre para acompanhar seus atendimentos e sua operação.</p>
+            </header>
+
+            <form className="mt-9 grid gap-5" onSubmit={handleSubmit}>
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-text-primary">Email</span>
+                <div className="flex items-center gap-3 rounded-2xl border bg-bg-primary px-4 py-3.5 transition-all focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-100">
+                  <Mail size={18} className="shrink-0 text-text-tertiary" />
+                  <input
+                    className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
+                    placeholder="seu@email.com"
+                    value={email}
+                    onChange={(event) => setEmail(event.target.value)}
+                    disabled={isSubmitting}
+                    required
+                    type="email"
+                    autoComplete="email"
+                  />
+                </div>
+              </label>
+
+              <label className="grid gap-2">
+                <span className="text-sm font-medium text-text-primary">Senha</span>
+                <div className="flex items-center gap-3 rounded-2xl border bg-bg-primary px-4 py-3.5 transition-all focus-within:border-brand-500 focus-within:ring-4 focus-within:ring-brand-100">
+                  <LockKeyhole size={18} className="shrink-0 text-text-tertiary" />
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    className="w-full bg-transparent text-sm text-text-primary outline-none placeholder:text-text-tertiary"
+                    placeholder="Sua senha"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    disabled={isSubmitting}
+                    required
+                    autoComplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setShowPassword((current) => !current)}
+                    className="shrink-0 rounded-lg p-1.5 text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary"
+                  >
+                    {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
+              </label>
+
+              {error ? (
+                <div role="alert" className="flex items-start gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm leading-5 text-rose-700">
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-600">!</span>
+                  <span>{error}</span>
+                </div>
+              ) : null}
+
+              <button type="submit" disabled={isSubmitting} className="btn-primary mt-2 min-h-12 w-full rounded-2xl disabled:cursor-not-allowed disabled:opacity-60">
+                {isSubmitting ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Entrando...
+                  </>
+                ) : (
+                  "Entrar"
+                )}
+              </button>
+            </form>
+
+            <p className="mt-8 text-center text-xs leading-5 text-text-tertiary">
+              Acesso exclusivo para usuários autorizados da Vavive.
+            </p>
+          </div>
+        </section>
       </div>
     </main>
   );
 }
-

@@ -7,7 +7,7 @@ import { Drawer } from "@/components/Drawer";
 import { useAuth } from "@/lib/auth";
 import { Loader2 } from "lucide-react";
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({ children, wide = false }: { children: React.ReactNode; wide?: boolean }) {
   const { isLoading, token } = useAuth();
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content */}
       <div className="lg:pl-72">
         <Header onMenuClick={() => setIsDrawerOpen(true)} />
-        <main className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 animate-in">
+        <main className={`mx-auto flex w-full flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8 animate-in ${wide ? "max-w-[1600px]" : "max-w-7xl"}`}>
           {children}
         </main>
       </div>
