@@ -38,6 +38,7 @@ public class ConversationController {
         @RequestParam(required = false) String status,
         @RequestParam(required = false) String channel,
         @RequestParam(required = false) String responsible,
+        @RequestParam(required = false) String query,
         @RequestParam(required = false) Integer page,
         @RequestParam(required = false) Integer pageSize
     ) {
@@ -47,11 +48,12 @@ public class ConversationController {
                 status,
                 channel,
                 responsible,
+                query,
                 page == null ? 1 : page,
                 pageSize == null ? 50 : pageSize
             );
         }
-        return conversationService.list(franchiseId, status, channel, responsible);
+        return conversationService.list(franchiseId, status, channel, responsible, query);
     }
 
     @PostMapping("/conversations/materialize")

@@ -198,6 +198,48 @@ class ConversationServiceTest {
     }
 
     @Test
+    void listPageForwardsQueryToGptMakerAndMatchesPhoneLocally() {
+        Franchise franchise = mock(Franchise.class);
+        UUID franchiseId = UUID.randomUUID();
+        when(franchise.getId()).thenReturn(franchiseId);
+        when(franchise.getName()).thenReturn("Vavive Centro");
+        when(franchise.getWorkspaceId()).thenReturn("workspace-1");
+        when(franchise.getAgentName()).thenReturn("Assistente Vavive");
+
+        ConversationSessionRepository sessionRepository = mock(ConversationSessionRepository.class);
+        when(sessionRepository.findByFranchiseIdAndChatIdIn(franchiseId, List.of("chat-search"))).thenReturn(List.of());
+
+        User admin = new User("Admin", "admin@vavive.com", "hash", UserRole.ADMIN_FRANQUIA, franchise);
+        CurrentUserService currentUserService = mock(CurrentUserService.class);
+        when(currentUserService.requireCurrentUser()).thenReturn(admin);
+        when(currentUserService.requireFranchise(admin)).thenReturn(franchise);
+
+        GptMakerClient gptMakerClient = mock(GptMakerClient.class);
+        when(gptMakerClient.listChats("workspace-1", 1, 50, "21999999999")).thenReturn(List.of(chat("chat-search")));
+        when(gptMakerClient.listChats("workspace-1", 2, 50, "21999999999")).thenReturn(List.of(chat("chat-search-page-2")));
+
+        ConversationService service = new ConversationService(
+            sessionRepository,
+            mock(ConversationHandoffEventRepository.class),
+            mock(FranchiseRepository.class),
+            mock(FranchiseSetupRepository.class),
+            currentUserService,
+            gptMakerClient,
+            mock(WhatsappHandoffService.class),
+            new AppRuntimeProperties(null, new AppRuntimeProperties.Features(false, true, false))
+        );
+
+        var result = service.listPage(franchiseId, null, null, null, "(21) 99999-9999", 1, 50);
+
+        assertThat(result.items()).hasSize(1);
+        assertThat(result.items().getFirst().customerPhone()).isEqualTo("5521999999999");
+        verify(gptMakerClient).listChats("workspace-1", 1, 50, "21999999999");
+        assertThat(service.listPage(franchiseId, null, null, null, "21999999999", 2, 50).items()).hasSize(1);
+        verify(gptMakerClient).listChats("workspace-1", 2, 50, "21999999999");
+        verify(sessionRepository, never()).save(any(ConversationSession.class));
+    }
+
+    @Test
     void listingRemotePagesNeverCreatesConversationSessions() {
         Franchise franchise = mock(Franchise.class);
         UUID franchiseId = UUID.randomUUID();

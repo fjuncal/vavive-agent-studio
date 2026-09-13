@@ -890,18 +890,19 @@ export function updateFranchiseAssistantBlock(
   });
 }
 
-export function getConversations(filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string } = {}) {
+export function getConversations(filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string; query?: string } = {}) {
   const params = new URLSearchParams();
   if (filters.franchiseId) params.set("franchiseId", filters.franchiseId);
   if (filters.status) params.set("status", filters.status);
   if (filters.channel) params.set("channel", filters.channel);
   if (filters.responsible) params.set("responsible", filters.responsible);
+  if (filters.query) params.set("query", filters.query);
   const suffix = params.toString() ? `?${params.toString()}` : "";
   return apiFetch<ConversationSummary[]>(`/conversations${suffix}`);
 }
 
 export function getConversationPage(
-  filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string } = {},
+  filters: { franchiseId?: string; status?: string; channel?: string; responsible?: string; query?: string } = {},
   page = 1,
   pageSize = 50
 ) {
@@ -910,6 +911,7 @@ export function getConversationPage(
   if (filters.status) params.set("status", filters.status);
   if (filters.channel) params.set("channel", filters.channel);
   if (filters.responsible) params.set("responsible", filters.responsible);
+  if (filters.query) params.set("query", filters.query);
   return apiFetch<ConversationPage>(`/conversations?${params.toString()}`);
 }
 

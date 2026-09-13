@@ -9,6 +9,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { resolveConversationMessageTarget } from "@/lib/conversation-message-routing";
 import { nextConversationPage, shouldLoadNextConversationPage } from "@/lib/conversation-scroll";
+import { conversationMatchesSearch } from "@/lib/conversation-search";
 import { countNewCustomerMessages, isCustomerMessageRole } from "@/lib/conversation-unread";
 import {
   completeConversation,
@@ -25,7 +26,7 @@ import {
   type ConversationSummary,
   type FranchiseSummary
 } from "@/lib/api";
-import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, Phone, Send, X } from "lucide-react";
+import { Bot, Building2, CheckCircle2, ChevronDown, Loader2, MessageSquareText, Phone, Search, Send, X } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 const MESSAGE_PAGE_SIZE = 30;
@@ -263,6 +264,8 @@ export default function ConversationsPage() {
   const [franchises, setFranchises] = useState<FranchiseSummary[]>([]);
   const [selectedFranchiseId, setSelectedFranchiseId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [appliedConversationQuery, setAppliedConversationQuery] = useState("");
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState("");
   const [messages, setMessages] = useState<ConversationMessage[]>([]);
@@ -300,6 +303,7 @@ export default function ConversationsPage() {
   const pollingEffectActiveRef = useRef(false);
   const conversationMaterializationInFlightRef = useRef(false);
   const conversationLoadGenerationRef = useRef(0);
+  const initializedConversationSearchRef = useRef(false);
   const loadedMessagePagesRef = useRef(new Set<number>());
   const currentMessagePageRef = useRef(1);
   const hasMoreMessagesRef = useRef(false);
@@ -426,7 +430,8 @@ export default function ConversationsPage() {
     try {
       const response = await getConversationPage({
         franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
-        status: selectedStatus || undefined
+        status: selectedStatus || undefined,
+        query: appliedConversationQuery || undefined
       }, 1, CONVERSATION_PAGE_SIZE);
       if (generation !== conversationLoadGenerationRef.current) return;
       const items = sortConversationsByRecent(response.items);
@@ -482,7 +487,8 @@ export default function ConversationsPage() {
     try {
       const response = await getConversationPage({
         franchiseId: isSuperAdmin ? selectedFranchiseId || undefined : undefined,
-        status: selectedStatus || undefined
+        status: selectedStatus || undefined,
+        query: appliedConversationQuery || undefined
       }, page, CONVERSATION_PAGE_SIZE);
       if (generation !== conversationLoadGenerationRef.current) return;
       currentConversationPageRef.current = response.page;
@@ -517,6 +523,31 @@ export default function ConversationsPage() {
     }
     void loadConversations();
   }, [selectedFranchiseId, selectedStatus, user]);
+
+  useEffect(() => {
+    const normalizedQuery = conversationSearch.trim();
+    const timeout = window.setTimeout(() => {
+      setAppliedConversationQuery((current) => current === normalizedQuery ? current : normalizedQuery);
+    }, 400);
+    return () => window.clearTimeout(timeout);
+  }, [conversationSearch]);
+
+  useEffect(() => {
+    if (!initializedConversationSearchRef.current) {
+      initializedConversationSearchRef.current = true;
+      return;
+    }
+    const selectedKey = selectedConversationIdRef.current;
+    const selectedOnly = selectedKey
+      ? conversationsRef.current.filter((item) => conversationKey(item) === selectedKey)
+      : [];
+    conversationsRef.current = selectedOnly;
+    setConversations(selectedOnly);
+    if (conversationsContainerRef.current) {
+      conversationsContainerRef.current.scrollTop = 0;
+    }
+    void loadConversationsRef.current();
+  }, [appliedConversationQuery]);
 
   useEffect(() => {
     if (isLoading || isLoadingMoreConversations || conversations.length > 0 || !hasMoreConversations) {
@@ -795,7 +826,9 @@ export default function ConversationsPage() {
   }
 
   useEffect(() => {
-    if (!user || (isSuperAdmin && !selectedFranchiseId)) {
+    const searchActive = conversationSearch.trim().length > 0 || appliedConversationQuery.length > 0;
+    if (!user || (isSuperAdmin && !selectedFranchiseId) || searchActive) {
+      pollingEffectActiveRef.current = false;
       return;
     }
 
@@ -866,7 +899,7 @@ export default function ConversationsPage() {
         backoffMs = nextDelayMs;
       } finally {
         conversationPollingInFlightRef.current = false;
-        if (pendingConversationReloadRef.current && pollingEffectActiveRef.current) {
+        if (pendingConversationReloadRef.current) {
           pendingConversationReloadRef.current = false;
           void loadConversationsRef.current();
           return;
@@ -902,11 +935,18 @@ export default function ConversationsPage() {
     };
   // The polling effect deliberately closes over the current filter and message loader.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuperAdmin, selectedFranchiseId, selectedStatus, user]);
+  }, [appliedConversationQuery, conversationSearch, isSuperAdmin, selectedFranchiseId, selectedStatus, user]);
+
+  const visibleConversations = useMemo(
+    () => appliedConversationQuery
+      ? conversations.filter((conversation) => conversationMatchesSearch(conversation, appliedConversationQuery))
+      : conversations,
+    [appliedConversationQuery, conversations]
+  );
 
   const groupedConversations = useMemo(() => {
     const groups = new Map<string, { key: string; label: string; items: ConversationSummary[] }>();
-    conversations.forEach((conversation) => {
+    visibleConversations.forEach((conversation) => {
       const timestamp = conversation.lastMessageAt || conversation.updatedAt || conversation.createdAt;
       const key = conversationGroupKey(timestamp);
       const current = groups.get(key);
@@ -921,7 +961,7 @@ export default function ConversationsPage() {
       });
     });
     return Array.from(groups.values());
-  }, [conversations]);
+  }, [visibleConversations]);
   const groupedMessages = useMemo(() => {
     const sortedMessages = [...messages].sort((left, right) => {
       const leftTime = normalizeTimestamp(left.time) ?? 0;
@@ -1092,18 +1132,49 @@ export default function ConversationsPage() {
             <div className="shrink-0 border-b border-border px-3 py-3">
               <div className="mb-2 flex items-center justify-between gap-3 px-1">
                 <p className="text-xs font-semibold text-text-primary">Caixa de entrada</p>
-                <span className="text-2xs tabular-nums text-text-tertiary">{conversations.length} carregadas</span>
+                <span className="text-2xs tabular-nums text-text-tertiary">{visibleConversations.length} carregadas</span>
               </div>
-              <select className="input-field" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
-                {statusOptions.map((status) => (
-                  <option key={status.value || "all"} value={status.value}>{status.label}</option>
-                ))}
-              </select>
+              <div className="grid gap-2">
+                <div className="relative">
+                  <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-text-tertiary" aria-hidden="true" />
+                  <input
+                    type="search"
+                    value={conversationSearch}
+                    onChange={(event) => setConversationSearch(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Escape") {
+                        setConversationSearch("");
+                      }
+                    }}
+                    placeholder="Buscar por nome ou telefone..."
+                    aria-label="Buscar conversas por nome ou telefone"
+                    className="input-field w-full pl-9 pr-16"
+                  />
+                  {conversationSearch ? (
+                    <button
+                      type="button"
+                      onClick={() => setConversationSearch("")}
+                      className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-md text-text-tertiary transition-colors hover:bg-bg-tertiary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                      aria-label="Limpar busca"
+                    >
+                      <X size={14} />
+                    </button>
+                  ) : null}
+                  {conversationSearch.trim() !== appliedConversationQuery ? (
+                    <Loader2 size={14} className="pointer-events-none absolute right-10 top-1/2 -translate-y-1/2 animate-spin text-text-tertiary" aria-label="Aguardando busca" />
+                  ) : null}
+                </div>
+                <select className="input-field" value={selectedStatus} onChange={(event) => setSelectedStatus(event.target.value)}>
+                  {statusOptions.map((status) => (
+                    <option key={status.value || "all"} value={status.value}>{status.label}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {isLoading ? (
               <p className="px-4 py-5 text-sm" style={{ color: "var(--color-text-secondary)" }}>Carregando conversas...</p>
-            ) : conversations.length ? (
+            ) : visibleConversations.length ? (
               <div
                 ref={conversationsContainerRef}
                 onScroll={(event) => {
@@ -1144,7 +1215,11 @@ export default function ConversationsPage() {
                 Carregando conversas...
               </p>
             ) : (
-              <EmptyState icon={MessageSquareText} title="Nenhuma conversa" description="Quando houver conversas sincronizadas, elas aparecerao aqui." />
+              <EmptyState
+                icon={MessageSquareText}
+                title={appliedConversationQuery ? "Nenhuma conversa encontrada" : "Nenhuma conversa"}
+                description={appliedConversationQuery ? "Tente outro nome ou telefone." : "Quando houver conversas sincronizadas, elas aparecerao aqui."}
+              />
             )}
           </section>
         </aside>

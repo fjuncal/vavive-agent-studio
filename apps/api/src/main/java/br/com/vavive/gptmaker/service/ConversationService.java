@@ -27,6 +27,7 @@ import br.com.vavive.gptmaker.repository.ConversationHandoffEventRepository;
 import br.com.vavive.gptmaker.repository.ConversationSessionRepository;
 import br.com.vavive.gptmaker.repository.FranchiseRepository;
 import br.com.vavive.gptmaker.repository.FranchiseSetupRepository;
+import java.text.Normalizer;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
@@ -34,6 +35,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
@@ -89,14 +91,26 @@ public class ConversationService {
 
     @Transactional(readOnly = true)
     public List<ConversationSummaryResponse> list(UUID franchiseId, String status, String channel, String responsible) {
+        return list(franchiseId, status, channel, responsible, null);
+    }
+
+    @Transactional(readOnly = true)
+    public List<ConversationSummaryResponse> list(
+        UUID franchiseId,
+        String status,
+        String channel,
+        String responsible,
+        String query
+    ) {
         User user = currentUserService.requireCurrentUser();
         Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
             ? (franchiseId == null ? null : requireFranchise(franchiseId))
             : currentUserService.requireFranchise(user);
+        String normalizedQuery = normalizeQuery(query);
 
         List<ConversationSummaryResponse> remoteItems = List.of();
         if (liveInboxEnabled() && franchise != null) {
-            remoteItems = syncFranchisePage(franchise, CHAT_SYNC_PAGE, CHAT_SYNC_PAGE_SIZE).items();
+            remoteItems = syncFranchisePage(franchise, CHAT_SYNC_PAGE, CHAT_SYNC_PAGE_SIZE, normalizedQuery).items();
         }
 
         List<ConversationSession> base = user.getRole() == UserRole.SUPER_ADMIN
@@ -107,7 +121,7 @@ public class ConversationService {
         List<ConversationSummaryResponse> localItems = deduplicateSessions(base).stream()
             .map(item -> toSummary(item, null))
             .toList();
-        return filterSummaries(mergeSummaries(localItems, remoteItems), status, channel, responsible);
+        return filterSummaries(mergeSummaries(localItems, remoteItems), status, channel, responsible, normalizedQuery);
     }
 
     @Transactional(readOnly = true)
@@ -119,25 +133,40 @@ public class ConversationService {
         int page,
         int pageSize
     ) {
+        return listPage(franchiseId, status, channel, responsible, null, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public ConversationPageResponse listPage(
+        UUID franchiseId,
+        String status,
+        String channel,
+        String responsible,
+        String query,
+        int page,
+        int pageSize
+    ) {
         validateConversationPagination(page, pageSize);
         User user = currentUserService.requireCurrentUser();
         Franchise franchise = user.getRole() == UserRole.SUPER_ADMIN
             ? (franchiseId == null ? null : requireFranchise(franchiseId))
             : currentUserService.requireFranchise(user);
+        String normalizedQuery = normalizeQuery(query);
 
         if (liveInboxEnabled() && franchise != null) {
-            ConversationSyncPage synced = syncFranchisePage(franchise, page, pageSize);
+            ConversationSyncPage synced = syncFranchisePage(franchise, page, pageSize, normalizedQuery);
             if (page == 1 && synced.items().isEmpty()) {
                 return localConversationPage(
                     conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()),
                     status,
                     channel,
                     responsible,
+                    normalizedQuery,
                     page,
                     pageSize
                 );
             }
-            List<ConversationSummaryResponse> filtered = filterSummaries(synced.items(), status, channel, responsible);
+            List<ConversationSummaryResponse> filtered = filterSummaries(synced.items(), status, channel, responsible, normalizedQuery);
             return new ConversationPageResponse(
                 filtered,
                 page,
@@ -151,7 +180,7 @@ public class ConversationService {
                 ? conversationSessionRepository.findAll()
                 : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId()))
             : conversationSessionRepository.findByFranchiseIdOrderByUpdatedAtDesc(franchise.getId());
-        return localConversationPage(base, status, channel, responsible, page, pageSize);
+        return localConversationPage(base, status, channel, responsible, normalizedQuery, page, pageSize);
     }
 
     @Transactional
@@ -165,10 +194,11 @@ public class ConversationService {
         String status,
         String channel,
         String responsible,
+        String query,
         int page,
         int pageSize
     ) {
-        List<ConversationSession> filtered = filterSessions(base, status, channel, responsible);
+        List<ConversationSession> filtered = filterSessions(base, status, channel, responsible, query);
         long requestedFromIndex = (long) (page - 1) * pageSize;
         int fromIndex = requestedFromIndex >= filtered.size() ? filtered.size() : (int) requestedFromIndex;
         int toIndex = Math.min(fromIndex + pageSize, filtered.size());
@@ -664,7 +694,7 @@ public class ConversationService {
         );
     }
 
-    private ConversationSyncPage syncFranchisePage(Franchise franchise, int page, int pageSize) {
+    private ConversationSyncPage syncFranchisePage(Franchise franchise, int page, int pageSize, String query) {
         if (!liveInboxEnabled()) {
             return new ConversationSyncPage(List.of(), false);
         }
@@ -672,7 +702,9 @@ public class ConversationService {
             return new ConversationSyncPage(List.of(), false);
         }
         try {
-            List<GptMakerChatResponse> chats = gptMakerClient.listChats(franchise.getWorkspaceId(), page, pageSize);
+            List<GptMakerChatResponse> chats = query == null
+                ? gptMakerClient.listChats(franchise.getWorkspaceId(), page, pageSize)
+                : gptMakerClient.listChats(franchise.getWorkspaceId(), page, pageSize, query);
             List<String> chatIds = chats.stream()
                 .map(GptMakerChatResponse::id)
                 .filter(id -> id != null && !id.isBlank())
@@ -798,12 +830,14 @@ public class ConversationService {
         List<ConversationSummaryResponse> summaries,
         String status,
         String channel,
-        String responsible
+        String responsible,
+        String query
     ) {
         return summaries.stream()
             .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.operationalStatus()))
             .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.channelType()))
             .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.responsibleUserName()))
+            .filter(item -> matchesQuery(item.customerName(), item.customerPhone(), query))
             .sorted(Comparator.comparing(this::summarySortTimestamp, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
     }
@@ -833,14 +867,57 @@ public class ConversationService {
         List<ConversationSession> sessions,
         String status,
         String channel,
-        String responsible
+        String responsible,
+        String query
     ) {
         return deduplicateSessions(sessions).stream()
             .filter(item -> status == null || status.isBlank() || status.equalsIgnoreCase(item.getOperationalStatus()))
             .filter(item -> channel == null || channel.isBlank() || channel.equalsIgnoreCase(item.getChannelType()))
             .filter(item -> responsible == null || responsible.isBlank() || responsible.equalsIgnoreCase(item.getResponsibleUserName()))
+            .filter(item -> matchesQuery(item.getCustomerName(), item.getCustomerPhone(), query))
             .sorted(Comparator.comparing(ConversationService::sessionSortTimestamp, Comparator.nullsLast(Comparator.reverseOrder())))
             .toList();
+    }
+
+    private String normalizeQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return null;
+        }
+        String trimmed = query.trim();
+        String digits = digitsOnly(trimmed);
+        boolean phoneLike = digits.length() >= 6
+            && trimmed.chars().allMatch(character -> Character.isDigit(character) || "+() -.".indexOf(character) >= 0);
+        return phoneLike ? digits : trimmed;
+    }
+
+    private boolean matchesQuery(String customerName, String customerPhone, String query) {
+        if (query == null || query.isBlank()) {
+            return true;
+        }
+        String normalizedQuery = foldSearchText(query);
+        String normalizedName = foldSearchText(customerName);
+        if (!normalizedName.isBlank() && java.util.Arrays.stream(normalizedQuery.split("\\s+")).allMatch(normalizedName::contains)) {
+            return true;
+        }
+        String queryDigits = digitsOnly(query);
+        return !queryDigits.isBlank() && digitsOnly(customerPhone).contains(queryDigits);
+    }
+
+    private String foldSearchText(String value) {
+        if (value == null || value.isBlank()) {
+            return "";
+        }
+        return Normalizer.normalize(value, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase(Locale.ROOT)
+            .trim();
+    }
+
+    private String digitsOnly(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replaceAll("\\D", "");
     }
 
     private List<ConversationSession> deduplicateSessions(List<ConversationSession> sessions) {
