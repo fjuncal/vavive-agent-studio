@@ -20,7 +20,10 @@ import br.com.vavive.gptmaker.dto.GptMakerAgentOptionResponse;
 import br.com.vavive.gptmaker.dto.GptMakerWorkspaceOptionResponse;
 import br.com.vavive.gptmaker.dto.PublishAgentResponse;
 import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
+import br.com.vavive.gptmaker.dto.ResetFranchiseAdminPasswordRequest;
 import br.com.vavive.gptmaker.dto.RevertBlockRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseAccessStatusRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseAdminEmailRequest;
 import br.com.vavive.gptmaker.dto.UpdateAssistantBlockRequest;
 import br.com.vavive.gptmaker.dto.UpdateChannelConfigurationRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
@@ -39,6 +42,7 @@ import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -85,14 +89,41 @@ public class FranchiseController {
         return franchiseService.get(id);
     }
 
-    @GetMapping("/franchises/{id}/admin-user")
-    public UserResponse getAdminUser(@PathVariable UUID id) {
-        return franchiseService.getAdminUser(id);
+    @GetMapping("/franchises/{id}/admin-users")
+    public List<UserResponse> getAdminUsers(@PathVariable UUID id) {
+        return franchiseService.getAdminUsers(id);
     }
 
     @PostMapping("/franchises/{id}/admin-user")
     public UserResponse createAdminUser(@PathVariable UUID id, @Valid @RequestBody CreateFranchiseAdminUserRequest request) {
         return franchiseService.createAdminUser(id, request);
+    }
+
+    @PatchMapping("/franchises/{franchiseId}/users/{userId}/email")
+    public UserResponse updateAdminEmail(
+        @PathVariable UUID franchiseId,
+        @PathVariable UUID userId,
+        @Valid @RequestBody UpdateFranchiseAdminEmailRequest request
+    ) {
+        return franchiseService.updateAdminEmail(franchiseId, userId, request);
+    }
+
+    @PutMapping("/franchises/{franchiseId}/users/{userId}/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void resetAdminPassword(
+        @PathVariable UUID franchiseId,
+        @PathVariable UUID userId,
+        @Valid @RequestBody ResetFranchiseAdminPasswordRequest request
+    ) {
+        franchiseService.resetAdminPassword(franchiseId, userId, request);
+    }
+
+    @PatchMapping("/franchises/{id}/access-status")
+    public FranchiseResponse updateAccessStatus(
+        @PathVariable UUID id,
+        @Valid @RequestBody UpdateFranchiseAccessStatusRequest request
+    ) {
+        return franchiseService.updateAccessStatus(id, request);
     }
 
     @GetMapping("/franchises/{id}/gptmaker-connection")

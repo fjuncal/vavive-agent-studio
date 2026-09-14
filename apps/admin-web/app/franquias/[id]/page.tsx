@@ -2,7 +2,10 @@
 
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DeactivateFranchiseDialog } from "@/components/DeactivateFranchiseDialog";
+import { EditAdminEmailDialog } from "@/components/EditAdminEmailDialog";
 import { PageHeader } from "@/components/PageHeader";
+import { ResetAdminPasswordDialog } from "@/components/ResetAdminPasswordDialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useAuth } from "@/lib/auth";
 import { formatCreditsStatus, getCreditsNumbers, getCreditsPercentage } from "@/lib/credits";
@@ -11,13 +14,16 @@ import {
   createFranchiseAdminUser,
   getAvailableGptMakerWorkspaces,
   getConversations,
-  getFranchiseAdminUser,
+  getFranchiseAdminUsers,
   getFranchiseById,
   getFranchiseChannels,
   getFranchiseGptMakerConnection,
   getFranchiseSetup,
   getWorkspaceCredits,
   linkFranchiseWorkspace,
+  resetFranchiseAdminPassword,
+  updateFranchiseAccessStatus,
+  updateFranchiseAdminEmail,
   unlinkFranchiseWorkspace,
   type ConversationSummary,
   type FranchiseAdminUser,
@@ -28,7 +34,7 @@ import {
   type GptMakerWorkspaceOption,
   type WorkspaceCredits
 } from "@/lib/api";
-import { ArrowRight, Bot, Building2, Coins, Loader2, MessageCircleMore, PlugZap, Radio, Settings, Trash2, Unlink, UserRound } from "lucide-react";
+import { ArrowRight, Bot, Building2, CheckCircle2, Coins, KeyRound, Loader2, Mail, MessageCircleMore, PlugZap, Radio, Settings, ShieldCheck, ShieldOff, Trash2, Unlink, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -73,7 +79,7 @@ export default function FranchiseDetailPage() {
   const [franchise, setFranchise] = useState<FranchiseSummary | null>(null);
   const [connection, setConnection] = useState<FranchiseGptMakerConnection | null>(null);
   const [setup, setSetup] = useState<FranchiseSetup | null>(null);
-  const [adminUser, setAdminUser] = useState<FranchiseAdminUser | null>(null);
+  const [adminUsers, setAdminUsers] = useState<FranchiseAdminUser[]>([]);
   const [channels, setChannels] = useState<FranchiseChannel[]>([]);
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [workspaces, setWorkspaces] = useState<GptMakerWorkspaceOption[]>([]);
@@ -81,13 +87,24 @@ export default function FranchiseDetailPage() {
   const [adminName, setAdminName] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [isCreatingAdmin, setIsCreatingAdmin] = useState(false);
   const [credits, setCredits] = useState<WorkspaceCredits | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isSavingAdmin, setIsSavingAdmin] = useState(false);
+  const [editingAdminUser, setEditingAdminUser] = useState<FranchiseAdminUser | null>(null);
+  const [resettingAdminUser, setResettingAdminUser] = useState<FranchiseAdminUser | null>(null);
+  const [isSavingAdminEmail, setIsSavingAdminEmail] = useState(false);
+  const [isResettingAdminPassword, setIsResettingAdminPassword] = useState(false);
+  const [isSavingAccessStatus, setIsSavingAccessStatus] = useState(false);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(false);
+  const [workspaceLoadError, setWorkspaceLoadError] = useState<string | null>(null);
+  const [accessStatusAction, setAccessStatusAction] = useState<"deactivate" | "reactivate" | null>(null);
   const [confirmAction, setConfirmAction] = useState<null | "replace-workspace" | "unlink-workspace" | "clear-agent">(null);
+
+  const adminUser = adminUsers[0] ?? (user?.role === "ADMIN_FRANQUIA" ? user : null);
 
   const selectedWorkspace = useMemo(
     () => workspaces.find((item) => item.id === selectedWorkspaceId) ?? null,
@@ -99,11 +116,12 @@ export default function FranchiseDetailPage() {
       return;
     }
     setIsLoading(true);
+    setSelectedWorkspaceId("");
     Promise.all([
       getFranchiseById(params.id),
       getFranchiseGptMakerConnection(params.id),
       getFranchiseSetup(params.id),
-      getFranchiseAdminUser(params.id).catch(() => null),
+      isSuperAdmin ? getFranchiseAdminUsers(params.id).catch(() => []) : Promise.resolve<FranchiseAdminUser[]>([]),
       getFranchiseChannels(params.id).catch(() => []),
       getConversations({ franchiseId: params.id }).catch(() => []),
       getWorkspaceCredits(params.id).catch(() => null)
@@ -112,7 +130,7 @@ export default function FranchiseDetailPage() {
         setFranchise(franchiseData);
         setConnection(connectionData);
         setSetup(setupData);
-        setAdminUser(adminData);
+        setAdminUsers(adminData);
         setChannels(channelData);
         setConversations(conversationData);
         setCredits(creditData);
@@ -121,13 +139,35 @@ export default function FranchiseDetailPage() {
         setError(requestError instanceof Error ? requestError.message : "Nao foi possivel carregar a franquia.");
       })
       .finally(() => setIsLoading(false));
-  }, [params?.id]);
+  }, [isSuperAdmin, params?.id]);
 
   useEffect(() => {
     if (!isSuperAdmin) {
       return;
     }
-    getAvailableGptMakerWorkspaces().then(setWorkspaces).catch(() => setWorkspaces([]));
+    let cancelled = false;
+    setIsLoadingWorkspaces(true);
+    setWorkspaceLoadError(null);
+    getAvailableGptMakerWorkspaces()
+      .then((workspaceData) => {
+        if (!cancelled) {
+          setWorkspaces(workspaceData);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setWorkspaces([]);
+          setWorkspaceLoadError("Não foi possível carregar os workspaces disponíveis agora.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsLoadingWorkspaces(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [isSuperAdmin]);
 
   async function refreshOperationalData() {
@@ -158,15 +198,73 @@ export default function FranchiseDetailPage() {
     setError(null);
     setSuccess(null);
     try {
-      setAdminUser(await createFranchiseAdminUser(params.id, { name: adminName, email: adminEmail, password: adminPassword }));
+      const createdUser = await createFranchiseAdminUser(params.id, { name: adminName, email: adminEmail, password: adminPassword });
+      setAdminUsers((current) => [...current, createdUser]);
       setAdminName("");
       setAdminEmail("");
       setAdminPassword("");
+      setIsCreatingAdmin(false);
       setSuccess("Administrador criado com sucesso.");
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Nao foi possivel criar administrador.");
     } finally {
       setIsSavingAdmin(false);
+    }
+  }
+
+  async function handleUpdateAdminEmail(email: string) {
+    if (!params?.id || !editingAdminUser) {
+      return;
+    }
+    setIsSavingAdminEmail(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const updatedUser = await updateFranchiseAdminEmail(params.id, editingAdminUser.id, { email });
+      setAdminUsers((current) => current.map((item) => item.id === updatedUser.id ? updatedUser : item));
+      setEditingAdminUser(null);
+      setSuccess("E-mail atualizado com sucesso.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel atualizar o e-mail.");
+    } finally {
+      setIsSavingAdminEmail(false);
+    }
+  }
+
+  async function handleResetAdminPassword(newPassword: string, confirmPassword: string) {
+    if (!params?.id || !resettingAdminUser) {
+      return;
+    }
+    setIsResettingAdminPassword(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      await resetFranchiseAdminPassword(params.id, resettingAdminUser.id, { newPassword, confirmPassword });
+      setResettingAdminUser(null);
+      setSuccess("Senha redefinida com sucesso.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel redefinir a senha.");
+    } finally {
+      setIsResettingAdminPassword(false);
+    }
+  }
+
+  async function handleAccessStatusChange(nextStatus: "ACTIVE" | "INACTIVE") {
+    if (!params?.id || !franchise) {
+      return;
+    }
+    setIsSavingAccessStatus(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const updatedFranchise = await updateFranchiseAccessStatus(params.id, nextStatus);
+      setFranchise(updatedFranchise);
+      setAccessStatusAction(null);
+      setSuccess(nextStatus === "INACTIVE" ? "Franquia desativada com sucesso." : "Franquia reativada com sucesso.");
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Nao foi possivel alterar o status da franquia.");
+    } finally {
+      setIsSavingAccessStatus(false);
     }
   }
 
@@ -192,6 +290,17 @@ export default function FranchiseDetailPage() {
     } finally {
       setIsSaving(false);
     }
+  }
+
+  function requestWorkspaceLink() {
+    if (!selectedWorkspaceId || isSaving) {
+      return;
+    }
+    if (linkedWorkspaceId) {
+      setConfirmAction("replace-workspace");
+      return;
+    }
+    void handleLinkWorkspace(false);
   }
 
   async function handleUnlinkWorkspace() {
@@ -231,6 +340,14 @@ export default function FranchiseDetailPage() {
   const creditNumbers = getCreditsNumbers(credits);
   const creditPercentage = getCreditsPercentage(credits);
   const humanConversations = conversations.filter((item) => item.operationalStatus === "em_atendimento_humano").length;
+  const accessStatus = franchise?.accessStatus ?? "ACTIVE";
+  const linkedWorkspaceId = connection?.workspaceId ?? franchise?.workspaceId ?? null;
+  const linkedWorkspaceName = connection?.workspaceName?.trim() || franchise?.workspaceName?.trim() || null;
+  const linkedAgentId = connection?.agentId ?? franchise?.agentId ?? null;
+  const linkedAgentName = connection?.agentName?.trim() || franchise?.agentName?.trim() || null;
+  const linkedWorkspaceLabel = linkedWorkspaceName ?? (linkedWorkspaceId ? "Workspace vinculado" : null);
+  const linkedAgentLabel = linkedAgentName ?? (linkedAgentId ? "Assistente vinculado" : null);
+  const availableWorkspaceOptions = workspaces.filter((workspace) => workspace.id !== linkedWorkspaceId);
 
   return (
     <AppShell>
@@ -254,8 +371,8 @@ export default function FranchiseDetailPage() {
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <InfoCard icon={Building2} title="Dados" value={`${franchise?.city} / ${franchise?.state}`} subtitle={franchise?.document ?? undefined} />
             <InfoCard icon={UserRound} title="Administrador" value={adminUser?.name ?? "Nao cadastrado"} subtitle={adminUser?.email ?? undefined} />
-            <InfoCard icon={PlugZap} title="Workspace" value={connection?.workspaceName ?? "Nao vinculada"} />
-            <InfoCard icon={Bot} title="Assistente" value={connection?.agentName ?? "Nao configurado"} action={connection?.agentId ? { label: "Abrir", href: `/franquias/${franchise?.id}/agente` } : undefined} />
+            <InfoCard icon={PlugZap} title="Workspace" value={linkedWorkspaceLabel ?? "Não vinculado"} subtitle={linkedWorkspaceId ? "Conectado à unidade" : "Nenhum workspace conectado"} />
+            <InfoCard icon={Bot} title="Assistente" value={linkedAgentLabel ?? "Não configurado"} action={linkedAgentId ? { label: "Abrir", href: `/franquias/${franchise?.id}/agente` } : undefined} />
             {isSuperAdmin ? (
               <InfoCard
                 icon={MessageCircleMore}
@@ -308,6 +425,41 @@ export default function FranchiseDetailPage() {
           <div className="flex items-center gap-3">
             <StatusBadge status={franchise?.status ?? "PENDENTE_CONFIGURACAO"} size="md" />
           </div>
+
+          <section className="card border-l-4 border-l-brand-500">
+            <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${accessStatus === "ACTIVE" ? "bg-emerald-50 text-emerald-600" : "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-300"}`}>
+                  {accessStatus === "ACTIVE" ? <ShieldCheck size={21} /> : <ShieldOff size={21} />}
+                </div>
+                <div>
+                  <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>STATUS DA FRANQUIA</h2>
+                  <p className="mt-1 max-w-2xl text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                    Controla o acesso dos usuários da unidade. Não altera dados, workspace ou assistente.
+                  </p>
+                </div>
+              </div>
+              <StatusBadge status={accessStatus} size="md" />
+            </div>
+            {isSuperAdmin ? (
+              <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-4">
+                <p className="text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                  {accessStatus === "ACTIVE" ? "Os usuários vinculados podem acessar a plataforma." : "Os usuários vinculados estão sem acesso até a reativação."}
+                </p>
+                {accessStatus === "ACTIVE" ? (
+                  <button type="button" className="btn-secondary border-rose-200 text-rose-700 hover:bg-rose-50" onClick={() => setAccessStatusAction("deactivate")} disabled={isSavingAccessStatus}>
+                    <ShieldOff size={16} />
+                    Desativar franquia
+                  </button>
+                ) : (
+                  <button type="button" className="btn-primary" onClick={() => setAccessStatusAction("reactivate")} disabled={isSavingAccessStatus}>
+                    <ShieldCheck size={16} />
+                    Reativar franquia
+                  </button>
+                )}
+              </div>
+            ) : null}
+          </section>
 
           <section className="grid gap-6 xl:grid-cols-2">
             <div className="card">
@@ -373,55 +525,171 @@ export default function FranchiseDetailPage() {
 
           <section className="grid gap-6 xl:grid-cols-2">
             <div className="card">
-              <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Administrador</h2>
-              <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Usuario responsavel pela unidade.</p>
-              {adminUser ? (
+              <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>{isSuperAdmin ? "ACESSO DOS FRANQUEADOS" : "Administrador"}</h2>
+              <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{isSuperAdmin ? "Usuários ADMIN_FRANQUIA vinculados a esta unidade." : "Usuário responsável pela unidade."}</p>
+              {isSuperAdmin ? (
+                <div className="mt-5 grid gap-3">
+                  {adminUsers.length ? adminUsers.map((admin) => (
+                    <div key={admin.id} className="flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between" style={{ background: "var(--color-bg-secondary)" }}>
+                      <div className="min-w-0">
+                        <p className="truncate font-medium" style={{ color: "var(--color-text-primary)" }}>{admin.name}</p>
+                        <p className="mt-1 truncate text-sm" style={{ color: "var(--color-text-secondary)" }}>{admin.email}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button type="button" className="btn-secondary px-3 py-2 text-xs" onClick={() => setEditingAdminUser(admin)} disabled={isSavingAdminEmail || isResettingAdminPassword}>
+                          <Mail size={14} />
+                          Editar e-mail
+                        </button>
+                        <button type="button" className="btn-secondary px-3 py-2 text-xs" onClick={() => setResettingAdminUser(admin)} disabled={isSavingAdminEmail || isResettingAdminPassword}>
+                          <KeyRound size={14} />
+                          Redefinir senha
+                        </button>
+                      </div>
+                    </div>
+                  )) : (
+                    <div className="rounded-xl border border-dashed border-border px-4 py-5 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                      Nenhum usuário ADMIN_FRANQUIA cadastrado nesta franquia.
+                    </div>
+                  )}
+
+                  {(!adminUsers.length || isCreatingAdmin) ? (
+                    <div className="grid gap-3 border-t border-border pt-5">
+                      <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                        {adminUsers.length ? "Adicionar outro acesso" : "Criar acesso do franqueado"}
+                      </p>
+                      <input className="input-field" placeholder="Nome do administrador" value={adminName} onChange={(event) => setAdminName(event.target.value)} disabled={isSavingAdmin} />
+                      <input className="input-field" placeholder="E-mail do administrador" type="email" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} disabled={isSavingAdmin} />
+                      <input className="input-field" placeholder="Senha temporária" type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} disabled={isSavingAdmin} />
+                      <p className="text-xs" style={{ color: "var(--color-text-tertiary)" }}>A senha deve ter pelo menos 8 caracteres, uma letra e um número.</p>
+                      <div className="flex flex-wrap gap-3">
+                        <button type="button" onClick={() => void handleCreateAdminUser()} disabled={isSavingAdmin} className="btn-primary">
+                          {isSavingAdmin ? <><Loader2 size={16} className="animate-spin" /> Salvando...</> : "Criar administrador"}
+                        </button>
+                        {adminUsers.length ? (
+                          <button type="button" onClick={() => setIsCreatingAdmin(false)} disabled={isSavingAdmin} className="btn-secondary">Cancelar</button>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setIsCreatingAdmin(true)} className="btn-secondary">Adicionar outro acesso</button>
+                  )}
+                </div>
+              ) : adminUser ? (
                 <div className="mt-4 rounded-xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
                   <p className="font-medium" style={{ color: "var(--color-text-primary)" }}>{adminUser.name}</p>
                   <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>{adminUser.email}</p>
-                </div>
-              ) : isSuperAdmin ? (
-                <div className="mt-4 grid gap-3">
-                  <input className="input-field" placeholder="Nome do administrador" value={adminName} onChange={(event) => setAdminName(event.target.value)} />
-                  <input className="input-field" placeholder="Email do administrador" value={adminEmail} onChange={(event) => setAdminEmail(event.target.value)} />
-                  <input className="input-field" placeholder="Senha temporaria" type="password" value={adminPassword} onChange={(event) => setAdminPassword(event.target.value)} />
-                  <button type="button" onClick={() => void handleCreateAdminUser()} disabled={isSavingAdmin} className="btn-primary">
-                    {isSavingAdmin ? "Salvando..." : "Criar administrador"}
-                  </button>
                 </div>
               ) : null}
             </div>
 
             {isSuperAdmin ? (
-              <div className="card">
-                <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Workspace da unidade</h2>
-                <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>Area tecnica da matriz para vinculo de workspace.</p>
-                <div className="mt-4 grid gap-3">
-                  <select className="input-field" value={selectedWorkspaceId} onChange={(event) => setSelectedWorkspaceId(event.target.value)}>
-                    <option value="">Selecione um workspace</option>
-                    {workspaces.map((workspace) => (
-                      <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
-                    ))}
-                  </select>
-                  <div className="flex flex-wrap gap-3">
-                    <button type="button" disabled={!selectedWorkspaceId || isSaving} onClick={() => void handleLinkWorkspace(false)} className="btn-primary">
-                      Vincular workspace
-                    </button>
-                    {connection?.workspaceId ? (
-                      <button type="button" disabled={isSaving} onClick={() => setConfirmAction("unlink-workspace")} className="btn-secondary">
-                        <Unlink size={16} />
-                        Desvincular
+              <section className="card overflow-hidden p-0">
+                <div className="border-b border-border px-5 py-5 sm:px-6">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${linkedWorkspaceId ? "bg-emerald-50 text-emerald-600" : "bg-amber-50 text-amber-600"}`}>
+                        {linkedWorkspaceId ? <CheckCircle2 size={20} /> : <PlugZap size={20} />}
+                      </div>
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h2 className="text-lg font-semibold" style={{ color: "var(--color-text-primary)" }}>Workspace da unidade</h2>
+                          <span className={linkedWorkspaceId ? "badge-success" : "badge-warning"}>{linkedWorkspaceId ? "Vinculado" : "Não vinculado"}</span>
+                        </div>
+                        <p className="mt-1 max-w-xl text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                          É o workspace usado para manter a conexão da franquia com o GPTMaker.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="rounded-xl px-3 py-2 sm:max-w-[220px] sm:text-right" style={{ background: "var(--color-bg-secondary)" }}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>Workspace atual</p>
+                      <p className="mt-1 truncate text-sm font-semibold" style={{ color: "var(--color-text-primary)" }} title={linkedWorkspaceLabel ?? undefined}>
+                        {linkedWorkspaceLabel ?? "Nenhum workspace selecionado"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 px-5 py-5 sm:px-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+                  <div className="rounded-2xl p-4" style={{ background: "var(--color-bg-secondary)" }}>
+                    <div className="flex items-start gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-brand-600 shadow-sm dark:bg-slate-800">
+                        <PlugZap size={18} />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em]" style={{ color: "var(--color-text-tertiary)" }}>Conexão preservada</p>
+                        <p className="mt-1 truncate font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                          {linkedWorkspaceLabel ?? "Ainda não há workspace vinculado"}
+                        </p>
+                        <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                          {linkedWorkspaceId ? "Este vínculo continua salvo nesta franquia." : "Escolha um workspace disponível para iniciar o vínculo."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="workspace-selection" className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>
+                      {linkedWorkspaceId ? "Trocar workspace" : "Vincular workspace"}
+                    </label>
+                    <p className="mt-1 text-sm" style={{ color: "var(--color-text-secondary)" }}>
+                      {linkedWorkspaceId ? "Selecione outro workspace para substituir o atual." : "Selecione um workspace disponível para esta unidade."}
+                    </p>
+                    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+                      <select
+                        id="workspace-selection"
+                        className="input-field"
+                        value={selectedWorkspaceId}
+                        onChange={(event) => setSelectedWorkspaceId(event.target.value)}
+                        disabled={isLoadingWorkspaces || isSaving}
+                      >
+                        <option value="">{linkedWorkspaceId ? "Selecione outro workspace" : "Selecione um workspace"}</option>
+                        {availableWorkspaceOptions.map((workspace) => (
+                          <option key={workspace.id} value={workspace.id}>{workspace.name}</option>
+                        ))}
+                      </select>
+                      <button type="button" disabled={!selectedWorkspaceId || isSaving || isLoadingWorkspaces} onClick={requestWorkspaceLink} className="btn-primary shrink-0 sm:min-w-[164px]">
+                        {isSaving ? <><Loader2 size={16} className="animate-spin" /> Salvando...</> : linkedWorkspaceId ? "Trocar workspace" : "Vincular workspace"}
                       </button>
-                    ) : null}
-                    {connection?.agentId ? (
-                      <button type="button" disabled={isSaving} onClick={() => setConfirmAction("clear-agent")} className="btn-secondary">
-                        <Trash2 size={16} />
-                        Limpar assistente
-                      </button>
+                    </div>
+                    {isLoadingWorkspaces ? (
+                      <p className="mt-2 flex items-center gap-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        <Loader2 size={13} className="animate-spin" /> Carregando workspaces disponíveis...
+                      </p>
+                    ) : workspaceLoadError ? (
+                      <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{workspaceLoadError}</p>
+                    ) : availableWorkspaceOptions.length === 0 ? (
+                      <p className="mt-2 text-xs" style={{ color: "var(--color-text-tertiary)" }}>
+                        {linkedWorkspaceId ? "Não há outro workspace disponível para troca no momento." : "Não há workspaces disponíveis no momento."}
+                      </p>
                     ) : null}
                   </div>
                 </div>
-              </div>
+
+                {linkedWorkspaceId || linkedAgentId ? (
+                  <div className="border-t border-border px-5 py-4 sm:px-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold" style={{ color: "var(--color-text-primary)" }}>Ações avançadas</p>
+                        <p className="mt-1 text-xs" style={{ color: "var(--color-text-tertiary)" }}>Use somente quando precisar alterar a conexão desta unidade.</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {linkedWorkspaceId ? (
+                          <button type="button" disabled={isSaving} onClick={() => setConfirmAction("unlink-workspace")} className="btn-secondary px-3 py-2 text-xs">
+                            <Unlink size={15} />
+                            Desvincular workspace
+                          </button>
+                        ) : null}
+                        {linkedAgentId ? (
+                          <button type="button" disabled={isSaving} onClick={() => setConfirmAction("clear-agent")} className="btn-secondary px-3 py-2 text-xs">
+                            <Trash2 size={15} />
+                            Remover assistente
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
             ) : null}
           </section>
         </div>
@@ -450,6 +718,36 @@ export default function FranchiseDetailPage() {
         confirmLabel="Trocar"
         onCancel={() => setConfirmAction(null)}
         onConfirm={() => void handleLinkWorkspace(true)}
+      />
+      <EditAdminEmailDialog
+        user={editingAdminUser}
+        isOpen={isSuperAdmin && editingAdminUser !== null}
+        isSubmitting={isSavingAdminEmail}
+        onCancel={() => setEditingAdminUser(null)}
+        onConfirm={(email) => void handleUpdateAdminEmail(email)}
+      />
+      <ResetAdminPasswordDialog
+        user={resettingAdminUser}
+        isOpen={isSuperAdmin && resettingAdminUser !== null}
+        isSubmitting={isResettingAdminPassword}
+        onCancel={() => setResettingAdminUser(null)}
+        onConfirm={(newPassword, confirmPassword) => void handleResetAdminPassword(newPassword, confirmPassword)}
+      />
+      <DeactivateFranchiseDialog
+        franchiseName={franchise?.name ?? ""}
+        isOpen={isSuperAdmin && accessStatusAction === "deactivate" && franchise !== null}
+        isSubmitting={isSavingAccessStatus}
+        onCancel={() => setAccessStatusAction(null)}
+        onConfirm={() => void handleAccessStatusChange("INACTIVE")}
+      />
+      <ConfirmDialog
+        isOpen={isSuperAdmin && accessStatusAction === "reactivate"}
+        title="Reativar franquia?"
+        description="Os usuários vinculados voltarão a poder acessar a plataforma. Nenhum dado será recriado ou alterado nessa ação."
+        confirmLabel="Reativar"
+        isSubmitting={isSavingAccessStatus}
+        onCancel={() => setAccessStatusAction(null)}
+        onConfirm={() => void handleAccessStatusChange("ACTIVE")}
       />
     </AppShell>
   );

@@ -4,7 +4,10 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8
 
 export type ApiError = Error & {
   status?: number;
+  code?: string;
 };
+
+export type FranchiseAccessStatus = "ACTIVE" | "INACTIVE";
 
 export type FranchiseSummary = {
   id: string;
@@ -13,6 +16,7 @@ export type FranchiseSummary = {
   city: string;
   state: string;
   status: string;
+  accessStatus: FranchiseAccessStatus;
   workspaceId?: string | null;
   workspaceName?: string | null;
   agentId?: string | null;
@@ -373,6 +377,15 @@ export type ConversationSummary = {
   unReadCount?: number | null;
 };
 
+export type UpdateFranchiseAdminEmailPayload = {
+  email: string;
+};
+
+export type ResetFranchiseAdminPasswordPayload = {
+  newPassword: string;
+  confirmPassword: string;
+};
+
 export type ConversationMessage = {
   id: string;
   role?: string | null;
@@ -556,8 +569,12 @@ function getStoredToken(): string | null {
 
 async function parseError(response: Response): Promise<ApiError> {
   let message = "Nao foi possivel concluir a solicitacao.";
+  let code: string | undefined;
   try {
     const body = await response.json();
+    if (typeof body?.code === "string") {
+      code = body.code;
+    }
     if (typeof body?.message === "string" && body.message.trim()) {
       message = body.message;
     } else if (typeof body?.error === "string" && body.error.trim()) {
@@ -575,6 +592,7 @@ async function parseError(response: Response): Promise<ApiError> {
 
   const error = new Error(message) as ApiError;
   error.status = response.status;
+  error.code = code;
   return error;
 }
 
@@ -655,14 +673,18 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
 
   if (!response.ok) {
-    if (response.status === 401 && typeof window !== "undefined") {
+    const error = await parseError(response);
+    if ((response.status === 401 || error.code === "FRANCHISE_INACTIVE") && typeof window !== "undefined") {
       window.localStorage.removeItem("vavive_token");
       window.localStorage.removeItem("vavive_user");
       if (window.location.pathname !== "/login") {
-        window.location.replace("/login");
+        const destination = error.code === "FRANCHISE_INACTIVE"
+          ? "/login?reason=franchise-inactive"
+          : "/login";
+        window.location.replace(destination);
       }
     }
-    throw await parseError(response);
+    throw error;
   }
 
   if (response.status === 204) {
@@ -760,8 +782,8 @@ export function getFranchiseGptMakerConnection(id: string) {
   return apiFetch<FranchiseGptMakerConnection>(`/franchises/${id}/gptmaker-connection`);
 }
 
-export function getFranchiseAdminUser(id: string) {
-  return apiFetch<FranchiseAdminUser>(`/franchises/${id}/admin-user`);
+export function getFranchiseAdminUsers(id: string) {
+  return apiFetch<FranchiseAdminUser[]>(`/franchises/${id}/admin-users`);
 }
 
 export function createFranchiseAdminUser(id: string, payload: CreateFranchiseAdminUserPayload) {
@@ -919,6 +941,27 @@ export function materializeConversation(payload: { franchiseId?: string; chatId:
   return apiFetch<ConversationSummary>("/conversations/materialize", {
     method: "POST",
     body: JSON.stringify(payload)
+  });
+}
+
+export function updateFranchiseAdminEmail(franchiseId: string, userId: string, payload: UpdateFranchiseAdminEmailPayload) {
+  return apiFetch<FranchiseAdminUser>(`/franchises/${franchiseId}/users/${userId}/email`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function resetFranchiseAdminPassword(franchiseId: string, userId: string, payload: ResetFranchiseAdminPasswordPayload) {
+  return apiFetch<void>(`/franchises/${franchiseId}/users/${userId}/password`, {
+    method: "PUT",
+    body: JSON.stringify(payload)
+  });
+}
+
+export function updateFranchiseAccessStatus(id: string, status: FranchiseAccessStatus) {
+  return apiFetch<FranchiseSummary>(`/franchises/${id}/access-status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status })
   });
 }
 

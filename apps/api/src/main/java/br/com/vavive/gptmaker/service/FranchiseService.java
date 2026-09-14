@@ -7,6 +7,7 @@ import br.com.vavive.gptmaker.domain.entity.GptMakerAgent;
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.AssistantBlockMode;
 import br.com.vavive.gptmaker.domain.enums.AssistantBlockType;
+import br.com.vavive.gptmaker.domain.enums.FranchiseAccessStatus;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
 import br.com.vavive.gptmaker.dto.ConversationExampleResponse;
 import br.com.vavive.gptmaker.dto.CreateFranchiseRequest;
@@ -25,6 +26,9 @@ import br.com.vavive.gptmaker.dto.ProvisionFranchiseGptMakerAgentRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseSetupRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerConnectionRequest;
 import br.com.vavive.gptmaker.dto.UpdateFranchiseGptMakerWorkspaceRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseAccessStatusRequest;
+import br.com.vavive.gptmaker.dto.UpdateFranchiseAdminEmailRequest;
+import br.com.vavive.gptmaker.dto.ResetFranchiseAdminPasswordRequest;
 import br.com.vavive.gptmaker.dto.UserResponse;
 import br.com.vavive.gptmaker.dto.VaviveDefaultContextResponse;
 import br.com.vavive.gptmaker.dto.WorkspaceCreditsResponse;
@@ -52,6 +56,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Locale;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -63,6 +69,7 @@ import org.springframework.web.server.ResponseStatusException;
 @Service
 public class FranchiseService {
     private static final Logger log = LoggerFactory.getLogger(FranchiseService.class);
+    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
     private final FranchiseRepository franchiseRepository;
     private final FranchiseSetupRepository franchiseSetupRepository;
     private final GptMakerAgentRepository agentRepository;
@@ -169,12 +176,14 @@ public class FranchiseService {
         refreshStatus(franchise);
         franchiseRepository.save(franchise);
 
-        if (userRepository.existsByEmailIgnoreCase(request.adminUser().email())) {
+        String adminEmail = normalizeEmail(request.adminUser().email());
+        PasswordPolicy.requireValid(request.adminUser().password());
+        if (userRepository.existsByEmailIgnoreCase(adminEmail)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ja existe um usuario com este email");
         }
         User admin = new User(
             request.adminUser().name(),
-            request.adminUser().email(),
+            adminEmail,
             passwordEncoder.encode(request.adminUser().password()),
             UserRole.ADMIN_FRANQUIA,
             franchise
@@ -194,32 +203,80 @@ public class FranchiseService {
     }
 
     @Transactional(readOnly = true)
-    public UserResponse getAdminUser(UUID id) {
-        Franchise franchise = requireAccessibleFranchise(id);
-        return userRepository.findFirstByFranchiseIdAndRole(franchise.getId(), UserRole.ADMIN_FRANQUIA)
+    public List<UserResponse> getAdminUsers(UUID id) {
+        requireSuperAdmin("Apenas SUPER_ADMIN pode visualizar os usuarios administrativos da franquia.");
+        Franchise franchise = requireFranchise(id);
+        return userRepository.findAllByFranchiseIdAndRoleOrderByCreatedAtAsc(franchise.getId(), UserRole.ADMIN_FRANQUIA)
+            .stream()
             .map(AuthService::toResponse)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Administrador da franquia ainda nao cadastrado"));
+            .toList();
     }
 
     @Transactional
     public UserResponse createAdminUser(UUID id, CreateFranchiseAdminUserRequest request) {
         requireSuperAdmin();
         Franchise franchise = requireAccessibleFranchise(id);
-        if (userRepository.existsByEmailIgnoreCase(request.email())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Ja existe um usuario com este email");
-        }
-        if (userRepository.findFirstByFranchiseIdAndRole(franchise.getId(), UserRole.ADMIN_FRANQUIA).isPresent()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Esta franquia ja possui um administrador cadastrado");
+        String normalizedEmail = normalizeEmail(request.email());
+        PasswordPolicy.requireValid(request.password());
+        if (userRepository.existsByEmailIgnoreCase(normalizedEmail)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe um usuario com este email");
         }
 
         User user = new User(
             request.name(),
-            request.email(),
+            normalizedEmail,
             passwordEncoder.encode(request.password()),
             UserRole.ADMIN_FRANQUIA,
             franchise
         );
         return AuthService.toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public UserResponse updateAdminEmail(UUID franchiseId, UUID userId, UpdateFranchiseAdminEmailRequest request) {
+        requireSuperAdmin("Apenas SUPER_ADMIN pode alterar o email dos usuarios administrativos.");
+        Franchise franchise = requireFranchise(franchiseId);
+        User user = requireFranchiseAdminUser(franchise, userId);
+        String normalizedEmail = normalizeEmail(request == null ? null : request.email());
+
+        userRepository.findByEmailIgnoreCase(normalizedEmail)
+            .filter(existing -> !Objects.equals(existing.getId(), user.getId()))
+            .ifPresent(existing -> {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Ja existe um usuario com este email");
+            });
+
+        user.changeEmail(normalizedEmail);
+        return AuthService.toResponse(userRepository.save(user));
+    }
+
+    @Transactional
+    public void resetAdminPassword(UUID franchiseId, UUID userId, ResetFranchiseAdminPasswordRequest request) {
+        requireSuperAdmin("Apenas SUPER_ADMIN pode redefinir senhas de usuarios administrativos.");
+        Franchise franchise = requireFranchise(franchiseId);
+        User user = requireFranchiseAdminUser(franchise, userId);
+        if (request == null || !Objects.equals(request.newPassword(), request.confirmPassword())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "As senhas nao conferem.");
+        }
+
+        PasswordPolicy.requireValid(request.newPassword());
+        user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
+    }
+
+    @Transactional
+    public FranchiseResponse updateAccessStatus(UUID franchiseId, UpdateFranchiseAccessStatusRequest request) {
+        requireSuperAdmin("Apenas SUPER_ADMIN pode alterar o status de acesso da franquia.");
+        Franchise franchise = requireFranchise(franchiseId);
+        FranchiseAccessStatus nextStatus = request == null ? null : request.status();
+        if (nextStatus == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Status de acesso obrigatorio.");
+        }
+        if (franchise.getAccessStatus() == nextStatus) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "A franquia ja esta neste estado de acesso.");
+        }
+
+        franchise.setAccessStatus(nextStatus);
+        return AuthService.toFranchiseResponse(franchiseRepository.save(franchise));
     }
 
     @Transactional(readOnly = true)
@@ -605,11 +662,18 @@ public class FranchiseService {
             && !franchise.getId().equals(currentUserService.requireFranchise(user).getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "ADMIN_FRANQUIA so pode acessar dados da propria franquia.");
         }
+        if (user.getRole() == UserRole.ADMIN_FRANQUIA && !franchise.isAccessActive()) {
+            throw new FranchiseInactiveException();
+        }
         return franchise;
     }
 
     private void requireSuperAdmin() {
         currentUserService.requireSuperAdmin("Apenas SUPER_ADMIN pode acessar esta configuracao GPTMaker.");
+    }
+
+    private void requireSuperAdmin(String message) {
+        currentUserService.requireSuperAdmin(message);
     }
 
     private GptMakerAgent resolveAgentForPublishing(Franchise franchise, FranchiseSetup setup) {
@@ -1668,6 +1732,22 @@ public class FranchiseService {
     private Franchise requireFranchise(UUID id) {
         return franchiseRepository.findById(id)
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Franquia nao encontrada."));
+    }
+
+    private User requireFranchiseAdminUser(Franchise franchise, UUID userId) {
+        return userRepository.findById(userId)
+            .filter(user -> user.getRole() == UserRole.ADMIN_FRANQUIA)
+            .filter(user -> user.getFranchise() != null)
+            .filter(user -> franchise.getId().equals(user.getFranchise().getId()))
+            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Usuario administrativo nao encontrado nesta franquia."));
+    }
+
+    private String normalizeEmail(String email) {
+        String normalizedEmail = email == null ? "" : email.trim().toLowerCase(Locale.ROOT);
+        if (normalizedEmail.isBlank() || normalizedEmail.length() > 255 || !EMAIL_PATTERN.matcher(normalizedEmail).matches()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Informe um email valido.");
+        }
+        return normalizedEmail;
     }
 }
 

@@ -1,6 +1,8 @@
 import clsx from "clsx";
 
 const variants: Record<string, { bg: string; text: string; ring: string }> = {
+  ACTIVE: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
+  INACTIVE: { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" },
   ATIVA: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
   INATIVA: { bg: "bg-gray-100 dark:bg-gray-800", text: "text-gray-600 dark:text-gray-400", ring: "ring-gray-200 dark:ring-gray-700" },
   ATIVO: { bg: "bg-emerald-50 dark:bg-emerald-900/30", text: "text-emerald-700 dark:text-emerald-400", ring: "ring-emerald-200 dark:ring-emerald-800" },
@@ -28,6 +30,8 @@ const variants: Record<string, { bg: string; text: string; ring: string }> = {
 };
 
 const labels: Record<string, string> = {
+  ACTIVE: "Ativa",
+  INACTIVE: "Inativa",
   PUBLICADO_GPTMAKER: "Publicado",
   PUBLICADO_GPTMAKER_MOCK: "Publicado (simulado)",
   ENVIADO_GPTMAKER: "Sincronizado",

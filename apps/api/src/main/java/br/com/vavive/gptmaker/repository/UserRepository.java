@@ -2,6 +2,7 @@ package br.com.vavive.gptmaker.repository;
 
 import br.com.vavive.gptmaker.domain.entity.User;
 import br.com.vavive.gptmaker.domain.enums.UserRole;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.EntityGraph;
@@ -17,5 +18,6 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmailIgnoreCaseWithFranchise(@Param("email") String email);
 
     boolean existsByEmailIgnoreCase(String email);
+    List<User> findAllByFranchiseIdAndRoleOrderByCreatedAtAsc(UUID franchiseId, UserRole role);
     Optional<User> findFirstByFranchiseIdAndRole(UUID franchiseId, UserRole role);
 }

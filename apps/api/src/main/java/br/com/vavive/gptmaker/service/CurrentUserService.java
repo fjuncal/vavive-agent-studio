@@ -22,14 +22,17 @@ public class CurrentUserService {
         if (authentication == null || authentication.getName() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao autenticado");
         }
-        return userRepository.findByEmailIgnoreCaseWithFranchise(authentication.getName())
+        User user = userRepository.findByEmailIgnoreCaseWithFranchise(authentication.getName())
             .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Usuario nao encontrado"));
+        requireActiveFranchise(user);
+        return user;
     }
 
     public Franchise requireFranchise(User user) {
         if (user.getRole() == UserRole.ADMIN_FRANQUIA && user.getFranchise() == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Usuario ADMIN_FRANQUIA nao possui franquia associada.");
         }
+        requireActiveFranchise(user);
         return user.getFranchise();
     }
 
@@ -40,6 +43,14 @@ public class CurrentUserService {
     public void requireSuperAdmin(String message) {
         if (requireCurrentUser().getRole() != UserRole.SUPER_ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, message);
+        }
+    }
+
+    private void requireActiveFranchise(User user) {
+        if (user.getRole() == UserRole.ADMIN_FRANQUIA
+            && user.getFranchise() != null
+            && !user.getFranchise().isAccessActive()) {
+            throw new FranchiseInactiveException();
         }
     }
 }

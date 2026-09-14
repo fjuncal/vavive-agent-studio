@@ -1,6 +1,10 @@
 package br.com.vavive.gptmaker.domain.entity;
 
+import br.com.vavive.gptmaker.domain.enums.FranchiseAccessStatus;
 import jakarta.persistence.Entity;
+import jakarta.persistence.Column;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -19,6 +23,9 @@ public class Franchise {
     private String city;
     private String state;
     private String status;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "access_status", nullable = false, length = 16)
+    private FranchiseAccessStatus accessStatus = FranchiseAccessStatus.ACTIVE;
     private String workspaceId;
     private String workspaceName;
     private String agentId;
@@ -84,6 +91,18 @@ public class Franchise {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public FranchiseAccessStatus getAccessStatus() {
+        return accessStatus == null ? FranchiseAccessStatus.ACTIVE : accessStatus;
+    }
+
+    public void setAccessStatus(FranchiseAccessStatus accessStatus) {
+        this.accessStatus = accessStatus;
+    }
+
+    public boolean isAccessActive() {
+        return getAccessStatus() == FranchiseAccessStatus.ACTIVE;
     }
 
     public String getWorkspaceId() {

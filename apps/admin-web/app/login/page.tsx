@@ -4,7 +4,7 @@ import { login } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { Eye, EyeOff, Loader2, LockKeyhole, Mail, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +13,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [inactiveNotice, setInactiveNotice] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setInactiveNotice(new URLSearchParams(window.location.search).get("reason") === "franchise-inactive");
+  }, []);
 
   async function submitCredentials(nextEmail: string, nextPassword: string) {
     setError(null);
@@ -142,10 +147,10 @@ export default function LoginPage() {
                 </div>
               </label>
 
-              {error ? (
+              {error || inactiveNotice ? (
                   <div role="alert" className="flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-3.5 py-3 text-sm leading-5 text-rose-700">
                   <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-600">!</span>
-                  <span>{error}</span>
+                  <span>{error ?? "Esta franquia está inativa."}</span>
                 </div>
               ) : null}
 

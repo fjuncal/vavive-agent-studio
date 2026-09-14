@@ -44,7 +44,7 @@ export default function FranchisesPage() {
       .finally(() => setIsLoadingMapping(false));
   }, [isSuperAdmin]);
 
-  const activeCount = useMemo(() => franchises.filter((franchise) => franchise.status === "ATIVA").length, [franchises]);
+  const activeCount = useMemo(() => franchises.filter((franchise) => franchise.accessStatus === "ACTIVE").length, [franchises]);
   const withoutAgentCount = useMemo(() => franchises.filter((franchise) => franchise.status === "SEM_AGENTE").length, [franchises]);
   const pendingCount = useMemo(() => franchises.filter((franchise) => franchise.status === "PENDENTE_CONFIGURACAO").length, [franchises]);
   const unlinkedWorkspaceCount = mapping?.unlinkedWorkspaces.length ?? 0;
@@ -67,7 +67,7 @@ export default function FranchisesPage() {
 
       {isSuperAdmin && (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <SharedStatCard label="Franquias ativas" value={String(activeCount)} hint="Com workspace e assistente conectados." icon={CheckCircle2} variant="success" />
+          <SharedStatCard label="Franquias ativas" value={String(activeCount)} hint="Com acesso à plataforma." icon={CheckCircle2} variant="success" />
           <SharedStatCard label="Sem assistente" value={String(withoutAgentCount)} hint="Workspace conectado, assistente pendente." icon={Building2} variant="warning" />
           <SharedStatCard label="Pendentes" value={String(pendingCount)} hint="Aguardando configuração da matriz." icon={Clock} variant="warning" />
           <SharedStatCard label="Workspaces livres" value={String(unlinkedWorkspaceCount)} hint={isLoadingMapping ? "Carregando..." : "Disponíveis para vincular."} icon={PlugZap} />
@@ -199,20 +199,34 @@ export default function FranchisesPage() {
             },
             {
               header: "Status",
-              cell: (franchise) => <StatusBadge status={franchise.status} />
+              cell: (franchise) => <StatusBadge status={franchise.accessStatus ?? "ACTIVE"} />
             },
             {
               header: "Acao",
               className: "text-right",
-              cell: (franchise) => (
-                <Link
-                  href={franchise.agentId ? `/franquias/${franchise.id}` : franchise.workspaceId ? `/franquias/${franchise.id}/agente` : `/franquias/${franchise.id}`}
-                  className="btn-primary py-2 px-3 text-xs inline-flex"
-                >
-                  {franchise.agentId ? "Abrir" : franchise.workspaceId ? "Configurar assistente" : "Configurar"}
-                  <ArrowRight size={14} />
-                </Link>
-              )
+              cell: (franchise) => {
+                const isInactive = franchise.accessStatus === "INACTIVE";
+                const href = isInactive
+                  ? `/franquias/${franchise.id}`
+                  : franchise.agentId
+                    ? `/franquias/${franchise.id}`
+                    : franchise.workspaceId
+                      ? `/franquias/${franchise.id}/agente`
+                      : `/franquias/${franchise.id}`;
+                const label = isInactive
+                  ? "Abrir"
+                  : franchise.agentId
+                    ? "Abrir"
+                    : franchise.workspaceId
+                      ? "Configurar assistente"
+                      : "Configurar";
+                return (
+                  <Link href={href} className="btn-primary py-2 px-3 text-xs inline-flex">
+                    {label}
+                    <ArrowRight size={14} />
+                  </Link>
+                );
+              }
             }
           ]}
         />

@@ -64,8 +64,16 @@ public class User {
         return email;
     }
 
+    public void changeEmail(String email) {
+        this.email = email;
+    }
+
     public String getPasswordHash() {
         return passwordHash;
+    }
+
+    public void changePasswordHash(String passwordHash) {
+        this.passwordHash = passwordHash;
     }
 
     public UserRole getRole() {
